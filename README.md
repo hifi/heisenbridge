@@ -1,0 +1,4 @@
+Unnamed IRC Bridge
+==================
+
+WIP

@@ -5,6 +5,9 @@ import asyncio
 import aiohttp
 from aiohttp import web
 import yaml
+import argparse
+import string
+import random
 
 from matrix import Matrix, MatrixError, MatrixUserInUse
 from appservice import AppService
@@ -146,17 +149,14 @@ class BridgeAppService(AppService):
 
         return web.json_response({})
 
-    async def run(self):
+    async def run(self, config_file, listen_address, listen_port, homeserver_url):
+        with open(config_file) as f:
+            registration = yaml.safe_load(f)
+
         app = aiohttp.web.Application()
         app.router.add_put('/transactions/{id}', self._transaction)
 
-        with open('synapse-data/reg.yaml') as f:
-            registration = yaml.safe_load(f)
-
-        print(registration)
-
-        hs_url = 'http://localhost:8008'
-        self.api = Matrix(hs_url, registration['as_token'])
+        self.api = Matrix(homeserver_url, registration['as_token'])
 
         whoami = await self.api.get_user_whoami()
         print('We are ' + whoami['user_id'])
@@ -247,12 +247,49 @@ class BridgeAppService(AppService):
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
-        site = aiohttp.web.TCPSite(runner)
+        site = aiohttp.web.TCPSite(runner, listen_address, listen_port)
         await site.start()
 
         await asyncio.Event().wait()
 
-service = BridgeAppService()
-loop = asyncio.get_event_loop()
-loop.run_until_complete(service.run())
-loop.close()
+parser = argparse.ArgumentParser(description='The Friendly IRC bridge for Matrix', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser.add_argument('-c', '--config', help='registration YAML file path, must be writable if generating', required=True)
+parser.add_argument('-l', '--listen-address', help='bridge listen address', default='127.0.0.1')
+parser.add_argument('-p', '--listen-port', help='bridge listen port', type=int, default='9898')
+parser.add_argument('--generate', action='store_true', help='generate registration YAML for Matrix homeserver', default=argparse.SUPPRESS)
+parser.add_argument('homeserver', help='URL of Matrix homeserver')
+
+args = parser.parse_args()
+
+import io
+if 'generate' in args:
+    letters = string.ascii_letters + string.digits
+
+    registration = {
+        'id': 'irc',
+        'url': 'http://{}:{}'.format(args.listen_address, args.listen_port),
+        'as_token': ''.join(random.choice(letters) for i in range(64)),
+        'hs_token': ''.join(random.choice(letters) for i in range(64)),
+        'rate_limited': False,
+        'sender_localpart': 'irc',
+        'namespaces': {
+            'users': [
+                {
+                    'regex': '@irc_*',
+                    'exclusive': True
+                }
+            ],
+            'aliases': [],
+            'rooms': [],
+        }
+    }
+
+    with open(args.config, 'w') as f:
+        yaml.dump(registration, f, sort_keys=False)
+
+    print('Registration file generated and saved to {}'.format(args.config))
+else:
+    service = BridgeAppService()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(service.run(args.config, args.listen_address, args.listen_port, args.homeserver))
+    loop.close()

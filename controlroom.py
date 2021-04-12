@@ -92,10 +92,10 @@ class ControlRoom(Room):
         if args.name not in networks:
             return await self.send_notice('Network does not exist')
 
-        existing = self.serv.find_rooms(NetworkRoom, self.user_id)
-        if len(existing) > 0:
-            await self.serv.api.post_room_invite(existing[0].id, self.user_id)
-            return await self.send_notice('Inviting back to {}.'.format(args.name))
-        else:
-            await NetworkRoom.create(self.serv, args.name, self.user_id)
-            return await self.send_notice('You have been invited to {}.'.format(args.name))
+        for room in self.serv.find_rooms(NetworkRoom, self.user_id):
+            if room.name == args.name:
+                await self.serv.api.post_room_invite(room.id, self.user_id)
+                return await self.send_notice('Inviting back to {}.'.format(args.name))
+
+        await NetworkRoom.create(self.serv, args.name, self.user_id)
+        return await self.send_notice('You have been invited to {}.'.format(args.name))

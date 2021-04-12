@@ -20,7 +20,7 @@ class ChannelRoom(PrivateRoom):
     async def create(network: NetworkRoom, name: str):
         room_id = await network.serv.create_room('{} ({})'.format(name, network.name), ''.format(name, network.name), [network.user_id])
         room = ChannelRoom(room_id, network.user_id, network.serv, [network.serv.user_id])
-        room.name = name
+        room.name = name.lower()
         room.network = network
         room.network_name = network.name
         await room.save()

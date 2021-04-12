@@ -48,7 +48,7 @@ class BridgeAppService(AppService):
         return nick.strip('@+&')
 
     def irc_user_id(self, network, nick, at = True, server = True):
-        ret = ('@' if at else '') + 'irc_{}_{}'.format(network, self.strip_nick(nick))
+        ret = ('@' if at else '') + 'irc_{}_{}'.format(network, self.strip_nick(nick).lower())
         if server:
             ret += ':' + self.server_name
         return ret

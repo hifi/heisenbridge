@@ -44,7 +44,7 @@ class PrivateRoom(Room):
         irc_user_id = await network.serv.ensure_irc_user_id(network.name, name)
         room_id = await network.serv.create_room('{} ({})'.format(name, network.name), 'Private chat with {} on {}'.format(name, network.name), [network.user_id, irc_user_id])
         room = PrivateRoom(room_id, network.user_id, network.serv, [network.user_id, irc_user_id, network.serv.user_id])
-        room.name = name
+        room.name = name.lower()
         room.network = network
         room.network_name = network.name
         await room.save()

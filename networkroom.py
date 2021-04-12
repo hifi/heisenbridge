@@ -183,9 +183,10 @@ class NetworkRoom(Room):
             return await self.send_notice('Need to be connected to use this command.')
 
         ## TODO: validate nick doesn't look like a channel
+        target = args.nick.lower()
 
-        if args.nick in self.rooms:
-            room = self.rooms[args.nick]
+        if target in self.rooms:
+            room = self.rooms[target]
             await self.serv.api.post_room_invite(room.id, self.user_id)
             return await self.send_notice('Inviting back to private chat with {}.'.format(args.nick))
         else:
@@ -254,11 +255,11 @@ class NetworkRoom(Room):
             handled = await self.irc_handlers[message.command](message)
 
         if message.command in self.irc_forwards:
-            target = message.parameters[self.irc_forwards[message.command]]
+            target = message.parameters[self.irc_forwards[message.command]].lower()
 
             # direct target means the target room is the sender
-            if target == self.nick:
-                target = message.prefix.nick
+            if target == self.nick.lower():
+                target = message.prefix.nick.lower()
 
             if target in self.queue:
                 self.queue[target].append(message)
@@ -321,9 +322,7 @@ class NetworkRoom(Room):
         if message.parameters[0] != self.nick:
             return
 
-        target = message.prefix.nick
-
-        print('on_privmsg for ' + message.prefix.nick)
+        target = message.prefix.nick.lower()
 
         # prevent creating a room while queue is in effect
         if target in self.queue:
@@ -348,12 +347,12 @@ class NetworkRoom(Room):
                 await self.serv.api.post_room_invite(self.rooms[target].id, self.user_id)
 
     async def on_join(self, message):
-        target = message.parameters[0]
+        target = message.parameters[0].lower()
 
         # create a ChannelRoom in response to JOIN
         if message.prefix.nick == self.nick and target not in self.rooms:
             self.queue[target] = []
-            self.rooms[target] = await ChannelRoom.create(self, target)
+            self.rooms[target] = await ChannelRoom.create(self, message.parameters[0])
 
             # dequeue events if needed
             queue = self.queue[target]

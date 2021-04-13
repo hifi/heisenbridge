@@ -78,6 +78,9 @@ class Matrix:
     async def put_room_send_event(self, room_id, type, content, user_id = None):
         return await self.call('PUT', '/_matrix/client/r0/rooms/' + room_id + '/send/' + type + '/' + self._txn() + ('?user_id={}'.format(user_id) if user_id else ''), content)
 
+    async def put_room_send_state(self, room_id, type, state_key, content, user_id = None):
+        return await self.call('PUT', '/_matrix/client/r0/rooms/' + room_id + '/state/' + type + '/' + state_key + ('?user_id={}'.format(user_id) if user_id else ''), content)
+
     async def post_room_create(self, data):
         return await self.call('POST', '/_matrix/client/r0/createRoom', data)
 

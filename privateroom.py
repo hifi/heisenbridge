@@ -76,6 +76,9 @@ class PrivateRoom(Room):
         if self.network == None:
             return True
 
+        if self.network.is_ctcp(event):
+            return
+
         irc_user_id = self.serv.irc_user_id(self.network.name, event.prefix.nick)
 
         if irc_user_id in self.members:

@@ -15,6 +15,10 @@ class ChannelRoom(PrivateRoom):
         self.irc_register('366', self.on_irc_end_of_names)
         self.irc_register('JOIN', self.on_irc_join)
         self.irc_register('PART', self.on_irc_leave)
+        self.irc_register('MODE', self.on_irc_mode)
+        self.irc_register('TOPIC', self.on_irc_topic)
+        self.irc_register('331', self.on_irc_reply_notopic)
+        self.irc_register('332', self.on_irc_reply_topic)
 
     @staticmethod
     async def create(network: NetworkRoom, name: str):
@@ -34,8 +38,16 @@ class ChannelRoom(PrivateRoom):
         return super().is_valid()
 
     async def cleanup(self):
-        if self.network and self.network.conn and self.network.conn.connected:
-            self.network.conn.send('PART {}'.format(self.name))
+        if self.network:
+            if self.network.conn and self.network.conn.connected:
+                self.network.conn.send('PART {}'.format(self.name))
+            if self.name in self.network.rooms:
+                del self.network.rooms[self.name]
+
+    async def on_server_message(self, message):
+        parameters = list(message.parameters)
+        parameters.pop(0)
+        return await self.send_notice(' '.join(parameters))
 
     async def on_irc_names(self, event):
         self.names_buffer.extend(event.parameters[3].split())
@@ -79,6 +91,7 @@ class ChannelRoom(PrivateRoom):
     async def on_irc_join(self, event):
         # we don't need to sync ourself
         if self.network.nick == event.prefix.nick:
+            await self.send_notice('Joined channel.')
             return
 
         # convert to mx id, check if we already have them
@@ -107,3 +120,19 @@ class ChannelRoom(PrivateRoom):
         self.members.remove(irc_user_id)
 
         await self.serv.api.post_room_leave(self.id, irc_user_id)
+
+    async def on_irc_mode(self, event):
+        modes = list(event.parameters)
+        modes.pop(0)
+
+        await self.send_notice('{} set modes {}'.format(event.prefix.nick, ' '.join(modes)))
+
+    async def on_irc_reply_notopic(self, event):
+        await self.serv.api.put_room_send_state(self.id, 'm.room.topic', '', {'topic': ''})
+
+    async def on_irc_reply_topic(self, event):
+        await self.serv.api.put_room_send_state(self.id, 'm.room.topic', '', {'topic': event.parameters[2]})
+
+    async def on_irc_topic(self, event):
+        await self.send_notice("{} changed the topic".format(event.prefix.nick))
+        await self.serv.api.put_room_send_state(self.id, 'm.room.topic', '', {'topic': event.parameters[1]})

@@ -266,7 +266,7 @@ parser.add_argument('-c', '--config', help='registration YAML file path, must be
 parser.add_argument('-l', '--listen-address', help='bridge listen address', default='127.0.0.1')
 parser.add_argument('-p', '--listen-port', help='bridge listen port', type=int, default='9898')
 parser.add_argument('--generate', action='store_true', help='generate registration YAML for Matrix homeserver', default=argparse.SUPPRESS)
-parser.add_argument('homeserver', help='URL of Matrix homeserver')
+parser.add_argument('homeserver', nargs='?', help='URL of Matrix homeserver', default='http://localhost:8008')
 
 args = parser.parse_args()
 

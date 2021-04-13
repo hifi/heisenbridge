@@ -33,6 +33,10 @@ class ChannelRoom(PrivateRoom):
 
         return super().is_valid()
 
+    async def cleanup(self):
+        if self.network and self.network.conn and self.network.conn.connected:
+            self.network.conn.send('PART {}'.format(self.name))
+
     async def on_irc_names(self, event):
         self.names_buffer.extend(event.parameters[3].split())
 

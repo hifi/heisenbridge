@@ -19,7 +19,7 @@ from channelroom import ChannelRoom
 
 class BridgeAppService(AppService):
     _rooms: Dict[str, Room]
-    _users: Set[str]
+    _users: Dict[str, str]
 
     def register_room(self, room: Room):
         self._rooms[room.id] = room
@@ -53,8 +53,19 @@ class BridgeAppService(AppService):
             ret += ':' + self.server_name
         return ret
 
-    def cache_user(self, user_id):
-        self._users.add(user_id)
+    async def cache_user(self, user_id, displayname):
+        # start by caching that the user_id exists without a displayname
+        if user_id not in self._users:
+            self._users[user_id] = None
+
+        # if the cached displayname is incorrect
+        if displayname != None and self._users[user_id] != displayname:
+            try:
+                await self.api.put_user_displayname(user_id, displayname)
+            except MatrixError:
+                print('Failed to update user displayname but it is okay')
+
+            self._users[user_id] = displayname
 
     def is_user_cached(self, user_id):
         return user_id in self._users
@@ -63,26 +74,24 @@ class BridgeAppService(AppService):
         user_id = self.irc_user_id(network, nick)
 
         # if we've seen this user before, we can skip registering
-        if self.is_user_cached(user_id):
-            return user_id
+        if not self.is_user_cached(user_id):
+            try:
+                await self.api.post_user_register({
+                    'type': 'm.login.application_service',
+                    'username': self.irc_user_id(network, nick, False, False),
+                })
+            except MatrixUserInUse:
+                pass
 
-        try:
-            await self.api.post_user_register({
-                'type': 'm.login.application_service',
-                'username': self.irc_user_id(network, nick, False, False),
-            })
-            await self.api.put_user_displayname(user_id, nick)
-
-            self.cache_user(user_id)
-        except MatrixUserInUse:
-            pass
+        # always ensure the displayname is up-to-date
+        await self.cache_user(user_id, nick)
 
         return user_id
 
     async def _on_mx_event(self, event):
         # keep user cache up-to-date
         if 'user_id' in event:
-            self.cache_user(event['user_id'])
+            await self.cache_user(event['user_id'], None)
 
         if 'room_id' in event and event['room_id'] in self._rooms:
             try:
@@ -162,7 +171,7 @@ class BridgeAppService(AppService):
         print('We are ' + whoami['user_id'])
 
         self._rooms = {}
-        self._users = set()
+        self._users = {}
         self.user_id = whoami['user_id']
         self.server_name = self.user_id.split(':')[1]
         self.config = {'networks': {}, 'owner': None}
@@ -208,9 +217,9 @@ class BridgeAppService(AppService):
 
                 members = list((await self.api.get_room_joined_members(room_id))['joined'].keys())
 
-                # add to cache immediately
+                # add to cache immediately but without known displayname
                 for user_id in members:
-                    self.cache_user(user_id)
+                    await self.cache_user(user_id, None)
 
                 room = cls(room_id, config['user_id'], self, members)
                 room.from_config(config)

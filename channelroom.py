@@ -49,14 +49,13 @@ class ChannelRoom(PrivateRoom):
                 continue
 
             # convert to mx id, check if we already have them
-            irc_user_id = self.serv.irc_user_id(self.network.name, nick)
+            irc_user_id = await self.serv.ensure_irc_user_id(self.network.name, nick)
 
             # make sure this user is not removed from room
             if irc_user_id in to_remove:
                 to_remove.remove(irc_user_id)
                 continue
 
-            irc_user_id = await self.serv.ensure_irc_user_id(self.network.name, nick)
 
             # if this user is not in room, invite and join
             if not self.in_room(irc_user_id):

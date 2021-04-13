@@ -374,6 +374,10 @@ class NetworkRoom(Room):
         old_irc_user_id = self.serv.irc_user_id(self.name, message.prefix.nick)
         new_irc_user_id = await self.serv.ensure_irc_user_id(self.name, message.parameters[0])
 
+        # special case where only cases change
+        if old_irc_user_id == new_irc_user_id:
+            return
+
         # leave and join channels
         for room in self.rooms.values():
             if type(room) is ChannelRoom:

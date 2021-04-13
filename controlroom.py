@@ -13,18 +13,31 @@ class ControlRoom(Room):
         cmd = CommandParser(prog='NETWORKS', description='List networks')
         self.commands.register(cmd, self.cmd_networks)
 
-        cmd = CommandParser(prog='ADDNETWORK', description='Add network')
-        cmd.add_argument('name', help='network name')
-        cmd.add_argument('server', help='server address (irc.network.org)')
-        self.commands.register(cmd, self.cmd_addnetwork)
-
-        cmd = CommandParser(prog='DELNETWORK', description='Add network')
-        cmd.add_argument('name', help='network name')
-        self.commands.register(cmd, self.cmd_delnetwork)
-
         cmd = CommandParser(prog='OPEN', description='Open network control room')
         cmd.add_argument('name', help='network name')
         self.commands.register(cmd, self.cmd_open)
+
+        if self.serv.is_admin(self.user_id):
+            cmd = CommandParser(prog='MASKS', description='List allow masks')
+            self.commands.register(cmd, self.cmd_masks)
+
+            cmd = CommandParser(prog='ADDMASK', description='Add allow mask')
+            cmd.add_argument('mask', help='Matrix ID mask (eg: @friend:contoso.com)')
+            cmd.add_argument('--admin', help='Admin level access', action='store_true')
+            self.commands.register(cmd, self.cmd_addmask)
+
+            cmd = CommandParser(prog='DELMASK', description='Remove allow mask')
+            cmd.add_argument('mask', help='Matrix ID mask (eg: @friend:contoso.com)')
+            self.commands.register(cmd, self.cmd_delmask)
+
+            cmd = CommandParser(prog='ADDNETWORK', description='Add network')
+            cmd.add_argument('name', help='network name')
+            cmd.add_argument('server', help='server address (irc.network.org)')
+            self.commands.register(cmd, self.cmd_addnetwork)
+
+            cmd = CommandParser(prog='DELNETWORK', description='Add network')
+            cmd.add_argument('name', help='network name')
+            self.commands.register(cmd, self.cmd_delnetwork)
 
         self.mx_register('m.room.message', self.on_mx_message)
 
@@ -53,6 +66,36 @@ class ControlRoom(Room):
             return await self.commands.trigger(event['content']['body'])
         except CommandParserError as e:
             return await self.send_notice(str(e))
+
+    async def cmd_masks(self, args):
+        msg = 'Configured masks:\n'
+
+        for mask, value in self.serv.config['allow'].items():
+            msg += '\t{} -> {}\n'.format(mask, value)
+
+        return await self.send_notice(msg)
+
+    async def cmd_addmask(self, args):
+        masks = self.serv.config['allow']
+
+        if args.mask in masks:
+            return await self.send_notice('Mask already exists')
+
+        masks[args.mask] = 'admin' if args.admin else 'user'
+        await self.serv.save()
+
+        return await self.send_notice('Mask added.')
+
+    async def cmd_delmask(self, args):
+        masks = self.serv.config['allow']
+
+        if args.mask not in masks:
+            return await self.send_notice('Mask does not exist')
+
+        del masks[args.mask]
+        await self.serv.save()
+
+        return await self.send_notice('Mask removed.')
 
     async def cmd_networks(self, args):
         networks = self.serv.config['networks']

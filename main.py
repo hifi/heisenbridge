@@ -38,8 +38,22 @@ class BridgeAppService(AppService):
 
         return ret
 
-    def is_allowed(self, user_id: str):
+    def is_admin(self, user_id: str):
         if user_id == self.config['owner']:
+            return True
+
+        # FIXME: proper mask matching
+        if user_id in self.config['allow'] and self.config['allow'][user_id] == 'admin':
+            return True
+
+        return False
+
+    def is_user(self, user_id: str):
+        if self.is_admin(user_id):
+            return True
+
+        # FIXME: proper mask matching
+        if user_id in self.config['allow']:
             return True
 
         return False
@@ -126,8 +140,7 @@ class BridgeAppService(AppService):
                 self.config['owner'] = event['user_id']
                 await self.save()
 
-            # FIXME: whitelist + try to find out if we can filter out public rooms or rooms with more than one user before we join
-            if not self.is_allowed(event['user_id']):
+            if not self.is_user(event['user_id']):
                 print('Non-whitelisted user tried to talk with us:', event['user_id'])
                 return
 
@@ -174,7 +187,7 @@ class BridgeAppService(AppService):
         self._users = {}
         self.user_id = whoami['user_id']
         self.server_name = self.user_id.split(':')[1]
-        self.config = {'networks': {}, 'owner': None}
+        self.config = {'networks': {}, 'owner': None, 'allow': {}}
 
         # load config from HS
         await self.load()

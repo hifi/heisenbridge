@@ -25,6 +25,7 @@ class PrivateRoom(Room):
 
         self.mx_register('m.room.message', self.on_mx_message)
         self.irc_register('PRIVMSG', self.on_irc_privmsg)
+        self.irc_register('NOTICE', self.on_irc_notice)
 
     def from_config(self, config: dict):
         if 'name' not in config:
@@ -85,6 +86,20 @@ class PrivateRoom(Room):
             await self.send_message(event.parameters[1], irc_user_id)
         else:
             await self.send_notice_html('<b>Message from {}</b>: {}'.format(str(event.prefix), event.parameters[1]))
+
+    async def on_irc_notice(self, event):
+        if self.network == None:
+            return True
+
+        if self.network.is_ctcp(event):
+            return
+
+        irc_user_id = self.serv.irc_user_id(self.network.name, event.prefix.nick)
+
+        if irc_user_id in self.members:
+            await self.send_notice(event.parameters[1], irc_user_id)
+        else:
+            await self.send_notice_html('<b>Notice from {}</b>: {}'.format(str(event.prefix), event.parameters[1]))
 
     async def on_irc_event(self, event: dict) -> None:
         handlers = self.irc_handlers.get(event.command, [self._on_irc_room_event])

@@ -305,11 +305,11 @@ class NetworkRoom(Room):
         return await self.send_notice(' '.join(parameters))
 
     async def on_notice(self, message):
-        if message.prefix.user == '' and message.parameters[0] == self.nick or message.parameters[0] == '*':
-            return await self.send_notice('{} {}'.format(message.prefix.nick, message.parameters[1]))
+        source = message.prefix.nick.lower()
+        target = message.parameters[0].lower()
 
         # show unhandled notices in server room
-        if message.prefix.nick not in self.rooms:
+        if source not in self.rooms:
             return await self.send_notice_html('<b>{} ({}@{}):</b> {}'.format(message.prefix.nick, message.prefix.user, message.prefix.host, message.parameters[1]))
 
         return False

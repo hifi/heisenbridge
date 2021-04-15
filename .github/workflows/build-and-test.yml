@@ -28,7 +28,7 @@ jobs:
           run: pip install .[dev,test]
           
         - name: Run __main__.py
-          run: python -m unnamed_irc_bridge
+          run: test python -m unnamed_irc_bridge == 2 
           
         - name: Test
           run: pytest

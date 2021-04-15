@@ -1,8 +1,11 @@
-from room import Room
 import argparse
 import io
-from commandparse import CommandParser, CommandParserError, CommandManager
-from networkroom import NetworkRoom
+
+from unnamed_irc_bridge.command_parse import (CommandManager, CommandParser,
+                                              CommandParserError)
+from unnamed_irc_bridge.network_room import NetworkRoom
+from unnamed_irc_bridge.room import Room
+
 
 class ControlRoom(Room):
     commands: CommandManager

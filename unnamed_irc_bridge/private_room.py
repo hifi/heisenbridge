@@ -1,7 +1,10 @@
-from typing import Optional, Dict, Any
-from room import Room
-from commandparse import CommandParser, CommandParserError, CommandManager
 import re
+from typing import Any, Dict, Optional
+
+from unnamed_irc_bridge.command_parse import (CommandManager, CommandParser,
+                                              CommandParserError)
+from unnamed_irc_bridge.room import Room
+
 
 class NetworkRoom: pass
 

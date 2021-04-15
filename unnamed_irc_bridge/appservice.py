@@ -1,8 +1,8 @@
 from typing import List
 from abc import ABC, abstractmethod
 
-from room import Room
-from matrix import Matrix, MatrixNotFound
+from unnamed_irc_bridge.room import Room
+from unnamed_irc_bridge.matrix import Matrix, MatrixNotFound
 
 class AppService(ABC):
     api: Matrix

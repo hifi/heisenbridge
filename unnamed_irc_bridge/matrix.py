@@ -1,5 +1,7 @@
 import time
-from aiohttp import web, ClientSession
+
+from aiohttp import ClientSession, web
+
 
 class MatrixError(Exception):
     def __init__(self, errcode = None, error = None):

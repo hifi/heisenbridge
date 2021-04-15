@@ -1,5 +1,5 @@
 from typing import List
-from privateroom import PrivateRoom
+from unnamed_irc_bridge.private_room import PrivateRoom
 
 class NetworkRoom: pass
 

@@ -1,8 +1,10 @@
-from abc import ABC, abstractmethod
-from typing import List, Dict, Callable, Optional, Any
 import asyncio
 import re
-from matrix import MatrixError
+from abc import ABC, abstractmethod
+from typing import Any, Callable, Dict, List, Optional
+
+from unnamed_irc_bridge.matrix import MatrixError
+
 
 class AppService: pass
 

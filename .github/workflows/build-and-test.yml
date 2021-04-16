@@ -4,7 +4,7 @@ on: [push]
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         python-version: [3.6, 3.7, 3.8, 3.9]
@@ -12,7 +12,7 @@ jobs:
     steps:
         - name: Checkout repo
           uses: actions/checkout@v2
-        
+
         - name: Set up Python ${{ matrix.python-version }}
           uses: actions/setup-python@v2
           with:
@@ -26,10 +26,10 @@ jobs:
 
         - name: Install
           run: pip install .[dev,test]
-          
+
         - name: Run __main__.py
           run: python -m heisenbridge || echo
-          
+
         - name: Test
           run: pytest
 

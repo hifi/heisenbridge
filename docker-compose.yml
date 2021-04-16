@@ -1,15 +1,38 @@
 version: "3"
 services:
+  heisenbridge:
+    image: python:3.6-slim
+    volumes:
+      - ./:/app
+      - synapse-data:/data
+      - ./docker/heisenbridge-init.sh:/heisenbridge-init.sh:ro
+    entrypoint: /heisenbridge-init.sh
   synapse:
     image: matrixdotorg/synapse:latest
-    network_mode: host
     environment:
       SYNAPSE_SERVER_NAME: localhost
       SYNAPSE_REPORT_STATS: 'no'
-      UID: 1000
-      GID: 1000
+    ports:
+      - '8008:8008'
     volumes:
-      - './synapse-data:/data'
+      - synapse-data:/data
+      - ./docker/synapse-init.sh:/synapse-init.sh:ro
+    entrypoint: /synapse-init.sh
+    logging:
+      driver: none
+  element:
+    image: vectorim/riot-web:latest
+    ports:
+      - '80:80'
+    volumes:
+      - ./docker/element-config.json:/app/config.json:ro
+    logging:
+      driver: none
   inspircd:
     image: inspircd/inspircd-docker:latest
-    network_mode: host
+    ports:
+      - '6667:6667'
+    logging:
+      driver: none
+volumes:
+  synapse-data:

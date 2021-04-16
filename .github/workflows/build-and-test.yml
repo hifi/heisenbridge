@@ -28,7 +28,7 @@ jobs:
           run: pip install .[dev,test]
           
         - name: Run __main__.py
-          run: python -m unnamed_irc_bridge || echo
+          run: python -m heisenbridge || echo
           
         - name: Test
           run: pytest

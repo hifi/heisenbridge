@@ -1,9 +1,9 @@
 import re
 from typing import Any, Dict, Optional
 
-from unnamed_irc_bridge.command_parse import (CommandManager, CommandParser,
+from heisenbridge.command_parse import (CommandManager, CommandParser,
                                               CommandParserError)
-from unnamed_irc_bridge.room import Room
+from heisenbridge.room import Room
 
 
 class NetworkRoom: pass

@@ -1,10 +1,10 @@
 import argparse
 import io
 
-from unnamed_irc_bridge.command_parse import (CommandManager, CommandParser,
+from heisenbridge.command_parse import (CommandManager, CommandParser,
                                               CommandParserError)
-from unnamed_irc_bridge.network_room import NetworkRoom
-from unnamed_irc_bridge.room import Room
+from heisenbridge.network_room import NetworkRoom
+from heisenbridge.room import Room
 
 
 class ControlRoom(Room):

@@ -3,7 +3,7 @@ import re
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional
 
-from unnamed_irc_bridge.matrix import MatrixError
+from heisenbridge.matrix import MatrixError
 
 
 class AppService: pass

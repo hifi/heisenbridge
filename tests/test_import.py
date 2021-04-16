@@ -1,13 +1,13 @@
-import unnamed_irc_bridge
+import heisenbridge
 
-import unnamed_irc_bridge.appservice
-import unnamed_irc_bridge.channel_room
-import unnamed_irc_bridge.command_parse
-import unnamed_irc_bridge.control_room
-import unnamed_irc_bridge.matrix
-import unnamed_irc_bridge.network_room
-import unnamed_irc_bridge.private_room
-import unnamed_irc_bridge.room 
+import heisenbridge.appservice
+import heisenbridge.channel_room
+import heisenbridge.command_parse
+import heisenbridge.control_room
+import heisenbridge.matrix
+import heisenbridge.network_room
+import heisenbridge.private_room
+import heisenbridge.room 
 
 def test_dummy():
     assert True

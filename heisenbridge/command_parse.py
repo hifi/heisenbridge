@@ -19,7 +19,7 @@ class CommandParser(argparse.ArgumentParser):
         pass
 
 
-class CommandManager():
+class CommandManager:
     _commands: dict
 
     def __init__(self):
@@ -29,20 +29,22 @@ class CommandManager():
         self._commands[cmd.prog] = (cmd, func)
 
     async def trigger(self, text):
-        args = text.split(' ')
+        args = text.split(" ")
         command = args.pop(0).upper()
 
         if command in self._commands:
             (cmd, func) = self._commands[command]
             return await func(cmd.parse_args(args))
-        elif command == 'HELP':
-            out = ['Following commands are supported:', '']
+        elif command == "HELP":
+            out = ["Following commands are supported:", ""]
             for (cmd, func) in self._commands.values():
-                out.append('\t{} - {}'.format(cmd.prog, cmd.description))
+                out.append("\t{} - {}".format(cmd.prog, cmd.description))
 
-            out.append('')
-            out.append('To get more help, add -h to any command without arguments.')
+            out.append("")
+            out.append("To get more help, add -h to any command without arguments.")
 
-            raise CommandParserError('\n'.join(out))
+            raise CommandParserError("\n".join(out))
         else:
-            raise CommandParserError('Unknown command "{}", type HELP for list'.format(command))
+            raise CommandParserError(
+                'Unknown command "{}", type HELP for list'.format(command)
+            )

@@ -1,12 +1,15 @@
 import asyncio
 from argparse import Namespace
-from typing import Any, Dict, List
+from typing import Any
+from typing import Dict
+from typing import List
 
 from asyncirc.protocol import IrcProtocol
 from asyncirc.server import Server
 
-from heisenbridge.command_parse import (CommandManager, CommandParser,
-                                        CommandParserError)
+from heisenbridge.command_parse import CommandManager
+from heisenbridge.command_parse import CommandParser
+from heisenbridge.command_parse import CommandParserError
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 
@@ -143,7 +146,7 @@ class NetworkRoom(Room):
         return {"name": self.name, "connected": self.connected, "nick": self.nick}
 
     def is_valid(self) -> bool:
-        if self.name == None:
+        if self.name is None:
             return False
 
         # if user leaves network room and it's not connected we can clean it up
@@ -198,7 +201,7 @@ class NetworkRoom(Room):
         if not self.conn or not self.conn.connected:
             return await self.send_notice("Need to be connected to use this command.")
 
-        ## TODO: validate nick doesn't look like a channel
+        # TODO: validate nick doesn't look like a channel
         target = args.nick.lower()
 
         if target in self.rooms:
@@ -218,13 +221,13 @@ class NetworkRoom(Room):
         if not self.conn or not self.conn.connected:
             return
 
-        ## TODO: validate channel name and add # prefix if naked
+        # TODO: validate channel name and add # prefix if naked
 
         self.conn.send("JOIN {}".format(args.channel))
         return True
 
     async def cmd_nick(self, args):
-        if args.nick == None:
+        if args.nick is None:
             return await self.send_notice("Current nickname: {}".format(self.nick))
 
         self.nick = args.nick
@@ -235,7 +238,7 @@ class NetworkRoom(Room):
         if self.conn and self.conn.connected:
             return True
 
-        if self.nick == None:
+        if self.nick is None:
             return await self.send_notice(
                 "You need to configure a nick first, see HELP"
             )
@@ -259,7 +262,7 @@ class NetworkRoom(Room):
         for server in network["servers"]:
             servers.append(Server(server, 6667))
 
-        if self.conn == None:
+        if self.conn is None:
             self.conn = IrcProtocol(servers, self.nick, loop=asyncio.get_event_loop())
             self.conn.register("*", self.on_irc_event)
 
@@ -323,7 +326,9 @@ class NetworkRoom(Room):
 
     async def on_notice(self, message):
         source = message.prefix.nick.lower()
-        target = message.parameters[0].lower()
+
+        # Never used
+        # target = message.parameters[0].lower()
 
         # show unhandled notices in server room
         if source not in self.rooms:

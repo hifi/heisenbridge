@@ -1,10 +1,12 @@
+import argparse
 import asyncio
 import os
 import random
 import string
 import sys
 import traceback
-from typing import Dict, List, Set
+from typing import Dict
+from typing import List
 
 import aiohttp
 import yaml
@@ -13,7 +15,9 @@ from aiohttp import web
 from heisenbridge.appservice import AppService
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.control_room import ControlRoom
-from heisenbridge.matrix import Matrix, MatrixError, MatrixUserInUse
+from heisenbridge.matrix import Matrix
+from heisenbridge.matrix import MatrixError
+from heisenbridge.matrix import MatrixUserInUse
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
@@ -35,17 +39,17 @@ class BridgeAppService(AppService):
         ret = []
 
         for room in self._rooms.values():
-            if room.__class__ == type and (user_id == None or room.user_id == user_id):
+            if room.__class__ == type and (user_id is None or room.user_id == user_id):
                 ret.append(room)
 
         return ret
 
     def is_admin(self, user_id: str):
-        if user_id == self.config['owner']:
+        if user_id == self.config["owner"]:
             return True
 
         # FIXME: proper mask matching
-        if user_id in self.config['allow'] and self.config['allow'][user_id] == 'admin':
+        if user_id in self.config["allow"] and self.config["allow"][user_id] == "admin":
             return True
 
         return False
@@ -55,18 +59,20 @@ class BridgeAppService(AppService):
             return True
 
         # FIXME: proper mask matching
-        if user_id in self.config['allow']:
+        if user_id in self.config["allow"]:
             return True
 
         return False
 
     def strip_nick(self, nick):
-        return nick.strip('@+&')
+        return nick.strip("@+&")
 
     def irc_user_id(self, network, nick, at=True, server=True):
-        ret = ('@' if at else '') + 'irc_{}_{}'.format(network, self.strip_nick(nick).lower())
+        ret = ("@" if at else "") + "irc_{}_{}".format(
+            network, self.strip_nick(nick).lower()
+        )
         if server:
-            ret += ':' + self.server_name
+            ret += ":" + self.server_name
         return ret
 
     async def cache_user(self, user_id, displayname):
@@ -75,11 +81,11 @@ class BridgeAppService(AppService):
             self._users[user_id] = None
 
         # if the cached displayname is incorrect
-        if displayname != None and self._users[user_id] != displayname:
+        if displayname and self._users[user_id] != displayname:
             try:
                 await self.api.put_user_displayname(user_id, displayname)
             except MatrixError:
-                print('Failed to update user displayname but it is okay')
+                print("Failed to update user displayname but it is okay")
 
             self._users[user_id] = displayname
 
@@ -92,10 +98,12 @@ class BridgeAppService(AppService):
         # if we've seen this user before, we can skip registering
         if not self.is_user_cached(user_id):
             try:
-                await self.api.post_user_register({
-                    'type': 'm.login.application_service',
-                    'username': self.irc_user_id(network, nick, False, False),
-                })
+                await self.api.post_user_register(
+                    {
+                        "type": "m.login.application_service",
+                        "username": self.irc_user_id(network, nick, False, False),
+                    }
+                )
             except MatrixUserInUse:
                 pass
 
@@ -106,14 +114,16 @@ class BridgeAppService(AppService):
 
     async def _on_mx_event(self, event):
         # keep user cache up-to-date
-        if 'user_id' in event:
-            await self.cache_user(event['user_id'], None)
+        if "user_id" in event:
+            await self.cache_user(event["user_id"], None)
 
-        if 'room_id' in event and event['room_id'] in self._rooms:
+        if "room_id" in event and event["room_id"] in self._rooms:
             try:
-                room = self._rooms[event['room_id']]
+                room = self._rooms[event["room_id"]]
                 if not await room.on_mx_event(event):
-                    print('Event handler for {} returned false, leaving and cleaning up'.format(event['type']))
+                    print(
+                        f"Event handler for {event['type']} returned false, leaving and cleaning up."  # noqa: E501
+                    )
                     self.unregister_room(room.id)
                     await room.cleanup()
 
@@ -126,31 +136,37 @@ class BridgeAppService(AppService):
                     except MatrixError:
                         pass
             except Exception as e:
-                print('Ignoring exception from room handler:', str(e))
+                print("Ignoring exception from room handler:", str(e))
                 traceback.print_exc()
-        elif event['type'] == 'm.room.member' and event['user_id'] != self.user_id and event['content']['membership'] == 'invite':
-            print('got an invite')
+        elif (
+            event["type"] == "m.room.member"
+            and event["user_id"] != self.user_id
+            and event["content"]["membership"] == "invite"
+        ):
+            print("got an invite")
 
             # only respond to an invite
-            if event['room_id'] in self._rooms:
-                print('Control room already open, uhh')
+            if event["room_id"] in self._rooms:
+                print("Control room already open, uhh")
                 return
 
             # set owner
-            if 'owner' not in self.config or self.config['owner'] == None:
-                print('We have an owner now, let us rejoice!')
-                self.config['owner'] = event['user_id']
+            if self.config.get("owner", None) is None:
+                print("We have an owner now, let us rejoice!")
+                self.config["owner"] = event["user_id"]
                 await self.save()
 
-            if not self.is_user(event['user_id']):
-                print('Non-whitelisted user tried to talk with us:', event['user_id'])
+            if not self.is_user(event["user_id"]):
+                print("Non-whitelisted user tried to talk with us:", event["user_id"])
                 return
 
-            print('Whitelisted user invited us, going to accept')
+            print("Whitelisted user invited us, going to accept")
 
             # accept invite sequence
             try:
-                room = ControlRoom(event['room_id'], event['user_id'], self, [event['user_id']])
+                room = ControlRoom(
+                    event["room_id"], event["user_id"], self, [event["user_id"]]
+                )
                 await room.save()
                 self.register_room(room)
                 await self.api.post_room_join(room.id)
@@ -158,17 +174,17 @@ class BridgeAppService(AppService):
                 # show help on open
                 await room.show_help()
             except Exception as e:
-                if event['room_id'] in self._rooms:
-                    del self._rooms[event['room_id']]
+                if event["room_id"] in self._rooms:
+                    del self._rooms[event["room_id"]]
                 print(e)
         else:
             pass
-            #print(json.dumps(event, indent=4, sort_keys=True))
+            # print(json.dumps(event, indent=4, sort_keys=True))
 
     async def _transaction(self, req):
         body = await req.json()
 
-        for event in body['events']:
+        for event in body["events"]:
             await self._on_mx_event(event)
 
         return web.json_response({})
@@ -178,18 +194,18 @@ class BridgeAppService(AppService):
             registration = yaml.safe_load(f)
 
         app = aiohttp.web.Application()
-        app.router.add_put('/transactions/{id}', self._transaction)
+        app.router.add_put("/transactions/{id}", self._transaction)
 
-        self.api = Matrix(homeserver_url, registration['as_token'])
+        self.api = Matrix(homeserver_url, registration["as_token"])
 
         whoami = await self.api.get_user_whoami()
-        print('We are ' + whoami['user_id'])
+        print("We are " + whoami["user_id"])
 
         self._rooms = {}
         self._users = {}
-        self.user_id = whoami['user_id']
-        self.server_name = self.user_id.split(':')[1]
-        self.config = {'networks': {}, 'owner': None, 'allow': {}}
+        self.user_id = whoami["user_id"]
+        self.server_name = self.user_id.split(":")[1]
+        self.config = {"networks": {}, "owner": None, "allow": {}}
 
         # load config from HS
         await self.load()
@@ -200,17 +216,19 @@ class BridgeAppService(AppService):
         print(resp)
 
         try:
-            await self.api.post_user_register({
-                'type': 'm.login.application_service',
-                'username': registration['sender_localpart']
-            })
+            await self.api.post_user_register(
+                {
+                    "type": "m.login.application_service",
+                    "username": registration["sender_localpart"],
+                }
+            )
         except MatrixUserInUse:
             pass
 
-        await self.api.put_user_displayname(self.user_id, 'Heisenbridge')
+        await self.api.put_user_displayname(self.user_id, "Heisenbridge")
 
         # room types and their init order, network must be before chat and group
-        room_types = [ ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom ]
+        room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom]
 
         room_type_map = {}
         for room_type in room_types:
@@ -219,24 +237,28 @@ class BridgeAppService(AppService):
         print(room_type_map)
 
         # import all rooms
-        for room_id in resp['joined_rooms']:
+        for room_id in resp["joined_rooms"]:
             try:
-                config = await self.api.get_room_account_data(self.user_id, room_id, 'irc')
+                config = await self.api.get_room_account_data(
+                    self.user_id, room_id, "irc"
+                )
 
-                if 'type' not in config or 'user_id' not in config:
-                    raise Exception('Invalid config')
+                if "type" not in config or "user_id" not in config:
+                    raise Exception("Invalid config")
 
-                cls = room_type_map.get(config['type'])
+                cls = room_type_map.get(config["type"])
                 if not cls:
-                    raise Exception('Unknown room type')
+                    raise Exception("Unknown room type")
 
-                members = list((await self.api.get_room_joined_members(room_id))['joined'].keys())
+                members = list(
+                    (await self.api.get_room_joined_members(room_id))["joined"].keys()
+                )
 
                 # add to cache immediately but without known displayname
                 for user_id in members:
                     await self.cache_user(user_id, None)
 
-                room = cls(room_id, config['user_id'], self, members)
+                room = cls(room_id, config["user_id"], self, members)
                 room.from_config(config)
 
                 # only add valid rooms to event handler
@@ -244,9 +266,9 @@ class BridgeAppService(AppService):
                     self._rooms[room_id] = room
                 else:
                     await room.cleanup()
-                    raise Exception('Room validation failed after init')
+                    raise Exception("Room validation failed after init")
             except Exception as e:
-                print('Failed to configure room, leaving:')
+                print("Failed to configure room, leaving:")
                 print(e)
 
                 self.unregister_room(room_id)
@@ -260,14 +282,14 @@ class BridgeAppService(AppService):
                 except MatrixError:
                     pass
 
-        print('Connecting network rooms...')
+        print("Connecting network rooms...")
 
         # connect network rooms
         for room in self._rooms.values():
             if type(room) == NetworkRoom and room.connected:
                 await room.connect()
 
-        print('Init done!')
+        print("Init done!")
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
@@ -276,43 +298,64 @@ class BridgeAppService(AppService):
 
         await asyncio.Event().wait()
 
-parser = argparse.ArgumentParser(prog=os.path.basename(sys.executable) + ' -m ' + __package__, description='a Matrix IRC bridge', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-parser.add_argument('-c', '--config', help='registration YAML file path, must be writable if generating', required=True)
-parser.add_argument('-l', '--listen-address', help='bridge listen address', default='127.0.0.1')
-parser.add_argument('-p', '--listen-port', help='bridge listen port', type=int, default='9898')
-parser.add_argument('--generate', action='store_true', help='generate registration YAML for Matrix homeserver', default=argparse.SUPPRESS)
-parser.add_argument('homeserver', nargs='?', help='URL of Matrix homeserver', default='http://localhost:8008')
+
+parser = argparse.ArgumentParser(
+    prog=os.path.basename(sys.executable) + " -m " + __package__,
+    description="a Matrix IRC bridge",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    "-c",
+    "--config",
+    help="registration YAML file path, must be writable if generating",
+    required=True,
+)
+parser.add_argument(
+    "-l", "--listen-address", help="bridge listen address", default="127.0.0.1"
+)
+parser.add_argument(
+    "-p", "--listen-port", help="bridge listen port", type=int, default="9898"
+)
+parser.add_argument(
+    "--generate",
+    action="store_true",
+    help="generate registration YAML for Matrix homeserver",
+    default=argparse.SUPPRESS,
+)
+parser.add_argument(
+    "homeserver",
+    nargs="?",
+    help="URL of Matrix homeserver",
+    default="http://localhost:8008",
+)
 
 args = parser.parse_args()
 
-if 'generate' in args:
+if "generate" in args:
     letters = string.ascii_letters + string.digits
 
     registration = {
-        'id': 'heisenbridge',
-        'url': 'http://{}:{}'.format(args.listen_address, args.listen_port),
-        'as_token': ''.join(random.choice(letters) for i in range(64)),
-        'hs_token': ''.join(random.choice(letters) for i in range(64)),
-        'rate_limited': False,
-        'sender_localpart': 'heisenbridge',
-        'namespaces': {
-            'users': [
-                {
-                    'regex': '@irc_*',
-                    'exclusive': True
-                }
-            ],
-            'aliases': [],
-            'rooms': [],
-        }
+        "id": "heisenbridge",
+        "url": "http://{}:{}".format(args.listen_address, args.listen_port),
+        "as_token": "".join(random.choice(letters) for i in range(64)),
+        "hs_token": "".join(random.choice(letters) for i in range(64)),
+        "rate_limited": False,
+        "sender_localpart": "heisenbridge",
+        "namespaces": {
+            "users": [{"regex": "@irc_*", "exclusive": True}],
+            "aliases": [],
+            "rooms": [],
+        },
     }
 
-    with open(args.config, 'w') as f:
+    with open(args.config, "w") as f:
         yaml.dump(registration, f, sort_keys=False)
 
-    print('Registration file generated and saved to {}'.format(args.config))
+    print("Registration file generated and saved to {}".format(args.config))
 else:
     service = BridgeAppService()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(service.run(args.config, args.listen_address, args.listen_port, args.homeserver))
+    loop.run_until_complete(
+        service.run(args.config, args.listen_address, args.listen_port, args.homeserver)
+    )
     loop.close()

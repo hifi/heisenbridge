@@ -1,8 +1,5 @@
-import argparse
-import io
-
 from heisenbridge.command_parse import (CommandManager, CommandParser,
-                                              CommandParserError)
+                                        CommandParserError)
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.room import Room
 

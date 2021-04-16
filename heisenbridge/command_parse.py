@@ -1,16 +1,23 @@
 import argparse
 
-class CommandParserError(Exception): pass
+
+class CommandParserError(Exception):
+    pass
+
 
 class CommandParser(argparse.ArgumentParser):
     def error(self, message):
         raise CommandParserError(message)
+
     def print_usage(self):
         raise CommandParserError(self.format_usage())
+
     def print_help(self):
         raise CommandParserError(self.format_help())
+
     def exit(self, status=0, message=None):
         pass
+
 
 class CommandManager():
     _commands: dict

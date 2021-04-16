@@ -1,8 +1,9 @@
-from typing import List
 from abc import ABC, abstractmethod
+from typing import List
 
-from heisenbridge.room import Room
 from heisenbridge.matrix import Matrix, MatrixNotFound
+from heisenbridge.room import Room
+
 
 class AppService(ABC):
     api: Matrix

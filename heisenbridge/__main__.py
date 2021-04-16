@@ -1,5 +1,7 @@
 from typing import Dict, List, Set
 
+import sys
+import os
 import traceback
 import asyncio
 import aiohttp
@@ -205,7 +207,7 @@ class BridgeAppService(AppService):
         except MatrixUserInUse:
             pass
 
-        await self.api.put_user_displayname(self.user_id, 'Friendly IRC Bridge')
+        await self.api.put_user_displayname(self.user_id, 'Heisenbridge')
 
         # room types and their init order, network must be before chat and group
         room_types = [ ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom ]
@@ -274,7 +276,7 @@ class BridgeAppService(AppService):
 
         await asyncio.Event().wait()
 
-parser = argparse.ArgumentParser(description='The Friendly IRC bridge for Matrix', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+parser = argparse.ArgumentParser(prog=os.path.basename(sys.executable) + ' -m ' + __package__, description='a Matrix IRC bridge', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 parser.add_argument('-c', '--config', help='registration YAML file path, must be writable if generating', required=True)
 parser.add_argument('-l', '--listen-address', help='bridge listen address', default='127.0.0.1')
 parser.add_argument('-p', '--listen-port', help='bridge listen port', type=int, default='9898')
@@ -288,12 +290,12 @@ if 'generate' in args:
     letters = string.ascii_letters + string.digits
 
     registration = {
-        'id': 'irc',
+        'id': 'heisenbridge',
         'url': 'http://{}:{}'.format(args.listen_address, args.listen_port),
         'as_token': ''.join(random.choice(letters) for i in range(64)),
         'hs_token': ''.join(random.choice(letters) for i in range(64)),
         'rate_limited': False,
-        'sender_localpart': 'irc',
+        'sender_localpart': 'heisenbridge',
         'namespaces': {
             'users': [
                 {

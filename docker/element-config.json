@@ -1,0 +1,10 @@
+{
+    "default_hs_url": "http://localhost:8008",
+    "brand": "Heisenbridge",
+    "showLabsSettings": true,
+    "roomDirectory": {
+        "servers": [
+            "http://localhost:8008"
+        ]
+    }
+}

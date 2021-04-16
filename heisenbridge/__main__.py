@@ -9,13 +9,13 @@ import argparse
 import string
 import random
 
-from unnamed_irc_bridge.matrix import Matrix, MatrixError, MatrixUserInUse
-from unnamed_irc_bridge.appservice import AppService
-from unnamed_irc_bridge.room import Room
-from unnamed_irc_bridge.control_room import ControlRoom
-from unnamed_irc_bridge.network_room import NetworkRoom
-from unnamed_irc_bridge.private_room import PrivateRoom
-from unnamed_irc_bridge.channel_room import ChannelRoom
+from heisenbridge.matrix import Matrix, MatrixError, MatrixUserInUse
+from heisenbridge.appservice import AppService
+from heisenbridge.room import Room
+from heisenbridge.control_room import ControlRoom
+from heisenbridge.network_room import NetworkRoom
+from heisenbridge.private_room import PrivateRoom
+from heisenbridge.channel_room import ChannelRoom
 
 class BridgeAppService(AppService):
     _rooms: Dict[str, Room]

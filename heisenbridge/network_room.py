@@ -5,11 +5,11 @@ from typing import Any, Dict, List
 from asyncirc.protocol import IrcProtocol
 from asyncirc.server import Server
 
-from unnamed_irc_bridge.channel_room import ChannelRoom
-from unnamed_irc_bridge.command_parse import (CommandManager, CommandParser,
+from heisenbridge.channel_room import ChannelRoom
+from heisenbridge.command_parse import (CommandManager, CommandParser,
                                               CommandParserError)
-from unnamed_irc_bridge.private_room import PrivateRoom
-from unnamed_irc_bridge.room import Room
+from heisenbridge.private_room import PrivateRoom
+from heisenbridge.room import Room
 
 
 class NetworkRoom(Room):

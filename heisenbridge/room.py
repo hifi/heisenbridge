@@ -1,12 +1,12 @@
 import asyncio
 import re
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any, Callable, Dict, List, Optional
 
-from heisenbridge.matrix import MatrixError
 
+class AppService:
+    pass
 
-class AppService: pass
 
 class Room(ABC):
     id: str

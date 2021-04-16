@@ -1,23 +1,23 @@
+import asyncio
+import os
+import random
+import string
+import sys
+import traceback
 from typing import Dict, List, Set
 
-import sys
-import os
-import traceback
-import asyncio
 import aiohttp
-from aiohttp import web
 import yaml
-import argparse
-import string
-import random
+from aiohttp import web
 
-from heisenbridge.matrix import Matrix, MatrixError, MatrixUserInUse
 from heisenbridge.appservice import AppService
-from heisenbridge.room import Room
+from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.control_room import ControlRoom
+from heisenbridge.matrix import Matrix, MatrixError, MatrixUserInUse
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.private_room import PrivateRoom
-from heisenbridge.channel_room import ChannelRoom
+from heisenbridge.room import Room
+
 
 class BridgeAppService(AppService):
     _rooms: Dict[str, Room]
@@ -31,7 +31,7 @@ class BridgeAppService(AppService):
             del self._rooms[room_id]
 
     # this is mostly used by network rooms at init, it's a bit slow
-    def find_rooms(self, type, user_id = None) -> List[Room]:
+    def find_rooms(self, type, user_id=None) -> List[Room]:
         ret = []
 
         for room in self._rooms.values():
@@ -63,7 +63,7 @@ class BridgeAppService(AppService):
     def strip_nick(self, nick):
         return nick.strip('@+&')
 
-    def irc_user_id(self, network, nick, at = True, server = True):
+    def irc_user_id(self, network, nick, at=True, server=True):
         ret = ('@' if at else '') + 'irc_{}_{}'.format(network, self.strip_nick(nick).lower())
         if server:
             ret += ':' + self.server_name
@@ -169,7 +169,7 @@ class BridgeAppService(AppService):
         body = await req.json()
 
         for event in body['events']:
-          await self._on_mx_event(event)
+            await self._on_mx_event(event)
 
         return web.json_response({})
 
@@ -285,7 +285,6 @@ parser.add_argument('homeserver', nargs='?', help='URL of Matrix homeserver', de
 
 args = parser.parse_args()
 
-import io
 if 'generate' in args:
     letters = string.ascii_letters + string.digits
 

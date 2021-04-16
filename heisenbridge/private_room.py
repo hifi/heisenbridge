@@ -1,12 +1,13 @@
 import re
 from typing import Any, Dict, Optional
 
-from heisenbridge.command_parse import (CommandManager, CommandParser,
-                                              CommandParserError)
+from heisenbridge.command_parse import CommandManager, CommandParserError
 from heisenbridge.room import Room
 
 
-class NetworkRoom: pass
+class NetworkRoom:
+    pass
+
 
 class PrivateRoom(Room):
     # irc nick of the other party, name for consistency
@@ -130,7 +131,7 @@ class PrivateRoom(Room):
 
             # try really hard to find the start of the message
             # FIXME: parse the formatted part instead as it has a link inside it
-            text = re.sub('^[^:]+\s*:?\s*', '', event['content']['body'])
+            text = re.sub(r'^[^:]+\s*:?\s*', '', event['content']['body'])
 
             try:
                 return await self.commands.trigger(text)

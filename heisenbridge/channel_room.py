@@ -1,7 +1,11 @@
 from typing import List
+
 from heisenbridge.private_room import PrivateRoom
 
-class NetworkRoom: pass
+
+class NetworkRoom:
+    pass
+
 
 class ChannelRoom(PrivateRoom):
     names_buffer: List[str]
@@ -22,7 +26,7 @@ class ChannelRoom(PrivateRoom):
 
     @staticmethod
     async def create(network: NetworkRoom, name: str):
-        room_id = await network.serv.create_room('{} ({})'.format(name, network.name), ''.format(name, network.name), [network.user_id])
+        room_id = await network.serv.create_room('{} ({})'.format(name, network.name), '', [network.user_id])
         room = ChannelRoom(room_id, network.user_id, network.serv, [network.serv.user_id])
         room.name = name.lower()
         room.network = network
@@ -71,7 +75,6 @@ class ChannelRoom(PrivateRoom):
             if irc_user_id in to_remove:
                 to_remove.remove(irc_user_id)
                 continue
-
 
             # if this user is not in room, invite and join
             if not self.in_room(irc_user_id):

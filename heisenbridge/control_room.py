@@ -43,7 +43,7 @@ class ControlRoom(Room):
         self.mx_register("m.room.message", self.on_mx_message)
 
     def is_valid(self) -> bool:
-        if self.user_id == None:
+        if self.user_id is None:
             return False
 
         if len(self.members) != 2:
@@ -53,9 +53,7 @@ class ControlRoom(Room):
 
     async def show_help(self):
         await self.send_notice_html(
-            "<b>Howdy, stranger!</b> You have been granted access to the IRC bridge of <b>{}</b>.".format(
-                self.serv.server_name
-            )
+            f"<b>Howdy, stranger!</b> You have been granted access to the IRC bridge of <b>{self.serv.server_name}</b>."  # noqa: E501
         )
 
         try:
@@ -110,7 +108,7 @@ class ControlRoom(Room):
 
         msg = "Configured networks:\n"
 
-        for network, data in self.serv.config["networks"].items():
+        for network, data in networks.items():
             msg += network + "\n"
 
         return await self.send_notice(msg)

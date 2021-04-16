@@ -22,9 +22,7 @@ class Room(ABC):
     _notice_buf: List[str]
     _notice_task: Any
 
-    def __init__(
-        self, id: str, user_id: str, serv: AppService, members: List[str]
-    ) -> "Room":
+    def __init__(self, id: str, user_id: str, serv: AppService, members: List[str]):
         self.id = id
         self.user_id = user_id
         self.serv = serv
@@ -92,7 +90,7 @@ class Room(ABC):
 
             if not self.is_valid():
                 print(
-                    "Room ended up invalid after membership change, returning false from event handler"
+                    "Room ended up invalid after membership change, returning false from event handler."  # noqa: E501
                 )
                 return False
 
@@ -123,11 +121,11 @@ class Room(ABC):
     # send notice to mx user (may be puppeted)
     async def send_notice(self, text: str, user_id: Optional[str] = None) -> dict:
         # buffer only non-puppeted notices
-        if user_id == None:
+        if user_id is None:
             self._notice_buf.append(text)
 
             # start task if it doesn't exist
-            if self._notice_task == None:
+            if self._notice_task is None:
                 self._notice_task = asyncio.ensure_future(self.flush_notices())
 
             return True

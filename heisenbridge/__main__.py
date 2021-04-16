@@ -49,7 +49,7 @@ class BridgeAppService(AppService):
             return True
 
         # FIXME: proper mask matching
-        if user_id in self.config["allow"] and self.config["allow"][user_id] == "admin":
+        if self.config["allow"].get(user_id) == "admin":
             return True
 
         return False

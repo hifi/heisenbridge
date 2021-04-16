@@ -18,6 +18,6 @@ repos:
   hooks:
     - id: check-github-workflows
 -   repo: https://github.com/pycqa/flake8
-    rev: 3.9.1 
+    rev: 3.9.1
     hooks:
     -   id: flake8

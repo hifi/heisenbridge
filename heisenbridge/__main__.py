@@ -5,11 +5,13 @@ import os
 import random
 import string
 import sys
+import urllib
 from typing import Dict
 from typing import List
 
 import aiohttp
 import yaml
+from aiohttp import ClientSession
 from aiohttp import web
 
 from heisenbridge.appservice import AppService
@@ -184,6 +186,35 @@ class BridgeAppService(AppService):
 
         return web.json_response({})
 
+    async def detect_public_endpoint(self):
+        async with ClientSession() as session:
+            # first try https well-known
+            try:
+                resp = await session.request(
+                    "GET",
+                    "https://{}/.well-known/matrix/client".format(self.server_name),
+                )
+                data = await resp.json()
+                return data["m.homeserver"]["base_url"]
+            except Exception:
+                logging.debug("Did not find .well-known for HS")
+
+            # try https directly
+            try:
+                resp = await session.request("GET", "https://{}/_matrix/client/versions".format(self.server_name))
+                await resp.json()
+                return "https://{}".format(self.server_name)
+            except Exception:
+                logging.debug("Could not use direct connection to HS")
+
+            # give up
+            logging.warning("Using internal URL for homeserver, media links are likely broken!")
+            return self.api.url
+
+    def mxc_to_url(self, mxc):
+        mxc = urllib.parse.urlparse(mxc)
+        return "{}/_matrix/media/r0/download/{}{}".format(self.endpoint, mxc.netloc, mxc.path)
+
     async def run(self, config_file, listen_address, listen_port, homeserver_url):
         with open(config_file) as f:
             registration = yaml.safe_load(f)
@@ -202,6 +233,10 @@ class BridgeAppService(AppService):
         self.server_name = self.user_id.split(":")[1]
         self.config = {"networks": {}, "owner": None, "allow": {}}
         logging.debug(f"Default config: {self.config}")
+
+        # figure out where we are publicly for MXC conversions
+        self.endpoint = await self.detect_public_endpoint()
+        print("Homeserver is publicly available at " + self.endpoint)
 
         # load config from HS
         await self.load()

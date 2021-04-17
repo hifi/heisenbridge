@@ -130,7 +130,9 @@ class PrivateRoom(Room):
 
         if event["content"]["msgtype"] == "m.emote":
             self.network.conn.action(self.name, event["content"]["body"])
-        if event["content"]["msgtype"] == "m.text":
+        elif event["content"]["msgtype"] == "m.image":
+            self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event["content"]["url"]))
+        elif event["content"]["msgtype"] == "m.text":
             # allow commanding the appservice in rooms
             if "formatted_body" in event["content"] and self.serv.user_id in event["content"]["formatted_body"]:
 

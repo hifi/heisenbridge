@@ -140,7 +140,7 @@ class PrivateRoom(Room):
         self.irc_handlers[type].append(func)
 
     async def on_mx_message(self, event):
-        if event["content"]["msgtype"] != "m.text" or event["user_id"] != self.user_id:
+        if event["user_id"] != self.user_id:
             return True
 
         if (
@@ -150,22 +150,30 @@ class PrivateRoom(Room):
         ):
             return await self.send_notice("Not connected to network.")
 
-        # allow commanding the appservice in rooms
-        if (
-            "formatted_body" in event["content"]
-            and self.serv.user_id in event["content"]["formatted_body"]
-        ):
+        if event["content"]["msgtype"] == "m.image":
+            self.network.conn.send(
+                "PRIVMSG {} :{}".format(
+                    self.name, self.serv.mxc_to_url(event["content"]["url"])
+                )
+            )
+            return True
+        elif event["content"]["msgtype"] == "m.text":
+            # allow commanding the appservice in rooms
+            if (
+                "formatted_body" in event["content"]
+                and self.serv.user_id in event["content"]["formatted_body"]
+            ):
 
-            # try really hard to find the start of the message
-            # FIXME: parse the formatted part instead as it has a link inside it
-            text = re.sub(r"^[^:]+\s*:?\s*", "", event["content"]["body"])
+                # try really hard to find the start of the message
+                # FIXME: parse the formatted part instead as it has a link inside it
+                text = re.sub(r"^[^:]+\s*:?\s*", "", event["content"]["body"])
 
-            try:
-                return await self.commands.trigger(text)
-            except CommandParserError as e:
-                return await self.send_notice(str(e))
+                try:
+                    return await self.commands.trigger(text)
+                except CommandParserError as e:
+                    return await self.send_notice(str(e))
 
-        self.network.conn.send(
-            "PRIVMSG {} :{}".format(self.name, event["content"]["body"])
-        )
+            self.network.conn.send(
+                "PRIVMSG {} :{}".format(self.name, event["content"]["body"])
+            )
         return True

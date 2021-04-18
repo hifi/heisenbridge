@@ -15,9 +15,7 @@ class AppService(ABC):
 
     async def load(self):
         try:
-            self.config.update(
-                await self.api.get_user_account_data(self.user_id, "irc")
-            )
+            self.config.update(await self.api.get_user_account_data(self.user_id, "irc"))
         except MatrixNotFound:
             await self.save()
 

@@ -56,9 +56,7 @@ class Room(ABC):
         config = self.to_config()
         config["type"] = type(self).__name__
         config["user_id"] = self.user_id
-        await self.serv.api.put_room_account_data(
-            self.serv.user_id, self.id, "irc", config
-        )
+        await self.serv.api.put_room_account_data(self.serv.user_id, self.id, "irc", config)
 
     def mx_register(self, type: str, func: Callable[[dict], bool]):
         if type not in self._mx_handlers:
@@ -82,31 +80,21 @@ class Room(ABC):
         return True
 
     async def _on_mx_room_member(self, event: dict) -> None:
-        if (
-            event["content"]["membership"] == "leave"
-            and event["user_id"] in self.members
-        ):
+        if event["content"]["membership"] == "leave" and event["user_id"] in self.members:
             self.members.remove(event["user_id"])
 
             if not self.is_valid():
-                print(
-                    "Room ended up invalid after membership change, returning false from event handler."  # noqa: E501
-                )
+                print("Room ended up invalid after membership change, returning false from event handler.")
                 return False
 
-        if (
-            event["content"]["membership"] == "join"
-            and event["user_id"] not in self.members
-        ):
+        if event["content"]["membership"] == "join" and event["user_id"] not in self.members:
             self.members.append(event["user_id"])
 
         return True
 
     # send message to mx user (may be puppeted)
     async def send_message(self, text: str, user_id: Optional[str] = None) -> dict:
-        await self.serv.api.put_room_send_event(
-            self.id, "m.room.message", {"msgtype": "m.text", "body": text}, user_id
-        )
+        await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.text", "body": text}, user_id)
         return True
 
     async def flush_notices(self):
@@ -114,9 +102,7 @@ class Room(ABC):
         text = "\n".join(self._notice_buf)
         self._notice_buf = []
         self._notice_task = None
-        await self.serv.api.put_room_send_event(
-            self.id, "m.room.message", {"msgtype": "m.notice", "body": text}
-        )
+        await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.notice", "body": text})
 
     # send notice to mx user (may be puppeted)
     async def send_notice(self, text: str, user_id: Optional[str] = None) -> dict:

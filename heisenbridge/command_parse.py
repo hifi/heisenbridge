@@ -45,6 +45,4 @@ class CommandManager:
 
             raise CommandParserError("\n".join(out))
         else:
-            raise CommandParserError(
-                'Unknown command "{}", type HELP for list'.format(command)
-            )
+            raise CommandParserError('Unknown command "{}", type HELP for list'.format(command))

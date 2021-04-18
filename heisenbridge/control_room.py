@@ -53,7 +53,7 @@ class ControlRoom(Room):
 
     async def show_help(self):
         await self.send_notice_html(
-            f"<b>Howdy, stranger!</b> You have been granted access to the IRC bridge of <b>{self.serv.server_name}</b>."  # noqa: E501
+            f"<b>Howdy, stranger!</b> You have been granted access to the IRC bridge of <b>{self.serv.server_name}</b>."
         )
 
         try:
@@ -62,10 +62,7 @@ class ControlRoom(Room):
             return await self.send_notice(str(e))
 
     async def on_mx_message(self, event) -> None:
-        if (
-            event["content"]["msgtype"] != "m.text"
-            or event["user_id"] == self.serv.user_id
-        ):
+        if event["content"]["msgtype"] != "m.text" or event["user_id"] == self.serv.user_id:
             return True
 
         try:

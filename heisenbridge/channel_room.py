@@ -31,9 +31,7 @@ class ChannelRoom(PrivateRoom):
             "",
             [network.user_id],
         )
-        room = ChannelRoom(
-            room_id, network.user_id, network.serv, [network.serv.user_id]
-        )
+        room = ChannelRoom(room_id, network.user_id, network.serv, [network.serv.user_id])
         room.name = name.lower()
         room.network = network
         room.network_name = network.name
@@ -112,9 +110,7 @@ class ChannelRoom(PrivateRoom):
         self.members.append(irc_user_id)
 
         # ensure, append, invite and join
-        irc_user_id = await self.serv.ensure_irc_user_id(
-            self.network_name, event.prefix.nick
-        )
+        irc_user_id = await self.serv.ensure_irc_user_id(self.network_name, event.prefix.nick)
         await self.serv.api.post_room_invite(self.id, irc_user_id)
         await self.serv.api.post_room_join(self.id, irc_user_id)
 
@@ -136,22 +132,14 @@ class ChannelRoom(PrivateRoom):
         modes = list(event.parameters)
         modes.pop(0)
 
-        await self.send_notice(
-            "{} set modes {}".format(event.prefix.nick, " ".join(modes))
-        )
+        await self.send_notice("{} set modes {}".format(event.prefix.nick, " ".join(modes)))
 
     async def on_irc_reply_notopic(self, event):
-        await self.serv.api.put_room_send_state(
-            self.id, "m.room.topic", "", {"topic": ""}
-        )
+        await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": ""})
 
     async def on_irc_reply_topic(self, event):
-        await self.serv.api.put_room_send_state(
-            self.id, "m.room.topic", "", {"topic": event.parameters[2]}
-        )
+        await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.parameters[2]})
 
     async def on_irc_topic(self, event):
         await self.send_notice("{} changed the topic".format(event.prefix.nick))
-        await self.serv.api.put_room_send_state(
-            self.id, "m.room.topic", "", {"topic": event.parameters[1]}
-        )
+        await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.parameters[1]})

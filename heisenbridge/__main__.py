@@ -68,9 +68,7 @@ class BridgeAppService(AppService):
         return nick.strip("@+&")
 
     def irc_user_id(self, network, nick, at=True, server=True):
-        ret = ("@" if at else "") + "irc_{}_{}".format(
-            network, self.strip_nick(nick).lower()
-        )
+        ret = f"{'@' if at else ''}irc_{network}_{self.strip_nick(nick).lower()}"
         if server:
             ret += ":" + self.server_name
         return ret
@@ -121,9 +119,7 @@ class BridgeAppService(AppService):
             try:
                 room = self._rooms[event["room_id"]]
                 if not await room.on_mx_event(event):
-                    print(
-                        f"Event handler for {event['type']} returned false, leaving and cleaning up."  # noqa: E501
-                    )
+                    print(f"Event handler for {event['type']} returned false, leaving and cleaning up.")
                     self.unregister_room(room.id)
                     await room.cleanup()
 
@@ -164,9 +160,7 @@ class BridgeAppService(AppService):
 
             # accept invite sequence
             try:
-                room = ControlRoom(
-                    event["room_id"], event["user_id"], self, [event["user_id"]]
-                )
+                room = ControlRoom(event["room_id"], event["user_id"], self, [event["user_id"]])
                 await room.save()
                 self.register_room(room)
                 await self.api.post_room_join(room.id)
@@ -239,9 +233,7 @@ class BridgeAppService(AppService):
         # import all rooms
         for room_id in resp["joined_rooms"]:
             try:
-                config = await self.api.get_room_account_data(
-                    self.user_id, room_id, "irc"
-                )
+                config = await self.api.get_room_account_data(self.user_id, room_id, "irc")
 
                 if "type" not in config or "user_id" not in config:
                     raise Exception("Invalid config")
@@ -250,9 +242,7 @@ class BridgeAppService(AppService):
                 if not cls:
                     raise Exception("Unknown room type")
 
-                members = list(
-                    (await self.api.get_room_joined_members(room_id))["joined"].keys()
-                )
+                members = list((await self.api.get_room_joined_members(room_id))["joined"].keys())
 
                 # add to cache immediately but without known displayname
                 for user_id in members:
@@ -310,12 +300,8 @@ parser.add_argument(
     help="registration YAML file path, must be writable if generating",
     required=True,
 )
-parser.add_argument(
-    "-l", "--listen-address", help="bridge listen address", default="127.0.0.1"
-)
-parser.add_argument(
-    "-p", "--listen-port", help="bridge listen port", type=int, default="9898"
-)
+parser.add_argument("-l", "--listen-address", help="bridge listen address", default="127.0.0.1")
+parser.add_argument("-p", "--listen-port", help="bridge listen port", type=int, default="9898")
 parser.add_argument(
     "--generate",
     action="store_true",
@@ -355,7 +341,5 @@ if "generate" in args:
 else:
     service = BridgeAppService()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(
-        service.run(args.config, args.listen_address, args.listen_port, args.homeserver)
-    )
+    loop.run_until_complete(service.run(args.config, args.listen_address, args.listen_port, args.homeserver))
     loop.close()

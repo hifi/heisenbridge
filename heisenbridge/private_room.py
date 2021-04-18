@@ -101,11 +101,7 @@ class PrivateRoom(Room):
         if irc_user_id in self.members:
             await self.send_message(event.parameters[1], irc_user_id)
         else:
-            await self.send_notice_html(
-                "<b>Message from {}</b>: {}".format(
-                    str(event.prefix), event.parameters[1]
-                )
-            )
+            await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.prefix), event.parameters[1]))
 
     async def on_irc_notice(self, event):
         if self.network is None:
@@ -119,11 +115,7 @@ class PrivateRoom(Room):
         if irc_user_id in self.members:
             await self.send_notice(event.parameters[1], irc_user_id)
         else:
-            await self.send_notice_html(
-                "<b>Notice from {}</b>: {}".format(
-                    str(event.prefix), event.parameters[1]
-                )
-            )
+            await self.send_notice_html("<b>Notice from {}</b>: {}".format(str(event.prefix), event.parameters[1]))
 
     async def on_irc_event(self, event: dict) -> None:
         handlers = self.irc_handlers.get(event.command, [self._on_irc_room_event])
@@ -143,18 +135,11 @@ class PrivateRoom(Room):
         if event["content"]["msgtype"] != "m.text" or event["user_id"] != self.user_id:
             return True
 
-        if (
-            self.network is None
-            or self.network.conn is None
-            or not self.network.conn.connected
-        ):
+        if self.network is None or self.network.conn is None or not self.network.conn.connected:
             return await self.send_notice("Not connected to network.")
 
         # allow commanding the appservice in rooms
-        if (
-            "formatted_body" in event["content"]
-            and self.serv.user_id in event["content"]["formatted_body"]
-        ):
+        if "formatted_body" in event["content"] and self.serv.user_id in event["content"]["formatted_body"]:
 
             # try really hard to find the start of the message
             # FIXME: parse the formatted part instead as it has a link inside it
@@ -165,7 +150,5 @@ class PrivateRoom(Room):
             except CommandParserError as e:
                 return await self.send_notice(str(e))
 
-        self.network.conn.send(
-            "PRIVMSG {} :{}".format(self.name, event["content"]["body"])
-        )
+        self.network.conn.send("PRIVMSG {} :{}".format(self.name, event["content"]["body"]))
         return True

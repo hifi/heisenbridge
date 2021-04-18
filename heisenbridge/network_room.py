@@ -120,9 +120,7 @@ class NetworkRoom(Room):
 
     @staticmethod
     async def create(serv, name, user_id):
-        room_id = await serv.create_room(
-            name, "Network room for {}".format(name), [user_id]
-        )
+        room_id = await serv.create_room(name, "Network room for {}".format(name), [user_id])
         room = NetworkRoom(room_id, user_id, serv, [serv.user_id, user_id])
         room.from_config({"name": name})
         await room.save()
@@ -156,9 +154,7 @@ class NetworkRoom(Room):
         return True
 
     async def show_help(self):
-        await self.send_notice_html(
-            "Welcome to the network room for <b>{}</b>!".format(self.name)
-        )
+        await self.send_notice_html("Welcome to the network room for <b>{}</b>!".format(self.name))
 
         try:
             return await self.commands.trigger("HELP")
@@ -166,10 +162,7 @@ class NetworkRoom(Room):
             return await self.send_notice(str(e))
 
     async def on_mx_message(self, event) -> None:
-        if (
-            event["content"]["msgtype"] != "m.text"
-            or event["user_id"] == self.serv.user_id
-        ):
+        if event["content"]["msgtype"] != "m.text" or event["user_id"] == self.serv.user_id:
             return True
 
         try:
@@ -207,15 +200,11 @@ class NetworkRoom(Room):
         if target in self.rooms:
             room = self.rooms[target]
             await self.serv.api.post_room_invite(room.id, self.user_id)
-            return await self.send_notice(
-                "Inviting back to private chat with {}.".format(args.nick)
-            )
+            return await self.send_notice("Inviting back to private chat with {}.".format(args.nick))
         else:
             room = await PrivateRoom.create(self, args.nick)
             self.rooms[room.name] = room
-            return await self.send_notice(
-                "You have been invited to private chat with {}.".format(args.nick)
-            )
+            return await self.send_notice("You have been invited to private chat with {}.".format(args.nick))
 
     async def cmd_join(self, args):
         if not self.conn or not self.conn.connected:
@@ -239,9 +228,7 @@ class NetworkRoom(Room):
             return True
 
         if self.nick is None:
-            return await self.send_notice(
-                "You need to configure a nick first, see HELP"
-            )
+            return await self.send_notice("You need to configure a nick first, see HELP")
 
         # attach loose sub-rooms to us
         for room in self.serv.find_rooms(PrivateRoom, self.user_id):
@@ -292,9 +279,7 @@ class NetworkRoom(Room):
             elif target in self.rooms:
                 await self.rooms[target].on_irc_event(message)
             elif not handled:
-                await self.send_notice(
-                    "No room for targeted event ({}): {}".format(target, str(message))
-                )
+                await self.send_notice("No room for targeted event ({}): {}".format(target, str(message)))
 
             # dequeue events if needed
             if target in self.queue and target in self.rooms:
@@ -313,9 +298,7 @@ class NetworkRoom(Room):
         # tell the sender
         for room in self.serv.find_rooms(PrivateRoom, self.user_id):
             if room.network_name == self.name and room.name == message.parameters[1]:
-                return await room.send_notice(
-                    "{}: {}".format(message.parameters[1], message.parameters[2])
-                )
+                return await room.send_notice("{}: {}".format(message.parameters[1], message.parameters[2]))
 
         return False
 
@@ -367,9 +350,7 @@ class NetworkRoom(Room):
         target = message.prefix.nick.lower()
 
         if self.is_ctcp(message):
-            return await self.send_notice(
-                "Ignored CTCP from {}".format(message.prefix.nick)
-            )
+            return await self.send_notice("Ignored CTCP from {}".format(message.prefix.nick))
 
         # prevent creating a room while queue is in effect
         if target in self.queue:
@@ -391,9 +372,7 @@ class NetworkRoom(Room):
         else:
             room = self.rooms[target]
             if not room.in_room(self.user_id):
-                await self.serv.api.post_room_invite(
-                    self.rooms[target].id, self.user_id
-                )
+                await self.serv.api.post_room_invite(self.rooms[target].id, self.user_id)
 
     async def on_join(self, message):
         target = message.parameters[0].lower()
@@ -425,9 +404,7 @@ class NetworkRoom(Room):
 
     async def on_nick(self, message):
         old_irc_user_id = self.serv.irc_user_id(self.name, message.prefix.nick)
-        new_irc_user_id = await self.serv.ensure_irc_user_id(
-            self.name, message.parameters[0]
-        )
+        new_irc_user_id = await self.serv.ensure_irc_user_id(self.name, message.parameters[0])
 
         # special case where only cases change
         if old_irc_user_id == new_irc_user_id:
@@ -439,9 +416,7 @@ class NetworkRoom(Room):
                 if room.in_room(old_irc_user_id):
                     # notify mx user about the change
                     await room.send_notice(
-                        "{} is changing nick to {}".format(
-                            message.prefix.nick, message.parameters[0]
-                        )
+                        "{} is changing nick to {}".format(message.prefix.nick, message.parameters[0])
                     )
                     await self.serv.api.post_room_leave(room.id, old_irc_user_id)
                     await self.serv.api.post_room_invite(room.id, new_irc_user_id)
@@ -451,8 +426,6 @@ class NetworkRoom(Room):
 
     async def on_invite(self, message):
         await self.send_notice_html(
-            "<b>{}</b> has invited you to <b>{}</b>".format(
-                message.prefix.nick, message.parameters[1]
-            )
+            "<b>{}</b> has invited you to <b>{}</b>".format(message.prefix.nick, message.parameters[1])
         )
         return True

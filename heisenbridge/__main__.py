@@ -1,10 +1,10 @@
 import argparse
 import asyncio
+import logging
 import os
 import random
 import string
 import sys
-import traceback
 from typing import Dict
 from typing import List
 
@@ -82,8 +82,8 @@ class BridgeAppService(AppService):
         if displayname and self._users[user_id] != displayname:
             try:
                 await self.api.put_user_displayname(user_id, displayname)
-            except MatrixError:
-                print("Failed to update user displayname but it is okay")
+            except MatrixError as e:
+                logging.warning(f"Failed to set displayname '{displayname}' for user_id '{user_id}', got '{e}'")
 
             self._users[user_id] = displayname
 
@@ -119,7 +119,7 @@ class BridgeAppService(AppService):
             try:
                 room = self._rooms[event["room_id"]]
                 if not await room.on_mx_event(event):
-                    print(f"Event handler for {event['type']} returned false, leaving and cleaning up.")
+                    logging.info(f"Event handler for {event['type']} returned false, leaving and cleaning up.")
                     self.unregister_room(room.id)
                     await room.cleanup()
 
@@ -131,32 +131,31 @@ class BridgeAppService(AppService):
                         await self.api.post_room_forget(room.id)
                     except MatrixError:
                         pass
-            except Exception as e:
-                print("Ignoring exception from room handler:", str(e))
-                traceback.print_exc()
+            except Exception:
+                logging.exception("Ignoring exception from room handler. This should be fixed.")
         elif (
             event["type"] == "m.room.member"
             and event["user_id"] != self.user_id
             and event["content"]["membership"] == "invite"
         ):
-            print("got an invite")
+            logging.info(f"Got an invite from {event['user_id']}")
 
             # only respond to an invite
             if event["room_id"] in self._rooms:
-                print("Control room already open, uhh")
+                logging.debug("Control room already open, uhh")
                 return
 
             # set owner
             if self.config.get("owner", None) is None:
-                print("We have an owner now, let us rejoice!")
+                logging.info(f"We have an owner now, let us rejoice, {event['user_id']}!")
                 self.config["owner"] = event["user_id"]
                 await self.save()
 
             if not self.is_user(event["user_id"]):
-                print("Non-whitelisted user tried to talk with us:", event["user_id"])
+                logging.info(f"Non-whitelisted user {event['user_id']} tried to invite us, ignoring.")
                 return
 
-            print("Whitelisted user invited us, going to accept")
+            logging.info("Whitelisted user {event['user_id'} invited us, going to accept.")
 
             # accept invite sequence
             try:
@@ -167,10 +166,10 @@ class BridgeAppService(AppService):
 
                 # show help on open
                 await room.show_help()
-            except Exception as e:
+            except Exception:
                 if event["room_id"] in self._rooms:
                     del self._rooms[event["room_id"]]
-                print(e)
+                logging.exception("Failed to create control room.")
         else:
             pass
             # print(json.dumps(event, indent=4, sort_keys=True))
@@ -193,21 +192,21 @@ class BridgeAppService(AppService):
         self.api = Matrix(homeserver_url, registration["as_token"])
 
         whoami = await self.api.get_user_whoami()
-        print("We are " + whoami["user_id"])
+        logging.info("We are " + whoami["user_id"])
 
         self._rooms = {}
         self._users = {}
         self.user_id = whoami["user_id"]
         self.server_name = self.user_id.split(":")[1]
         self.config = {"networks": {}, "owner": None, "allow": {}}
+        logging.debug(f"Default config: {self.config}")
 
         # load config from HS
         await self.load()
-        print(self.config)
+        logging.debug(f"Merged configuration from HS: {self.config}")
 
         resp = await self.api.get_user_joined_rooms()
-        print("Got rooms from server:")
-        print(resp)
+        logging.debug(f"Appservice rooms: {resp['joined_rooms']}")
 
         try:
             await self.api.post_user_register(
@@ -216,8 +215,11 @@ class BridgeAppService(AppService):
                     "username": registration["sender_localpart"],
                 }
             )
+            logging.debug("Appservice user registration succeeded.")
         except MatrixUserInUse:
-            pass
+            logging.debug("Appservice user is already registered.")
+        except Exception:
+            logging.exception("Unexpected failure when registering appservice user.")
 
         await self.api.put_user_displayname(self.user_id, "Heisenbridge")
 
@@ -227,8 +229,6 @@ class BridgeAppService(AppService):
         room_type_map = {}
         for room_type in room_types:
             room_type_map[room_type.__name__] = room_type
-
-        print(room_type_map)
 
         # import all rooms
         for room_id in resp["joined_rooms"]:
@@ -257,9 +257,8 @@ class BridgeAppService(AppService):
                 else:
                     await room.cleanup()
                     raise Exception("Room validation failed after init")
-            except Exception as e:
-                print("Failed to configure room, leaving:")
-                print(e)
+            except Exception:
+                logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")
 
                 self.unregister_room(room_id)
 
@@ -272,14 +271,14 @@ class BridgeAppService(AppService):
                 except MatrixError:
                     pass
 
-        print("Connecting network rooms...")
+        logging.info("Connecting network rooms...")
 
         # connect network rooms
         for room in self._rooms.values():
             if type(room) == NetworkRoom and room.connected:
                 await room.connect()
 
-        print("Init done!")
+        logging.info("Init done, bridge is now running!")
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()
@@ -293,6 +292,9 @@ parser = argparse.ArgumentParser(
     prog=os.path.basename(sys.executable) + " -m " + __package__,
     description="a Matrix IRC bridge",
     formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    "-v", "--verbose", help="logging verbosity level: once is info, twice is debug", action="count", default=0
 )
 parser.add_argument(
     "-c",
@@ -317,6 +319,14 @@ parser.add_argument(
 
 args = parser.parse_args()
 
+logging_level = logging.WARNING
+if args.verbose > 0:
+    logging_level = logging.INFO
+    if args.verbose > 1:
+        logging_level = logging.DEBUG
+
+logging.basicConfig(stream=sys.stdout, level=logging_level)
+
 if "generate" in args:
     letters = string.ascii_letters + string.digits
 
@@ -337,7 +347,7 @@ if "generate" in args:
     with open(args.config, "w") as f:
         yaml.dump(registration, f, sort_keys=False)
 
-    print("Registration file generated and saved to {}".format(args.config))
+    print(f"Registration file generated and saved to {args.config}")
 else:
     service = BridgeAppService()
     loop = asyncio.get_event_loop()

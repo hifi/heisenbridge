@@ -3,24 +3,26 @@ import re
 from abc import ABC
 from typing import Any
 from typing import Callable
+from typing import Coroutine
 from typing import Dict
 from typing import List
 from typing import Optional
 
-from heisenbridge.appservice import AppService
+from asyncirc.protocol import IrcProtocol
+from heisenbridge.appservice import AppService, IRoom
 
 
 class RoomInvalidError(Exception):
     pass
 
 
-class Room(ABC):
+class Room(IRoom):
     id: str
     user_id: str
     serv: AppService
     members: List[str]
 
-    _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
+    _mx_handlers: Dict[str, List[Callable[[Dict[Any, Any]], Coroutine[Any, Any, None]]]]
     _notice_buf: List[str]
     _notice_task: Any
 
@@ -60,7 +62,7 @@ class Room(ABC):
         config["user_id"] = self.user_id
         await self.serv.api.put_room_account_data(self.serv.user_id, self.id, "irc", config)
 
-    def mx_register(self, type: str, func: Callable[[dict], bool]) -> None:
+    def mx_register(self, type: str, func: Callable[[Dict[Any, Any]], Coroutine[Any, Any, None]]) -> None:
         if type not in self._mx_handlers:
             self._mx_handlers[type] = []
 
@@ -131,3 +133,48 @@ class Room(ABC):
             },
             user_id,
         )
+
+class INetworkRoom(Room):
+    name: str
+    rooms: Dict[str, 'IrcRoom']
+    conn: IrcProtocol
+
+    connected: bool
+    nick: str
+
+    def is_ctcp(self, message) -> bool:
+        return len(message.parameters) > 1 and message.parameters[1][0] == "\x01"
+
+class IrcRoom(Room):
+    name: str
+    network: INetworkRoom
+    network_name: str
+
+    irc_handlers: Dict[str, List[Callable[[Dict[Any, Any]], Coroutine[Any, Any, None]]]]
+
+    def from_config(self, config: dict) -> None:
+        if "name" not in config:
+            raise RoomInvalidError("No name key in config for IrcRoom")
+
+        if "network" not in config:
+            raise RoomInvalidError("No network key in config for IrcRoom")
+
+        self.name = config["name"]
+        self.network_name = config["network"]
+
+    def to_config(self) -> dict:
+        return {"name": self.name, "network": self.network_name}
+
+    def irc_register(self, type, func) -> None:
+        if type not in self.irc_handlers:
+            self.irc_handlers[type] = []
+
+        self.irc_handlers[type].append(func)
+
+    async def on_irc_event(self, event: Any) -> None:
+        handlers = self.irc_handlers.get(event.command, [self._on_irc_room_event])
+        for handler in handlers:
+            await handler(event)
+
+    async def _on_irc_room_event(self, event: Any) -> None:
+        await self.send_notice("Unhandled IrcRoom event:" + str(event))

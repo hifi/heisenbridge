@@ -4,6 +4,7 @@ from argparse import Namespace
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import cast
 
 from asyncirc.protocol import IrcProtocol
 from asyncirc.server import Server
@@ -13,20 +14,14 @@ from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.private_room import PrivateRoom
-from heisenbridge.room import Room
+from heisenbridge.room import Room, INetworkRoom
 
 
-class NetworkRoom(Room):
-    # configuration stuff
-    name: str
-    connected: bool
-    nick: str
+class NetworkRoom(INetworkRoom):
 
     # state
     commands: CommandManager
-    conn: IrcProtocol
-    rooms: Dict[str, Room]
-    queue: Dict[str, Room]
+    queue: Dict[str, List[str]]
 
     irc_ignore: List[str]
     irc_handlers: Dict[str, Any]
@@ -161,7 +156,7 @@ class NetworkRoom(Room):
 
     async def on_mx_message(self, event) -> None:
         if event["content"]["msgtype"] != "m.text" or event["user_id"] == self.serv.user_id:
-            return True
+            return
 
         try:
             return await self.commands.trigger(event["content"]["body"])
@@ -231,13 +226,15 @@ class NetworkRoom(Room):
             return
 
         # attach loose sub-rooms to us
-        for room in self.serv.find_rooms(PrivateRoom, self.user_id):
+        for _room in self.serv.find_rooms(PrivateRoom, self.user_id):
+            room = cast(PrivateRoom, _room)
             if room.network_name == self.name:
                 logging.debug(f"NetworkRoom {self.id} attaching PrivateRoom {room.id}")
                 room.network = self
                 self.rooms[room.name] = room
 
-        for room in self.serv.find_rooms(ChannelRoom, self.user_id):
+        for _room in self.serv.find_rooms(ChannelRoom, self.user_id):
+            room = cast(ChannelRoom, _room)
             if room.network_name == self.name:
                 logging.debug(f"NetworkRoom {self.id} attaching ChannelRoom {room.id}")
                 room.network = self
@@ -294,10 +291,13 @@ class NetworkRoom(Room):
             return False
 
         # tell the sender
-        for room in self.serv.find_rooms(PrivateRoom, self.user_id):
+        for _room in self.serv.find_rooms(PrivateRoom, self.user_id):
+            room = cast(PrivateRoom, _room)
             if room.network_name == self.name and room.name == message.parameters[1]:
                 await room.send_notice("{}: {}".format(message.parameters[1], message.parameters[2]))
                 return True
+
+        return False
 
     async def on_server_message(self, message) -> bool:
         parameters = list(message.parameters)
@@ -336,9 +336,6 @@ class NetworkRoom(Room):
                 self.conn.send("JOIN {}".format(room.name))
 
         return True
-
-    def is_ctcp(self, message) -> bool:
-        return len(message.parameters) > 1 and message.parameters[1][0] == "\x01"
 
     async def on_privmsg(self, message) -> bool:
         if message.parameters[0] != self.nick:
@@ -402,6 +399,8 @@ class NetworkRoom(Room):
             if type(room) is ChannelRoom:
                 if room.in_room(irc_user_id):
                     await self.serv.api.post_room_leave(room.id, irc_user_id)
+
+        return True
 
     async def on_nick(self, message) -> bool:
         old_irc_user_id = self.serv.irc_user_id(self.name, message.prefix.nick)

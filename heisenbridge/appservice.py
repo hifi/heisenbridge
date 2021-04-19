@@ -6,8 +6,9 @@ from heisenbridge.matrix import Matrix
 from heisenbridge.matrix import MatrixNotFound
 
 
-class Room:
-    pass
+class IRoom(ABC):
+    id: str
+    user_id: str
 
 
 class AppService(ABC):
@@ -45,10 +46,21 @@ class AppService(ABC):
 
         return resp["room_id"]
 
+    def strip_nick(self, nick):
+        return nick.strip("@+&")
+
     @abstractmethod
-    def register_room(self, room: Room):
+    def register_room(self, room: IRoom):
         pass
 
     @abstractmethod
-    def find_rooms(self, type, user_id: str = None) -> List[Room]:
+    def find_rooms(self, type, user_id: str = None) -> List[IRoom]:
+        pass
+
+    @abstractmethod
+    async def ensure_irc_user_id(self, network: str, nick: str) -> str:
+        pass
+
+    @abstractmethod
+    def irc_user_id(self, network: str, nick: str, at: bool = True, server: bool = True) -> str:
         pass

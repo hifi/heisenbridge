@@ -20,15 +20,15 @@ from heisenbridge.matrix import MatrixError
 from heisenbridge.matrix import MatrixUserInUse
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.private_room import PrivateRoom
-from heisenbridge.room import Room
+from heisenbridge.room import Room, IRoom
 from heisenbridge.room import RoomInvalidError
 
 
 class BridgeAppService(AppService):
-    _rooms: Dict[str, Room]
+    _rooms: Dict[str, IRoom]
     _users: Dict[str, str]
 
-    def register_room(self, room: Room):
+    def register_room(self, room: IRoom):
         self._rooms[room.id] = room
 
     def unregister_room(self, room_id):
@@ -36,7 +36,7 @@ class BridgeAppService(AppService):
             del self._rooms[room_id]
 
     # this is mostly used by network rooms at init, it's a bit slow
-    def find_rooms(self, type, user_id=None) -> List[Room]:
+    def find_rooms(self, type, user_id=None) -> List[IRoom]:
         ret = []
 
         for room in self._rooms.values():
@@ -65,10 +65,7 @@ class BridgeAppService(AppService):
 
         return False
 
-    def strip_nick(self, nick):
-        return nick.strip("@+&")
-
-    def irc_user_id(self, network, nick, at=True, server=True):
+    def irc_user_id(self, network, nick, at=True, server=True) -> str:
         ret = f"{'@' if at else ''}irc_{network}_{self.strip_nick(nick).lower()}"
         if server:
             ret += ":" + self.server_name
@@ -91,7 +88,7 @@ class BridgeAppService(AppService):
     def is_user_cached(self, user_id):
         return user_id in self._users
 
-    async def ensure_irc_user_id(self, network, nick):
+    async def ensure_irc_user_id(self, network, nick) -> str:
         user_id = self.irc_user_id(network, nick)
 
         # if we've seen this user before, we can skip registering

@@ -6,50 +6,21 @@ from typing import Optional
 
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParserError
-from heisenbridge.room import Room
+from heisenbridge.room import Room, INetworkRoom, IrcRoom
 
 
-class NetworkRoom:
-    pass
-
-
-class PrivateRoom(Room):
-    # irc nick of the other party, name for consistency
-    name: str
-    network: Optional[NetworkRoom]
-    network_name: str
-
-    irc_handlers: Dict[str, Any]
-
+class PrivateRoom(IrcRoom):
     commands: CommandManager
 
     def init(self) -> None:
-        self.name = None
-        self.network = None
-        self.network_name = None
-        self.irc_handlers = {}
-
         self.commands = CommandManager()
 
         self.mx_register("m.room.message", self.on_mx_message)
         self.irc_register("PRIVMSG", self.on_irc_privmsg)
         self.irc_register("NOTICE", self.on_irc_notice)
 
-    def from_config(self, config: dict) -> None:
-        if "name" not in config:
-            raise Exception("No name key in config for ChatRoom")
-
-        if "network" not in config:
-            raise Exception("No network key in config for ChatRoom")
-
-        self.name = config["name"]
-        self.network_name = config["network"]
-
-    def to_config(self) -> dict:
-        return {"name": self.name, "network": self.network_name}
-
     @staticmethod
-    async def create(network: NetworkRoom, name: str) -> "PrivateRoom":
+    async def create(network: INetworkRoom, name: str) -> "PrivateRoom":
         logging.debug(f"PrivateRoom.create(network='{network.name}', name='{name}'")
         irc_user_id = await network.serv.ensure_irc_user_id(network.name, name)
         room_id = await network.serv.create_room(
@@ -118,20 +89,6 @@ class PrivateRoom(Room):
             await self.send_notice(event.parameters[1], irc_user_id)
         else:
             await self.send_notice_html("<b>Notice from {}</b>: {}".format(str(event.prefix), event.parameters[1]))
-
-    async def on_irc_event(self, event: dict) -> None:
-        handlers = self.irc_handlers.get(event.command, [self._on_irc_room_event])
-        for handler in handlers:
-            await handler(event)
-
-    async def _on_irc_room_event(self, event: dict) -> None:
-        await self.send_notice("Unhandled PrivateRoom IRC event:" + str(event))
-
-    def irc_register(self, type, func) -> None:
-        if type not in self.irc_handlers:
-            self.irc_handlers[type] = []
-
-        self.irc_handlers[type].append(func)
 
     async def on_mx_message(self, event) -> None:
         if event["content"]["msgtype"] != "m.text" or event["user_id"] != self.user_id:

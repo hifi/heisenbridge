@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import re
 from abc import ABC
 from typing import Any
@@ -84,7 +85,9 @@ class Room(ABC):
             self.members.remove(event["user_id"])
 
             if not self.is_valid():
-                print("Room ended up invalid after membership change, returning false from event handler.")
+                logging.info(
+                    f"Room {self.id} ended up invalid after membership change, returning false from event handler."
+                )
                 return False
 
         if event["content"]["membership"] == "join" and event["user_id"] not in self.members:

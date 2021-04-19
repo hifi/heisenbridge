@@ -61,7 +61,6 @@ class ChannelRoom(PrivateRoom):
         self.names_buffer.extend(event.parameters[3].split())
 
     async def on_irc_end_of_names(self, event):
-        print(self.names_buffer)
         to_remove = list(self.members)
         names = list(self.names_buffer)
         self.names_buffer = []

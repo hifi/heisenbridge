@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -233,13 +234,13 @@ class NetworkRoom(Room):
         # attach loose sub-rooms to us
         for room in self.serv.find_rooms(PrivateRoom, self.user_id):
             if room.network_name == self.name:
-                print("Attaching PrivateRoom")
+                logging.debug(f"NetworkRoom {self.id} attaching PrivateRoom {room.id}")
                 room.network = self
                 self.rooms[room.name] = room
 
         for room in self.serv.find_rooms(ChannelRoom, self.user_id):
             if room.network_name == self.name:
-                print("Attaching ChannelRoom")
+                logging.debug(f"NetworkRoom {self.id} attaching ChannelRoom {room.id}")
                 room.network = self
                 self.rooms[room.name] = room
 

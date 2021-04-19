@@ -1,3 +1,4 @@
+import logging
 from typing import List
 
 from heisenbridge.private_room import PrivateRoom
@@ -10,7 +11,7 @@ class NetworkRoom:
 class ChannelRoom(PrivateRoom):
     names_buffer: List[str]
 
-    def init(self):
+    def init(self) -> None:
         super().init()
 
         self.names_buffer = []
@@ -25,7 +26,8 @@ class ChannelRoom(PrivateRoom):
         self.irc_register("332", self.on_irc_reply_topic)
 
     @staticmethod
-    async def create(network: NetworkRoom, name: str):
+    async def create(network: NetworkRoom, name: str) -> "ChannelRoom":
+        logging.debug(f"ChannelRoom.create(network='{network.name}', name='{name}'")
         room_id = await network.serv.create_room(
             f"{name} ({network.name})",
             "",
@@ -39,28 +41,28 @@ class ChannelRoom(PrivateRoom):
         network.serv.register_room(room)
         return room
 
-    def is_valid(self):
+    def is_valid(self) -> bool:
         if not self.in_room(self.user_id):
             return False
 
         return super().is_valid()
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         if self.network:
             if self.network.conn and self.network.conn.connected:
                 self.network.conn.send("PART {}".format(self.name))
             if self.name in self.network.rooms:
                 del self.network.rooms[self.name]
 
-    async def on_server_message(self, message):
+    async def on_server_message(self, message) -> None:
         parameters = list(message.parameters)
         parameters.pop(0)
-        return await self.send_notice(" ".join(parameters))
+        await self.send_notice(" ".join(parameters))
 
-    async def on_irc_names(self, event):
+    async def on_irc_names(self, event) -> None:
         self.names_buffer.extend(event.parameters[3].split())
 
-    async def on_irc_end_of_names(self, event):
+    async def on_irc_end_of_names(self, event) -> None:
         to_remove = list(self.members)
         names = list(self.names_buffer)
         self.names_buffer = []
@@ -94,7 +96,7 @@ class ChannelRoom(PrivateRoom):
             await self.serv.api.post_room_leave(self.id, user_id)
             self.members.remove(user_id)
 
-    async def on_irc_join(self, event):
+    async def on_irc_join(self, event) -> None:
         # we don't need to sync ourself
         if self.network.nick == event.prefix.nick:
             await self.send_notice("Joined channel.")
@@ -113,7 +115,7 @@ class ChannelRoom(PrivateRoom):
         await self.serv.api.post_room_invite(self.id, irc_user_id)
         await self.serv.api.post_room_join(self.id, irc_user_id)
 
-    async def on_irc_leave(self, event):
+    async def on_irc_leave(self, event) -> None:
         # we don't need to sync ourself
         if self.network.nick == event.prefix.nick:
             return
@@ -127,18 +129,18 @@ class ChannelRoom(PrivateRoom):
 
         await self.serv.api.post_room_leave(self.id, irc_user_id)
 
-    async def on_irc_mode(self, event):
+    async def on_irc_mode(self, event) -> None:
         modes = list(event.parameters)
         modes.pop(0)
 
         await self.send_notice("{} set modes {}".format(event.prefix.nick, " ".join(modes)))
 
-    async def on_irc_reply_notopic(self, event):
+    async def on_irc_reply_notopic(self, event) -> None:
         await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": ""})
 
-    async def on_irc_reply_topic(self, event):
+    async def on_irc_reply_topic(self, event) -> None:
         await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.parameters[2]})
 
-    async def on_irc_topic(self, event):
+    async def on_irc_topic(self, event) -> None:
         await self.send_notice("{} changed the topic".format(event.prefix.nick))
         await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.parameters[1]})

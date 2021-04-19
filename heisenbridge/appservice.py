@@ -4,7 +4,10 @@ from typing import List
 
 from heisenbridge.matrix import Matrix
 from heisenbridge.matrix import MatrixNotFound
-from heisenbridge.room import Room
+
+
+class Room:
+    pass
 
 
 class AppService(ABC):

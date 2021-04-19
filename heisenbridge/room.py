@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import re
 from abc import ABC
 from typing import Any
@@ -8,8 +7,10 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from heisenbridge.appservice import AppService
 
-class AppService:
+
+class RoomInvalidError(Exception):
     pass
 
 
@@ -38,10 +39,10 @@ class Room(ABC):
 
         self.init()
 
-    def from_config(self, config: dict):
+    def from_config(self, config: dict) -> None:
         pass
 
-    async def init(self):
+    def init(self) -> None:
         pass
 
     def is_valid(self) -> bool:
@@ -59,56 +60,49 @@ class Room(ABC):
         config["user_id"] = self.user_id
         await self.serv.api.put_room_account_data(self.serv.user_id, self.id, "irc", config)
 
-    def mx_register(self, type: str, func: Callable[[dict], bool]):
+    def mx_register(self, type: str, func: Callable[[dict], bool]) -> None:
         if type not in self._mx_handlers:
             self._mx_handlers[type] = []
 
         self._mx_handlers[type].append(func)
 
-    async def on_mx_event(self, event: dict) -> bool:
+    async def on_mx_event(self, event: dict) -> None:
         handlers = self._mx_handlers.get(event["type"], [self._on_mx_unhandled_event])
 
         for handler in handlers:
-            if not await handler(event):
-                return False
-
-        return True
+            await handler(event)
 
     def in_room(self, user_id):
         return user_id in self.members
 
     async def _on_mx_unhandled_event(self, event: dict) -> None:
-        return True
+        pass
 
     async def _on_mx_room_member(self, event: dict) -> None:
         if event["content"]["membership"] == "leave" and event["user_id"] in self.members:
             self.members.remove(event["user_id"])
 
             if not self.is_valid():
-                logging.info(
+                raise RoomInvalidError(
                     f"Room {self.id} ended up invalid after membership change, returning false from event handler."
                 )
-                return False
 
         if event["content"]["membership"] == "join" and event["user_id"] not in self.members:
             self.members.append(event["user_id"])
 
-        return True
-
     # send message to mx user (may be puppeted)
-    async def send_message(self, text: str, user_id: Optional[str] = None) -> dict:
+    async def send_message(self, text: str, user_id: Optional[str] = None) -> None:
         await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.text", "body": text}, user_id)
-        return True
 
-    async def flush_notices(self):
-        await asyncio.sleep(0.5)
+    async def flush_notices(self) -> None:
+        await asyncio.sleep(0.2)
         text = "\n".join(self._notice_buf)
         self._notice_buf = []
         self._notice_task = None
         await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.notice", "body": text})
 
     # send notice to mx user (may be puppeted)
-    async def send_notice(self, text: str, user_id: Optional[str] = None) -> dict:
+    async def send_notice(self, text: str, user_id: Optional[str] = None) -> None:
         # buffer only non-puppeted notices
         if user_id is None:
             self._notice_buf.append(text)
@@ -117,15 +111,14 @@ class Room(ABC):
             if self._notice_task is None:
                 self._notice_task = asyncio.ensure_future(self.flush_notices())
 
-            return True
+            return
 
         await self.serv.api.put_room_send_event(
             self.id, "m.room.message", {"msgtype": "m.notice", "body": text}, user_id
         )
-        return True
 
     # send notice to mx user (may be puppeted)
-    async def send_notice_html(self, text: str, user_id: Optional[str] = None) -> dict:
+    async def send_notice_html(self, text: str, user_id: Optional[str] = None) -> None:
 
         await self.serv.api.put_room_send_event(
             self.id,
@@ -138,4 +131,3 @@ class Room(ABC):
             },
             user_id,
         )
-        return True

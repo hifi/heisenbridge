@@ -8,15 +8,12 @@ from typing import List
 from asyncirc.protocol import IrcProtocol
 from asyncirc.server import Server
 
+from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
-
-
-class ChannelRoom:
-    pass
 
 
 class NetworkRoom(Room):
@@ -171,29 +168,30 @@ class NetworkRoom(Room):
         except CommandParserError as e:
             return await self.send_notice(str(e))
 
-    async def cmd_connect(self, args):
-        return await self.connect()
+    async def cmd_connect(self, args) -> None:
+        await self.connect()
 
-    async def cmd_disconnect(self, args):
+    async def cmd_disconnect(self, args) -> None:
         self.connected = False
         await self.save()
 
         if not self.conn:
-            return True
+            return
 
         self.conn.quit()
-        return await self.send_notice("Disconnecting...")
+        await self.send_notice("Disconnecting...")
 
-    async def cmd_raw(self, args):
+    async def cmd_raw(self, args) -> None:
         if not self.conn or not self.conn.connected:
-            return await self.send_notice("Need to be connected to use this command.")
+            await self.send_notice("Need to be connected to use this command.")
+            return
 
         self.conn.send(" ".join(args.text))
-        return True
 
-    async def cmd_query(self, args):
+    async def cmd_query(self, args) -> None:
         if not self.conn or not self.conn.connected:
-            return await self.send_notice("Need to be connected to use this command.")
+            await self.send_notice("Need to be connected to use this command.")
+            return
 
         # TODO: validate nick doesn't look like a channel
         target = args.nick.lower()
@@ -201,35 +199,36 @@ class NetworkRoom(Room):
         if target in self.rooms:
             room = self.rooms[target]
             await self.serv.api.post_room_invite(room.id, self.user_id)
-            return await self.send_notice("Inviting back to private chat with {}.".format(args.nick))
+            await self.send_notice("Inviting back to private chat with {}.".format(args.nick))
         else:
             room = await PrivateRoom.create(self, args.nick)
             self.rooms[room.name] = room
-            return await self.send_notice("You have been invited to private chat with {}.".format(args.nick))
+            await self.send_notice("You have been invited to private chat with {}.".format(args.nick))
 
-    async def cmd_join(self, args):
+    async def cmd_join(self, args) -> None:
         if not self.conn or not self.conn.connected:
             return
 
         # TODO: validate channel name and add # prefix if naked
 
         self.conn.send("JOIN {}".format(args.channel))
-        return True
 
-    async def cmd_nick(self, args):
+    async def cmd_nick(self, args) -> None:
         if args.nick is None:
-            return await self.send_notice("Current nickname: {}".format(self.nick))
+            await self.send_notice("Current nickname: {}".format(self.nick))
+            return
 
         self.nick = args.nick
         await self.save()
-        return await self.send_notice("Nickname set to {}".format(self.nick))
+        await self.send_notice("Nickname set to {}".format(self.nick))
 
-    async def connect(self):
+    async def connect(self) -> None:
         if self.conn and self.conn.connected:
-            return True
+            return
 
         if self.nick is None:
-            return await self.send_notice("You need to configure a nick first, see HELP")
+            await self.send_notice("You need to configure a nick first, see HELP")
+            return
 
         # attach loose sub-rooms to us
         for room in self.serv.find_rooms(PrivateRoom, self.user_id):
@@ -261,9 +260,7 @@ class NetworkRoom(Room):
             self.connected = True
             await self.save()
 
-        return True
-
-    async def on_irc_event(self, conn, message):
+    async def on_irc_event(self, conn, message) -> None:
         handled = False
         if message.command in self.irc_handlers:
             handled = await self.irc_handlers[message.command](message)
@@ -292,31 +289,28 @@ class NetworkRoom(Room):
         elif not handled and message.command not in self.irc_ignore:
             await self.send_notice("Unhandled IRC event: " + str(message))
 
-    async def on_no_such_nick(self, message):
+    async def on_no_such_nick(self, message) -> bool:
         if message.parameters[0] != self.nick:
-            return True
+            return False
 
         # tell the sender
         for room in self.serv.find_rooms(PrivateRoom, self.user_id):
             if room.network_name == self.name and room.name == message.parameters[1]:
-                return await room.send_notice("{}: {}".format(message.parameters[1], message.parameters[2]))
+                await room.send_notice("{}: {}".format(message.parameters[1], message.parameters[2]))
+                return True
 
-        return False
-
-    async def on_server_message(self, message):
+    async def on_server_message(self, message) -> bool:
         parameters = list(message.parameters)
         parameters.pop(0)
-        return await self.send_notice(" ".join(parameters))
+        await self.send_notice(" ".join(parameters))
+        return True
 
-    async def on_notice(self, message):
+    async def on_notice(self, message) -> bool:
         source = message.prefix.nick.lower()
-
-        # Never used
-        # target = message.parameters[0].lower()
 
         # show unhandled notices in server room
         if source not in self.rooms:
-            return await self.send_notice_html(
+            await self.send_notice_html(
                 "<b>{} ({}@{}):</b> {}".format(
                     message.prefix.nick,
                     message.prefix.user,
@@ -325,9 +319,11 @@ class NetworkRoom(Room):
                 )
             )
 
+            return True
+
         return False
 
-    async def on_motd_end(self, message):
+    async def on_motd_end(self, message) -> bool:
         await self.on_server_message(message)
 
         # wait a bit for good measure after motd to send a join command
@@ -341,21 +337,22 @@ class NetworkRoom(Room):
 
         return True
 
-    def is_ctcp(self, message):
+    def is_ctcp(self, message) -> bool:
         return len(message.parameters) > 1 and message.parameters[1][0] == "\x01"
 
-    async def on_privmsg(self, message):
+    async def on_privmsg(self, message) -> bool:
         if message.parameters[0] != self.nick:
-            return
+            return False
 
         target = message.prefix.nick.lower()
 
         if self.is_ctcp(message):
-            return await self.send_notice("Ignored CTCP from {}".format(message.prefix.nick))
+            await self.send_notice("Ignored CTCP from {}".format(message.prefix.nick))
+            return True
 
         # prevent creating a room while queue is in effect
         if target in self.queue:
-            return
+            return True
 
         if target not in self.rooms:
             # create queue for subsequent messages
@@ -375,11 +372,16 @@ class NetworkRoom(Room):
             if not room.in_room(self.user_id):
                 await self.serv.api.post_room_invite(self.rooms[target].id, self.user_id)
 
-    async def on_join(self, message):
+        return True
+
+    async def on_join(self, message) -> bool:
         target = message.parameters[0].lower()
+
+        logging.debug(f"Handling JOIN to {target}")
 
         # create a ChannelRoom in response to JOIN
         if message.prefix.nick == self.nick and target not in self.rooms:
+            logging.debug("Pre-flight check for JOIN ok, going to create it...")
             self.queue[target] = []
             self.rooms[target] = await ChannelRoom.create(self, message.parameters[0])
 
@@ -392,7 +394,7 @@ class NetworkRoom(Room):
 
         return True
 
-    async def on_quit(self, message):
+    async def on_quit(self, message) -> bool:
         irc_user_id = self.serv.irc_user_id(self.name, message.prefix.nick)
 
         # leave channels
@@ -401,9 +403,7 @@ class NetworkRoom(Room):
                 if room.in_room(irc_user_id):
                     await self.serv.api.post_room_leave(room.id, irc_user_id)
 
-        return True
-
-    async def on_nick(self, message):
+    async def on_nick(self, message) -> bool:
         old_irc_user_id = self.serv.irc_user_id(self.name, message.prefix.nick)
         new_irc_user_id = await self.serv.ensure_irc_user_id(self.name, message.parameters[0])
 
@@ -425,7 +425,7 @@ class NetworkRoom(Room):
 
         return True
 
-    async def on_invite(self, message):
+    async def on_invite(self, message) -> bool:
         await self.send_notice_html(
             "<b>{}</b> has invited you to <b>{}</b>".format(message.prefix.nick, message.parameters[1])
         )

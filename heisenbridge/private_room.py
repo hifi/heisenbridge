@@ -1,3 +1,4 @@
+import logging
 import re
 from typing import Any
 from typing import Dict
@@ -22,7 +23,7 @@ class PrivateRoom(Room):
 
     commands: CommandManager
 
-    def init(self):
+    def init(self) -> None:
         self.name = None
         self.network = None
         self.network_name = None
@@ -34,7 +35,7 @@ class PrivateRoom(Room):
         self.irc_register("PRIVMSG", self.on_irc_privmsg)
         self.irc_register("NOTICE", self.on_irc_notice)
 
-    def from_config(self, config: dict):
+    def from_config(self, config: dict) -> None:
         if "name" not in config:
             raise Exception("No name key in config for ChatRoom")
 
@@ -48,7 +49,8 @@ class PrivateRoom(Room):
         return {"name": self.name, "network": self.network_name}
 
     @staticmethod
-    async def create(network: NetworkRoom, name: str):
+    async def create(network: NetworkRoom, name: str) -> "PrivateRoom":
+        logging.debug(f"PrivateRoom.create(network='{network.name}', name='{name}'")
         irc_user_id = await network.serv.ensure_irc_user_id(network.name, name)
         room_id = await network.serv.create_room(
             "{} ({})".format(name, network.name),
@@ -89,9 +91,9 @@ class PrivateRoom(Room):
         if self.network and self.name in self.network.rooms:
             del self.network.rooms[self.name]
 
-    async def on_irc_privmsg(self, event):
+    async def on_irc_privmsg(self, event) -> None:
         if self.network is None:
-            return True
+            return
 
         if self.network.is_ctcp(event):
             return
@@ -103,9 +105,9 @@ class PrivateRoom(Room):
         else:
             await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.prefix), event.parameters[1]))
 
-    async def on_irc_notice(self, event):
+    async def on_irc_notice(self, event) -> None:
         if self.network is None:
-            return True
+            return
 
         if self.network.is_ctcp(event):
             return
@@ -125,18 +127,19 @@ class PrivateRoom(Room):
     async def _on_irc_room_event(self, event: dict) -> None:
         await self.send_notice("Unhandled PrivateRoom IRC event:" + str(event))
 
-    def irc_register(self, type, func):
+    def irc_register(self, type, func) -> None:
         if type not in self.irc_handlers:
             self.irc_handlers[type] = []
 
         self.irc_handlers[type].append(func)
 
-    async def on_mx_message(self, event):
+    async def on_mx_message(self, event) -> None:
         if event["content"]["msgtype"] != "m.text" or event["user_id"] != self.user_id:
-            return True
+            return
 
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
-            return await self.send_notice("Not connected to network.")
+            await self.send_notice("Not connected to network.")
+            return
 
         # allow commanding the appservice in rooms
         if "formatted_body" in event["content"] and self.serv.user_id in event["content"]["formatted_body"]:
@@ -146,9 +149,9 @@ class PrivateRoom(Room):
             text = re.sub(r"^[^:]+\s*:?\s*", "", event["content"]["body"])
 
             try:
-                return await self.commands.trigger(text)
+                await self.commands.trigger(text)
             except CommandParserError as e:
-                return await self.send_notice(str(e))
+                await self.send_notice(str(e))
+            return
 
         self.network.conn.send("PRIVMSG {} :{}".format(self.name, event["content"]["body"]))
-        return True

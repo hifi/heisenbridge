@@ -21,6 +21,7 @@ from heisenbridge.matrix import MatrixUserInUse
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
+from heisenbridge.room import RoomInvalidError
 
 
 class BridgeAppService(AppService):
@@ -118,19 +119,20 @@ class BridgeAppService(AppService):
         if "room_id" in event and event["room_id"] in self._rooms:
             try:
                 room = self._rooms[event["room_id"]]
-                if not await room.on_mx_event(event):
-                    logging.info(f"Event handler for {event['type']} returned false, leaving and cleaning up.")
-                    self.unregister_room(room.id)
-                    await room.cleanup()
+                await room.on_mx_event(event)
+            except RoomInvalidError:
+                logging.info(f"Event handler for {event['type']} threw RoomInvalidError, leaving and cleaning up.")
+                self.unregister_room(room.id)
+                await room.cleanup()
 
-                    try:
-                        await self.api.post_room_leave(room.id)
-                    except MatrixError:
-                        pass
-                    try:
-                        await self.api.post_room_forget(room.id)
-                    except MatrixError:
-                        pass
+                try:
+                    await self.api.post_room_leave(room.id)
+                except MatrixError:
+                    pass
+                try:
+                    await self.api.post_room_forget(room.id)
+                except MatrixError:
+                    pass
             except Exception:
                 logging.exception("Ignoring exception from room handler. This should be fixed.")
         elif (

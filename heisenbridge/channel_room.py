@@ -2,10 +2,7 @@ import logging
 from typing import List
 
 from heisenbridge.private_room import PrivateRoom
-
-
-class NetworkRoom:
-    pass
+from heisenbridge.room import INetworkRoom
 
 
 class ChannelRoom(PrivateRoom):
@@ -26,7 +23,7 @@ class ChannelRoom(PrivateRoom):
         self.irc_register("332", self.on_irc_reply_topic)
 
     @staticmethod
-    async def create(network: NetworkRoom, name: str) -> "ChannelRoom":
+    async def create(network: INetworkRoom, name: str) -> "ChannelRoom":
         logging.debug(f"ChannelRoom.create(network='{network.name}', name='{name}'")
         room_id = await network.serv.create_room(
             f"{name} ({network.name})",

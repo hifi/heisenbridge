@@ -161,7 +161,7 @@ class BridgeAppService(AppService):
 
             # accept invite sequence
             try:
-                room = ControlRoom(event["room_id"], event["user_id"], self, [event["user_id"]])
+                room = ControlRoom(id=event["room_id"], user_id=event["user_id"], serv=self, members=[event["user_id"]])
                 await room.save()
                 self.register_room(room)
                 await self.api.post_room_join(room.id)
@@ -250,7 +250,7 @@ class BridgeAppService(AppService):
                 for user_id in members:
                     await self.cache_user(user_id, None)
 
-                room = cls(room_id, config["user_id"], self, members)
+                room = cls(id=room_id, user_id=config["user_id"], serv=self, members=members)
                 room.from_config(config)
 
                 # only add valid rooms to event handler

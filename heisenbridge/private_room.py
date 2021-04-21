@@ -1,7 +1,5 @@
 import logging
 import re
-from typing import Any
-from typing import Dict
 from typing import Optional
 
 from heisenbridge.command_parse import CommandManager
@@ -19,21 +17,16 @@ class PrivateRoom(Room):
     network: Optional[NetworkRoom]
     network_name: str
 
-    irc_handlers: Dict[str, Any]
-
     commands: CommandManager
 
     def init(self) -> None:
         self.name = None
         self.network = None
         self.network_name = None
-        self.irc_handlers = {}
 
         self.commands = CommandManager()
 
         self.mx_register("m.room.message", self.on_mx_message)
-        self.irc_register("PRIVMSG", self.on_irc_privmsg)
-        self.irc_register("NOTICE", self.on_irc_notice)
 
     def from_config(self, config: dict) -> None:
         if "name" not in config:
@@ -50,7 +43,7 @@ class PrivateRoom(Room):
 
     @staticmethod
     async def create(network: NetworkRoom, name: str) -> "PrivateRoom":
-        logging.debug(f"PrivateRoom.create(network='{network.name}', name='{name}'")
+        logging.debug(f"PrivateRoom.create(network='{network.name}', name='{name}')")
         irc_user_id = await network.serv.ensure_irc_user_id(network.name, name)
         room_id = await network.serv.create_room(
             "{} ({})".format(name, network.name),
@@ -91,67 +84,64 @@ class PrivateRoom(Room):
         if self.network and self.name in self.network.rooms:
             del self.network.rooms[self.name]
 
-    async def on_irc_privmsg(self, event) -> None:
+    async def on_privmsg(self, conn, event) -> None:
         if self.network is None:
             return
 
-        if self.network.is_ctcp(event):
-            return
-
-        irc_user_id = self.serv.irc_user_id(self.network.name, event.prefix.nick)
+        irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
         if irc_user_id in self.members:
-            await self.send_message(event.parameters[1], irc_user_id)
+            await self.send_message(event.arguments[0], irc_user_id)
         else:
-            await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.prefix), event.parameters[1]))
+            await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.source), event.arguments[0]))
 
-    async def on_irc_notice(self, event) -> None:
+    async def on_privnotice(self, conn, event) -> None:
         if self.network is None:
             return
 
-        if self.network.is_ctcp(event):
-            return
-
-        irc_user_id = self.serv.irc_user_id(self.network.name, event.prefix.nick)
+        irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
         if irc_user_id in self.members:
-            await self.send_notice(event.parameters[1], irc_user_id)
+            await self.send_notice(event.arguments[0], irc_user_id)
         else:
-            await self.send_notice_html("<b>Notice from {}</b>: {}".format(str(event.prefix), event.parameters[1]))
+            await self.send_notice_html("<b>Notice from {}</b>: {}".format(str(event.source), event.arguments[0]))
 
-    async def on_irc_event(self, event: dict) -> None:
-        handlers = self.irc_handlers.get(event.command, [self._on_irc_room_event])
-        for handler in handlers:
-            await handler(event)
+    async def on_ctcp(self, conn, event) -> None:
+        if self.network is None:
+            return
 
-    async def _on_irc_room_event(self, event: dict) -> None:
-        await self.send_notice("Unhandled PrivateRoom IRC event:" + str(event))
+        irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
-    def irc_register(self, type, func) -> None:
-        if type not in self.irc_handlers:
-            self.irc_handlers[type] = []
+        if event.arguments[0].upper() != "ACTION":
+            return
 
-        self.irc_handlers[type].append(func)
+        if irc_user_id in self.members:
+            await self.send_emote(event.arguments[1], irc_user_id)
+        else:
+            await self.send_notice_html("<b>Emote from {}</b>: {}".format(str(event.source), event.arguments[1]))
 
     async def on_mx_message(self, event) -> None:
-        if event["content"]["msgtype"] != "m.text" or event["user_id"] != self.user_id:
+        if event["user_id"] != self.user_id:
             return
 
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
             await self.send_notice("Not connected to network.")
             return
 
-        # allow commanding the appservice in rooms
-        if "formatted_body" in event["content"] and self.serv.user_id in event["content"]["formatted_body"]:
+        if event["content"]["msgtype"] == "m.emote":
+            self.network.conn.action(self.name, event["content"]["body"])
+        if event["content"]["msgtype"] == "m.text":
+            # allow commanding the appservice in rooms
+            if "formatted_body" in event["content"] and self.serv.user_id in event["content"]["formatted_body"]:
 
-            # try really hard to find the start of the message
-            # FIXME: parse the formatted part instead as it has a link inside it
-            text = re.sub(r"^[^:]+\s*:?\s*", "", event["content"]["body"])
+                # try really hard to find the start of the message
+                # FIXME: parse the formatted part instead as it has a link inside it
+                text = re.sub(r"^[^:]+\s*:?\s*", "", event["content"]["body"])
 
-            try:
-                await self.commands.trigger(text)
-            except CommandParserError as e:
-                await self.send_notice(str(e))
-            return
+                try:
+                    await self.commands.trigger(text)
+                except CommandParserError as e:
+                    await self.send_notice(str(e))
+                return
 
-        self.network.conn.send("PRIVMSG {} :{}".format(self.name, event["content"]["body"]))
+            self.network.conn.privmsg(self.name, event["content"]["body"])

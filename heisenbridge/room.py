@@ -94,6 +94,12 @@ class Room(ABC):
     async def send_message(self, text: str, user_id: Optional[str] = None) -> None:
         await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.text", "body": text}, user_id)
 
+    # send emote to mx user (may be puppeted)
+    async def send_emote(self, text: str, user_id: Optional[str] = None) -> None:
+        await self.serv.api.put_room_send_event(
+            self.id, "m.room.message", {"msgtype": "m.emote", "body": text}, user_id
+        )
+
     async def flush_notices(self) -> None:
         await asyncio.sleep(0.2)
         text = "\n".join(self._notice_buf)

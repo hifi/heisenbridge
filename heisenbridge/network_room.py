@@ -3,17 +3,51 @@ import logging
 from argparse import Namespace
 from typing import Any
 from typing import Dict
-from typing import List
 
-from asyncirc.protocol import IrcProtocol
-from asyncirc.server import Server
+import irc.client
+import irc.client_aio
 
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
+from heisenbridge.future_queue import FutureQueue
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
+
+
+# convert a synchronous method to asynchronous with a queue, recursion will lock
+def future(f):
+    def wrapper(*args, **kwargs):
+        return asyncio.ensure_future(args[0].queue.schedule(f(*args, **kwargs)))
+
+    return wrapper
+
+
+# forwards events to private and channel rooms or queues them
+def ircroom_event(target_arg=None):
+    def outer(f):
+        async def wrapper(self, conn, event):
+            if target_arg is not None:
+                # if we have target arg use that
+                target = event.arguments[target_arg].lower()
+            else:
+                # switch target around if it's targeted towards us directly
+                target = event.target.lower() if event.target != conn.real_nickname else event.source.nick.lower()
+
+            if target in self.rooms:
+                room = self.rooms[target]
+                try:
+                    room_f = getattr(room, "on_" + event.type)
+                    return await room_f(conn, event)
+                except AttributeError:
+                    logging.warning(f"Expected {room.__name__} to have on_{event.type} but didn't")
+
+            return await f(self, conn, event)
+
+        return wrapper
+
+    return outer
 
 
 class NetworkRoom(Room):
@@ -24,13 +58,11 @@ class NetworkRoom(Room):
 
     # state
     commands: CommandManager
-    conn: IrcProtocol
+    conn: Any
     rooms: Dict[str, Room]
-    queue: Dict[str, Room]
-
-    irc_ignore: List[str]
-    irc_handlers: Dict[str, Any]
-    irc_forwards: Dict[str, Any]
+    queue: FutureQueue
+    reactor: Any
+    connecting: bool
 
     def init(self):
         self.name = None
@@ -40,7 +72,9 @@ class NetworkRoom(Room):
         self.commands = CommandManager()
         self.conn = None
         self.rooms = {}
-        self.queue = {}
+        self.queue = FutureQueue(timeout=30)
+        self.reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
+        self.connecting = False
 
         cmd = CommandParser(prog="NICK", description="Change nickname")
         cmd.add_argument("nick", nargs="?", help="new nickname")
@@ -65,56 +99,6 @@ class NetworkRoom(Room):
         self.commands.register(cmd, self.cmd_join)
 
         self.mx_register("m.room.message", self.on_mx_message)
-
-        # these messages are competely ignored by us
-        self.irc_ignore = ["PING", "PONG", "333"]
-
-        # these we handle but may also forward
-        self.irc_handlers = {
-            "001": self.on_server_message,
-            "002": self.on_server_message,
-            "003": self.on_server_message,
-            "004": self.on_server_message,
-            "005": self.on_server_message,
-            "250": self.on_server_message,
-            "251": self.on_server_message,
-            "252": self.on_server_message,
-            "253": self.on_server_message,
-            "254": self.on_server_message,
-            "255": self.on_server_message,
-            "265": self.on_server_message,
-            "266": self.on_server_message,
-            "401": self.on_no_such_nick,
-            "465": self.on_server_message,
-            "473": self.on_server_message,
-            "476": self.on_server_message,
-            "501": self.on_server_message,
-            "CAP": self.on_server_message,
-            "NOTICE": self.on_notice,
-            "375": self.on_server_message,
-            "372": self.on_server_message,
-            "376": self.on_motd_end,
-            "PRIVMSG": self.on_privmsg,
-            "JOIN": self.on_join,
-            "QUIT": self.on_quit,
-            "NICK": self.on_nick,
-            "INVITE": self.on_invite,
-        }
-
-        # forward these messages to target specifier in arguments
-        self.irc_forwards = {
-            "PRIVMSG": 0,
-            "JOIN": 0,
-            "NOTICE": 0,
-            "PART": 0,
-            "MODE": 0,
-            "TOPIC": 0,
-            "331": 1,
-            "332": 1,
-            "366": 1,
-            "353": 2,
-            "473": 0,
-        }
 
     @staticmethod
     async def create(serv, name, user_id):
@@ -172,21 +156,23 @@ class NetworkRoom(Room):
         await self.connect()
 
     async def cmd_disconnect(self, args) -> None:
-        self.connected = False
-        await self.save()
+        if self.connected:
+            self.connected = False
+            await self.save()
 
-        if not self.conn:
+        if not self.conn or not self.conn.connected:
+            await self.send_notice("Not connected.")
             return
 
-        self.conn.quit()
         await self.send_notice("Disconnecting...")
+        self.conn.disconnect()
 
     async def cmd_raw(self, args) -> None:
         if not self.conn or not self.conn.connected:
             await self.send_notice("Need to be connected to use this command.")
             return
 
-        self.conn.send(" ".join(args.text))
+        self.conn.send_raw(" ".join(args.text))
 
     async def cmd_query(self, args) -> None:
         if not self.conn or not self.conn.connected:
@@ -201,8 +187,7 @@ class NetworkRoom(Room):
             await self.serv.api.post_room_invite(room.id, self.user_id)
             await self.send_notice("Inviting back to private chat with {}.".format(args.nick))
         else:
-            room = await PrivateRoom.create(self, args.nick)
-            self.rooms[room.name] = room
+            self.rooms[room.name] = await PrivateRoom.create(self, args.nick)
             await self.send_notice("You have been invited to private chat with {}.".format(args.nick))
 
     async def cmd_join(self, args) -> None:
@@ -210,20 +195,26 @@ class NetworkRoom(Room):
             return
 
         # TODO: validate channel name and add # prefix if naked
-
-        self.conn.send("JOIN {}".format(args.channel))
+        self.conn.join(args.channel)
 
     async def cmd_nick(self, args) -> None:
         if args.nick is None:
-            await self.send_notice("Current nickname: {}".format(self.nick))
+            if self.conn and self.conn.connected:
+                await self.send_notice(f"Current nickname: {self.conn.real_nickname} (configured: {self.nick})")
+            else:
+                await self.send_notice("Configured nickname: {}".format(self.nick))
             return
 
         self.nick = args.nick
         await self.save()
         await self.send_notice("Nickname set to {}".format(self.nick))
 
-    async def connect(self) -> None:
         if self.conn and self.conn.connected:
+            self.conn.nick(args.nick)
+
+    async def connect(self) -> None:
+        if self.connecting or (self.conn and self.conn.connected):
+            await self.send_notice("Already connected.")
             return
 
         if self.nick is None:
@@ -243,88 +234,112 @@ class NetworkRoom(Room):
                 room.network = self
                 self.rooms[room.name] = room
 
+        # force cleanup
+        if self.conn:
+            self.conn = None
+
+        self.connecting = True
+
         network = self.serv.config["networks"][self.name]
-
-        servers = []
-        for server in network["servers"]:
-            servers.append(Server(server, 6667))
-
-        if self.conn is None:
-            self.conn = IrcProtocol(servers, self.nick, loop=asyncio.get_event_loop())
-            self.conn.register("*", self.on_irc_event)
-
         await self.send_notice("Connecting...")
-        await self.conn.connect()
 
-        if not self.connected:
-            self.connected = True
-            await self.save()
+        try:
+            self.conn = await self.reactor.server().connect(network["servers"][0], 6667, self.nick)
 
-    async def on_irc_event(self, conn, message) -> None:
-        handled = False
-        if message.command in self.irc_handlers:
-            handled = await self.irc_handlers[message.command](message)
+            self.conn.add_global_handler("disconnect", self.on_disconnect)
+            self.conn.add_global_handler("020", self.on_server_message)
+            self.conn.add_global_handler("welcome", self.on_server_message)
+            self.conn.add_global_handler("yourhost", self.on_server_message)
+            self.conn.add_global_handler("created", self.on_server_message)
+            self.conn.add_global_handler("myinfo", self.on_server_message)
+            self.conn.add_global_handler("featurelist", self.on_server_message)
+            self.conn.add_global_handler("umodeunknownflag", self.on_server_message)
+            self.conn.add_global_handler("unknowncommand", self.on_server_message)
+            self.conn.add_global_handler("nochanmodes", self.on_server_message)
+            self.conn.add_global_handler("nosuchnick", self.on_nosuchnick)
+            self.conn.add_global_handler("motd", self.on_server_message)
+            self.conn.add_global_handler("endofmotd", self.on_endofmotd)
+            self.conn.add_global_handler("privnotice", self.on_privnotice)
+            self.conn.add_global_handler("privmsg", self.on_privmsg)
+            self.conn.add_global_handler("privmsg", self.on_pass)
+            self.conn.add_global_handler("join", self.on_join)
+            self.conn.add_global_handler("join", self.on_pass)  # for forward only
+            self.conn.add_global_handler("quit", self.on_quit)
+            self.conn.add_global_handler("nick", self.on_nick)
+            self.conn.add_global_handler("nicknameinuse", self.on_nicknameinuse)
+            self.conn.add_global_handler("invite", self.on_invite)
 
-        if message.command in self.irc_forwards:
-            target = message.parameters[self.irc_forwards[message.command]].lower()
+            self.conn.add_global_handler("namreply", self.on_namreply)
+            self.conn.add_global_handler("endofnames", self.on_endofnames)
+            self.conn.add_global_handler("mode", self.on_pass)
+            self.conn.add_global_handler("notopic", self.on_pass)
+            self.conn.add_global_handler("currenttopic", self.on_endofnames)
+            self.conn.add_global_handler("topic", self.on_pass)
+            self.conn.add_global_handler("part", self.on_pass)
+            self.conn.add_global_handler("pubmsg", self.on_pass)
+            self.conn.add_global_handler("pubnotice", self.on_pass)
+            self.conn.add_global_handler("ctcp", self.on_pass)
 
-            # direct target means the target room is the sender
-            if target == self.nick.lower():
-                target = message.prefix.nick.lower()
+            if not self.connected:
+                self.connected = True
+                await self.save()
 
-            if target in self.queue:
-                self.queue[target].append(message)
-            elif target in self.rooms:
-                await self.rooms[target].on_irc_event(message)
-            elif not handled:
-                await self.send_notice("No room for targeted event ({}): {}".format(target, str(message)))
+        except irc.client.ServerConnectionError:
+            logging.exception("Failed to connect")
+        finally:
+            self.connecting = False
 
-            # dequeue events if needed
-            if target in self.queue and target in self.rooms:
-                queue = self.queue[target]
-                del self.queue[target]
+    @future
+    async def on_disconnect(self, conn, event) -> None:
+        if self.connected:
+            await self.send_notice("Disconnected, reconnecting in 10 seconds...")
+            await asyncio.sleep(10)
+            await self.connect()
+        else:
+            await self.send_notice("Disconnected.")
 
-                for e in queue:
-                    await self.rooms[target].on_irc_event(e)
-        elif not handled and message.command not in self.irc_ignore:
-            await self.send_notice("Unhandled IRC event: " + str(message))
+    @future
+    @ircroom_event()
+    async def on_pass(self, conn, event) -> None:
+        logging.warning(f"IRC room event '{event.type}' fell through, target issues?")
+        logging.warning(str(event))
 
-    async def on_no_such_nick(self, message) -> bool:
-        if message.parameters[0] != self.nick:
-            return False
+    @future
+    @ircroom_event(target_arg=1)
+    async def on_namreply(self, conn, event) -> None:
+        logging.warning(f"IRC room event '{event.type}' fell through.")
 
-        # tell the sender
-        for room in self.serv.find_rooms(PrivateRoom, self.user_id):
-            if room.network_name == self.name and room.name == message.parameters[1]:
-                await room.send_notice("{}: {}".format(message.parameters[1], message.parameters[2]))
-                return True
+    @future
+    @ircroom_event(target_arg=0)
+    async def on_endofnames(self, conn, event) -> None:
+        logging.warning(f"IRC room event '{event.type}' fell through.")
+        pass
 
-    async def on_server_message(self, message) -> bool:
-        parameters = list(message.parameters)
-        parameters.pop(0)
-        await self.send_notice(" ".join(parameters))
-        return True
+    @future
+    @ircroom_event()
+    async def on_nosuchnick(self, conn, event) -> None:
+        await self.send_notice("{}: {}".format(event.arguments[0], event.arguments[1]))
 
-    async def on_notice(self, message) -> bool:
-        source = message.prefix.nick.lower()
+    @future
+    async def on_server_message(self, conn, event) -> None:
+        await self.send_notice(" ".join(event.arguments))
 
+    @future
+    @ircroom_event()
+    async def on_privnotice(self, conn, event) -> None:
         # show unhandled notices in server room
-        if source not in self.rooms:
-            await self.send_notice_html(
-                "<b>{} ({}@{}):</b> {}".format(
-                    message.prefix.nick,
-                    message.prefix.user,
-                    message.prefix.host,
-                    message.parameters[1],
-                )
+        await self.send_notice_html(
+            "<b>{} ({}@{}):</b> {}".format(
+                event.source.nick,
+                event.source.user,
+                event.source.host,
+                event.arguments[0],
             )
+        )
 
-            return True
-
-        return False
-
-    async def on_motd_end(self, message) -> bool:
-        await self.on_server_message(message)
+    @future
+    async def on_endofmotd(self, conn, event) -> None:
+        await self.send_notice(" ".join(event.arguments))
 
         # wait a bit for good measure after motd to send a join command
         await asyncio.sleep(2)
@@ -333,69 +348,36 @@ class NetworkRoom(Room):
         for room in self.rooms.values():
             if type(room) is ChannelRoom:
                 await self.send_notice("Joining " + room.name)
-                self.conn.send("JOIN {}".format(room.name))
+                self.conn.join(room.name)
 
-        return True
-
-    def is_ctcp(self, message) -> bool:
-        return len(message.parameters) > 1 and message.parameters[1][0] == "\x01"
-
-    async def on_privmsg(self, message) -> bool:
-        if message.parameters[0] != self.nick:
-            return False
-
-        target = message.prefix.nick.lower()
-
-        if self.is_ctcp(message):
-            await self.send_notice("Ignored CTCP from {}".format(message.prefix.nick))
-            return True
-
-        # prevent creating a room while queue is in effect
-        if target in self.queue:
-            return True
+    @future
+    async def on_privmsg(self, conn, event) -> bool:
+        # slightly backwards
+        target = event.source.nick.lower()
 
         if target not in self.rooms:
-            # create queue for subsequent messages
-            self.queue[target] = []
-
             # reuse query command to create a room
-            await self.cmd_query(Namespace(nick=message.prefix.nick))
-
-            # dequeue events if needed
-            queue = self.queue[target]
-            del self.queue[target]
-
-            for e in queue:
-                await self.rooms[target].on_irc_event(e)
+            await self.cmd_query(Namespace(nick=event.source.nick))
         else:
             room = self.rooms[target]
             if not room.in_room(self.user_id):
-                await self.serv.api.post_room_invite(self.rooms[target].id, self.user_id)
+                asyncio.ensure_future(self.serv.api.post_room_invite(self.rooms[target].id, self.user_id))
 
-        return True
+    @future
+    async def on_join(self, conn, event) -> None:
+        target = event.target.lower()
 
-    async def on_join(self, message) -> bool:
-        target = message.parameters[0].lower()
-
-        logging.debug(f"Handling JOIN to {target}")
+        logging.debug(f"Handling JOIN to {target} by {event.source.nick} (we are {self.conn.get_nickname()})")
 
         # create a ChannelRoom in response to JOIN
-        if message.prefix.nick == self.nick and target not in self.rooms:
+        if event.source.nick == self.conn.get_nickname() and target not in self.rooms:
             logging.debug("Pre-flight check for JOIN ok, going to create it...")
-            self.queue[target] = []
-            self.rooms[target] = await ChannelRoom.create(self, message.parameters[0])
 
-            # dequeue events if needed
-            queue = self.queue[target]
-            del self.queue[target]
+            self.rooms[target] = await ChannelRoom.create(self, event.target)
 
-            for e in queue:
-                await self.rooms[target].on_irc_event(e)
-
-        return True
-
-    async def on_quit(self, message) -> bool:
-        irc_user_id = self.serv.irc_user_id(self.name, message.prefix.nick)
+    @future
+    async def on_quit(self, conn, event) -> None:
+        irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
 
         # leave channels
         for room in self.rooms.values():
@@ -403,30 +385,34 @@ class NetworkRoom(Room):
                 if room.in_room(irc_user_id):
                     await self.serv.api.post_room_leave(room.id, irc_user_id)
 
-    async def on_nick(self, message) -> bool:
-        old_irc_user_id = self.serv.irc_user_id(self.name, message.prefix.nick)
-        new_irc_user_id = await self.serv.ensure_irc_user_id(self.name, message.parameters[0])
+    @future
+    async def on_nick(self, conn, event) -> None:
+        old_irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
+        new_irc_user_id = await self.serv.ensure_irc_user_id(self.name, event.target)
 
-        # special case where only cases change
+        # special case where only cases change, ensure will update displayname
         if old_irc_user_id == new_irc_user_id:
-            return True
+            return
 
         # leave and join channels
         for room in self.rooms.values():
             if type(room) is ChannelRoom:
                 if room.in_room(old_irc_user_id):
                     # notify mx user about the change
-                    await room.send_notice(
-                        "{} is changing nick to {}".format(message.prefix.nick, message.parameters[0])
-                    )
+                    await room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
                     await self.serv.api.post_room_leave(room.id, old_irc_user_id)
                     await self.serv.api.post_room_invite(room.id, new_irc_user_id)
                     await self.serv.api.post_room_join(room.id, new_irc_user_id)
 
-        return True
+    @future
+    async def on_nicknameinuse(self, conn, event) -> None:
+        newnick = event.arguments[0] + "_"
+        self.conn.nick(newnick)
+        await self.send_notice(f"Nickname {event.arguments[0]} is in use, trying {newnick}")
 
-    async def on_invite(self, message) -> bool:
+    @future
+    async def on_invite(self, conn, event) -> bool:
         await self.send_notice_html(
-            "<b>{}</b> has invited you to <b>{}</b>".format(message.prefix.nick, message.parameters[1])
+            "<b>{}</b> has invited you to <b>{}</b>".format(event.source.nick, event.arguments[0])
         )
         return True

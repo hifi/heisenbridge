@@ -1,6 +1,7 @@
 import time
 
 from aiohttp import ClientSession
+from aiohttp import TCPConnector
 
 
 class MatrixError(Exception):
@@ -28,6 +29,7 @@ class Matrix:
         self.token = token
         self.seq = 0
         self.session = str(int(time.time()))
+        self.conn = TCPConnector()
 
     def _matrix_error(self, data):
         errors = {
@@ -44,7 +46,9 @@ class Matrix:
         return self.session + "-" + str(self.seq)
 
     async def call(self, method, uri, data=None):
-        async with ClientSession(headers={"Authorization": "Bearer " + self.token}) as session:
+        async with ClientSession(
+            headers={"Authorization": "Bearer " + self.token}, connector=self.conn, connector_owner=False
+        ) as session:
             resp = await session.request(method, self.url + uri, json=data)
             data = await resp.json()
 

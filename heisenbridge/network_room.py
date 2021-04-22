@@ -187,7 +187,8 @@ class NetworkRoom(Room):
             await self.serv.api.post_room_invite(room.id, self.user_id)
             await self.send_notice("Inviting back to private chat with {}.".format(args.nick))
         else:
-            self.rooms[room.name] = await PrivateRoom.create(self, args.nick)
+            room = await PrivateRoom.create(self, args.nick)
+            self.rooms[room.name] = room
             await self.send_notice("You have been invited to private chat with {}.".format(args.nick))
 
     async def cmd_join(self, args) -> None:

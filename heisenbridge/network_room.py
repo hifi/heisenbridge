@@ -331,9 +331,9 @@ class NetworkRoom(Room):
         # show unhandled notices in server room
         await self.send_notice_html(
             "<b>{} ({}@{}):</b> {}".format(
-                event.source.nick,
-                event.source.user,
-                event.source.host,
+                event.source.nick if event.source else '',
+                event.source.user if event.source else '',
+                event.source.host if event.source else '',
                 event.arguments[0],
             )
         )

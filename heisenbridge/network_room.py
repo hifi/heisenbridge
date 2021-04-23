@@ -6,6 +6,7 @@ from typing import Dict
 
 import irc.client
 import irc.client_aio
+from jaraco.stream import buffer
 
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandManager
@@ -244,7 +245,9 @@ class NetworkRoom(Room):
 
         try:
             reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
-            self.conn = await reactor.server().connect(network["servers"][0], 6667, self.nick)
+            server = reactor.server()
+            server.buffer_class = buffer.LenientDecodingLineBuffer
+            self.conn = await server.connect(network["servers"][0], 6667, self.nick)
 
             self.conn.add_global_handler("disconnect", self.on_disconnect)
             self.conn.add_global_handler("020", self.on_server_message)

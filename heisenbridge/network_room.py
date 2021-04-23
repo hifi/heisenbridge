@@ -61,7 +61,6 @@ class NetworkRoom(Room):
     conn: Any
     rooms: Dict[str, Room]
     queue: FutureQueue
-    reactor: Any
     connecting: bool
 
     def init(self):
@@ -73,7 +72,6 @@ class NetworkRoom(Room):
         self.conn = None
         self.rooms = {}
         self.queue = FutureQueue(timeout=30)
-        self.reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
         self.connecting = False
 
         cmd = CommandParser(prog="NICK", description="Change nickname")
@@ -245,7 +243,8 @@ class NetworkRoom(Room):
         await self.send_notice("Connecting...")
 
         try:
-            self.conn = await self.reactor.server().connect(network["servers"][0], 6667, self.nick)
+            reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
+            self.conn = await reactor.server().connect(network["servers"][0], 6667, self.nick)
 
             self.conn.add_global_handler("disconnect", self.on_disconnect)
             self.conn.add_global_handler("020", self.on_server_message)
@@ -292,6 +291,9 @@ class NetworkRoom(Room):
 
     @future
     async def on_disconnect(self, conn, event) -> None:
+        self.conn.disconnect()
+        self.conn = None
+
         if self.connected:
             await self.send_notice("Disconnected, reconnecting in 10 seconds...")
             await asyncio.sleep(10)

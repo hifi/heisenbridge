@@ -91,7 +91,8 @@ class ChannelRoom(PrivateRoom):
 
         for user_id in to_remove:
             await self.serv.api.post_room_leave(self.id, user_id)
-            self.members.remove(user_id)
+            if user_id in self.members:
+                self.members.remove(user_id)
 
     async def on_join(self, conn, event) -> None:
         # we don't need to sync ourself

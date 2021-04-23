@@ -6,6 +6,7 @@ import random
 import string
 import sys
 import urllib
+from fnmatch import fnmatch
 from typing import Dict
 from typing import List
 
@@ -51,9 +52,9 @@ class BridgeAppService(AppService):
         if user_id == self.config["owner"]:
             return True
 
-        # FIXME: proper mask matching
-        if self.config["allow"].get(user_id) == "admin":
-            return True
+        for mask, value in self.config["allow"].items():
+            if fnmatch(user_id, mask) and value == "admin":
+                return True
 
         return False
 
@@ -61,9 +62,9 @@ class BridgeAppService(AppService):
         if self.is_admin(user_id):
             return True
 
-        # FIXME: proper mask matching
-        if user_id in self.config["allow"]:
-            return True
+        for mask in self.config["allow"].keys():
+            if fnmatch(user_id, mask):
+                return True
 
         return False
 

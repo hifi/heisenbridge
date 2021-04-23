@@ -23,12 +23,12 @@ class ControlRoom(Room):
             self.commands.register(cmd, self.cmd_masks)
 
             cmd = CommandParser(prog="ADDMASK", description="Add allow mask")
-            cmd.add_argument("mask", help="Matrix ID mask (eg: @friend:contoso.com)")
+            cmd.add_argument("mask", help="Matrix ID mask (eg: @friend:contoso.com or *:contoso.com)")
             cmd.add_argument("--admin", help="Admin level access", action="store_true")
             self.commands.register(cmd, self.cmd_addmask)
 
             cmd = CommandParser(prog="DELMASK", description="Remove allow mask")
-            cmd.add_argument("mask", help="Matrix ID mask (eg: @friend:contoso.com)")
+            cmd.add_argument("mask", help="Matrix ID mask (eg: @friend:contoso.com or *:contoso.com)")
             self.commands.register(cmd, self.cmd_delmask)
 
             cmd = CommandParser(prog="ADDNETWORK", description="Add network")

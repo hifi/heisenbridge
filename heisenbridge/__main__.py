@@ -150,8 +150,8 @@ class BridgeAppService(AppService):
                 logging.debug("Control room already open, uhh")
                 return
 
-            # set owner
-            if self.config.get("owner", None) is None:
+            # set owner if we have none and the user is from the same HS
+            if self.config.get("owner", None) is None and event["user_id"].endswith(":" + self.server_name):
                 logging.info(f"We have an owner now, let us rejoice, {event['user_id']}!")
                 self.config["owner"] = event["user_id"]
                 await self.save()
@@ -246,7 +246,7 @@ class BridgeAppService(AppService):
 
         print("All done!")
 
-    async def run(self, config_file, listen_address, listen_port, homeserver_url):
+    async def run(self, config_file, listen_address, listen_port, homeserver_url, owner):
         with open(config_file) as f:
             registration = yaml.safe_load(f)
 
@@ -272,6 +272,12 @@ class BridgeAppService(AppService):
         # load config from HS
         await self.load()
         logging.debug(f"Merged configuration from HS: {self.config}")
+
+        # honor command line owner
+        if owner is not None and self.config["owner"] != owner:
+            logging.info(f"Overriding loaded owner with '{owner}'")
+            self.config["owner"] = owner
+            await self.save()
 
         resp = await self.api.get_user_joined_rooms()
         logging.debug(f"Appservice rooms: {resp['joined_rooms']}")
@@ -385,6 +391,12 @@ parser.add_argument(
     default=argparse.SUPPRESS,
 )
 parser.add_argument(
+    "-o",
+    "--owner",
+    help="set owner MXID (eg: @user:homeserver) or first talking local user will claim the bridge",
+    default=None,
+)
+parser.add_argument(
     "homeserver",
     nargs="?",
     help="URL of Matrix homeserver",
@@ -430,5 +442,7 @@ elif "reset" in args:
 else:
     service = BridgeAppService()
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(service.run(args.config, args.listen_address, args.listen_port, args.homeserver))
+    loop.run_until_complete(
+        service.run(args.config, args.listen_address, args.listen_port, args.homeserver, args.owner)
+    )
     loop.close()

@@ -216,6 +216,36 @@ class BridgeAppService(AppService):
         mxc = urllib.parse.urlparse(mxc)
         return "{}/_matrix/media/r0/download/{}{}".format(self.endpoint, mxc.netloc, mxc.path)
 
+    async def reset(self, config_file, homeserver_url):
+        with open(config_file) as f:
+            registration = yaml.safe_load(f)
+
+        self.api = Matrix(homeserver_url, registration["as_token"])
+
+        whoami = await self.api.get_user_whoami()
+        self.user_id = whoami["user_id"]
+        print("We are " + whoami["user_id"])
+
+        resp = await self.api.get_user_joined_rooms()
+        print(f"Leaving from {len(resp['joined_rooms'])} rooms...")
+
+        for room_id in resp["joined_rooms"]:
+            print(f"Leaving from {room_id}...")
+            await self.api.post_room_leave(room_id)
+
+            try:
+                await self.api.post_room_forget(room_id)
+                print("  ...and it's gone")
+            except MatrixError:
+                print("  ...but couldn't forget, that's fine")
+                pass
+
+        print("Resetting configuration...")
+        self.config = {}
+        await self.save()
+
+        print("All done!")
+
     async def run(self, config_file, listen_address, listen_port, homeserver_url):
         with open(config_file) as f:
             registration = yaml.safe_load(f)
@@ -349,6 +379,12 @@ parser.add_argument(
     default=argparse.SUPPRESS,
 )
 parser.add_argument(
+    "--reset",
+    action="store_true",
+    help="reset ALL bridge configuration from homeserver and exit",
+    default=argparse.SUPPRESS,
+)
+parser.add_argument(
     "homeserver",
     nargs="?",
     help="URL of Matrix homeserver",
@@ -386,6 +422,11 @@ if "generate" in args:
         yaml.dump(registration, f, sort_keys=False)
 
     print(f"Registration file generated and saved to {args.config}")
+elif "reset" in args:
+    service = BridgeAppService()
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(service.reset(args.config, args.homeserver))
+    loop.close()
 else:
     service = BridgeAppService()
     loop = asyncio.get_event_loop()

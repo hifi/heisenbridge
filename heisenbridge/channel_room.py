@@ -56,7 +56,7 @@ class ChannelRoom(PrivateRoom):
         self.names_buffer.extend(event.arguments[2].split())
 
     async def _add_puppet(self, nick):
-        irc_user_id = await self.serv.ensure_irc_user_id(self.network, nick)
+        irc_user_id = await self.serv.ensure_irc_user_id(self.network.name, nick)
         await self.serv.api.post_room_invite(self.id, irc_user_id)
         await self.serv.api.post_room_join(self.id, irc_user_id)
 

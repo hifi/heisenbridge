@@ -250,38 +250,189 @@ class NetworkRoom(Room):
             self.conn = await server.connect(network["servers"][0], 6667, self.nick)
 
             self.conn.add_global_handler("disconnect", self.on_disconnect)
-            self.conn.add_global_handler("020", self.on_server_message)
+
+            # 001-099
             self.conn.add_global_handler("welcome", self.on_server_message)
             self.conn.add_global_handler("yourhost", self.on_server_message)
             self.conn.add_global_handler("created", self.on_server_message)
             self.conn.add_global_handler("myinfo", self.on_server_message)
             self.conn.add_global_handler("featurelist", self.on_server_message)
-            self.conn.add_global_handler("umodeunknownflag", self.on_server_message)
-            self.conn.add_global_handler("unknowncommand", self.on_server_message)
-            self.conn.add_global_handler("nochanmodes", self.on_server_message)
-            self.conn.add_global_handler("nosuchnick", self.on_nosuchnick)
-            self.conn.add_global_handler("motd", self.on_server_message)
-            self.conn.add_global_handler("endofmotd", self.on_endofmotd)
-            self.conn.add_global_handler("privnotice", self.on_privnotice)
-            self.conn.add_global_handler("privmsg", self.on_privmsg)
-            self.conn.add_global_handler("privmsg", self.on_pass)
-            self.conn.add_global_handler("join", self.on_join)
-            self.conn.add_global_handler("join", self.on_pass)  # for forward only
-            self.conn.add_global_handler("quit", self.on_quit)
-            self.conn.add_global_handler("nick", self.on_nick)
-            self.conn.add_global_handler("nicknameinuse", self.on_nicknameinuse)
-            self.conn.add_global_handler("invite", self.on_invite)
+            self.conn.add_global_handler("020", self.on_server_message)
 
-            self.conn.add_global_handler("namreply", self.on_namreply)
-            self.conn.add_global_handler("endofnames", self.on_endofnames)
-            self.conn.add_global_handler("mode", self.on_pass)
+            # 200-299
+            self.conn.add_global_handler("tracelink", self.on_server_message)
+            self.conn.add_global_handler("traceconnecting", self.on_server_message)
+            self.conn.add_global_handler("tracehandshake", self.on_server_message)
+            self.conn.add_global_handler("traceunknown", self.on_server_message)
+            self.conn.add_global_handler("traceoperator", self.on_server_message)
+            self.conn.add_global_handler("traceuser", self.on_server_message)
+            self.conn.add_global_handler("traceserver", self.on_server_message)
+            self.conn.add_global_handler("traceservice", self.on_server_message)
+            self.conn.add_global_handler("tracenewtype", self.on_server_message)
+            self.conn.add_global_handler("traceclass", self.on_server_message)
+            self.conn.add_global_handler("tracereconnect", self.on_server_message)
+            self.conn.add_global_handler("statslinkinfo", self.on_server_message)
+            self.conn.add_global_handler("statscommands", self.on_server_message)
+            self.conn.add_global_handler("statscline", self.on_server_message)
+            self.conn.add_global_handler("statsnline", self.on_server_message)
+            self.conn.add_global_handler("statsiline", self.on_server_message)
+            self.conn.add_global_handler("statskline", self.on_server_message)
+            self.conn.add_global_handler("statsqline", self.on_server_message)
+            self.conn.add_global_handler("statsyline", self.on_server_message)
+            self.conn.add_global_handler("endofstats", self.on_server_message)
+            self.conn.add_global_handler("umodeis", self.on_umodeis)
+            self.conn.add_global_handler("serviceinfo", self.on_server_message)
+            self.conn.add_global_handler("endofservices", self.on_server_message)
+            self.conn.add_global_handler("service", self.on_server_message)
+            self.conn.add_global_handler("servlist", self.on_server_message)
+            self.conn.add_global_handler("servlistend", self.on_server_message)
+            self.conn.add_global_handler("statslline", self.on_server_message)
+            self.conn.add_global_handler("statsuptime", self.on_server_message)
+            self.conn.add_global_handler("statsoline", self.on_server_message)
+            self.conn.add_global_handler("statshline", self.on_server_message)
+            self.conn.add_global_handler("luserconns", self.on_server_message)
+            self.conn.add_global_handler("luserclient", self.on_server_message)
+            self.conn.add_global_handler("luserop", self.on_server_message)
+            self.conn.add_global_handler("luserunknown", self.on_server_message)
+            self.conn.add_global_handler("luserchannels", self.on_server_message)
+            self.conn.add_global_handler("luserme", self.on_server_message)
+            self.conn.add_global_handler("adminme", self.on_server_message)
+            self.conn.add_global_handler("adminloc1", self.on_server_message)
+            self.conn.add_global_handler("adminloc2", self.on_server_message)
+            self.conn.add_global_handler("adminemail", self.on_server_message)
+            self.conn.add_global_handler("tracelog", self.on_server_message)
+            self.conn.add_global_handler("endoftrace", self.on_server_message)
+            self.conn.add_global_handler("tryagain", self.on_server_message)
+            self.conn.add_global_handler("n_local", self.on_server_message)
+            self.conn.add_global_handler("n_global", self.on_server_message)
+
+            # 300-399
+            self.conn.add_global_handler("none", self.on_server_message)
+            self.conn.add_global_handler("away", self.on_server_message)
+            self.conn.add_global_handler("userhost", self.on_server_message)
+            self.conn.add_global_handler("ison", self.on_server_message)
+            self.conn.add_global_handler("unaway", self.on_server_message)
+            self.conn.add_global_handler("nowaway", self.on_server_message)
+            self.conn.add_global_handler("whoisuser", self.on_server_message)
+            self.conn.add_global_handler("whoisserver", self.on_server_message)
+            self.conn.add_global_handler("whoisoperator", self.on_server_message)
+            self.conn.add_global_handler("whowasuser", self.on_server_message)
+            self.conn.add_global_handler("endofwho", self.on_server_message)
+            self.conn.add_global_handler("whoischanop", self.on_server_message)
+            self.conn.add_global_handler("whoisidle", self.on_server_message)
+            self.conn.add_global_handler("endofwhois", self.on_server_message)
+            self.conn.add_global_handler("whoischannels", self.on_server_message)
+            self.conn.add_global_handler("liststart", self.on_server_message)
+            self.conn.add_global_handler("list", self.on_server_message)
+            self.conn.add_global_handler("listend", self.on_server_message)
+            self.conn.add_global_handler("channelmodeis", self.on_server_message)
+            self.conn.add_global_handler("channelcreate", self.on_server_message)
+            self.conn.add_global_handler("whoisaccount", self.on_server_message)
             self.conn.add_global_handler("notopic", self.on_pass)
-            self.conn.add_global_handler("currenttopic", self.on_endofnames)
-            self.conn.add_global_handler("topic", self.on_pass)
+            self.conn.add_global_handler("currenttopic", self.on_pass0)
+            # self.conn.add_global_handler("topicinfo", self.on_server_message) # not needed right now
+            self.conn.add_global_handler("inviting", self.on_server_message)
+            self.conn.add_global_handler("summoning", self.on_server_message)
+            self.conn.add_global_handler("invitelist", self.on_server_message)
+            self.conn.add_global_handler("endofinvitelist", self.on_server_message)
+            self.conn.add_global_handler("exceptlist", self.on_server_message)
+            self.conn.add_global_handler("endofexceptlist", self.on_server_message)
+            self.conn.add_global_handler("version", self.on_server_message)
+            self.conn.add_global_handler("whoreply", self.on_server_message)
+            self.conn.add_global_handler("namreply", self.on_pass1)
+            self.conn.add_global_handler("whospcrpl", self.on_server_message)
+            self.conn.add_global_handler("killdone", self.on_server_message)
+            self.conn.add_global_handler("closing", self.on_server_message)
+            self.conn.add_global_handler("closeend", self.on_server_message)
+            self.conn.add_global_handler("links", self.on_server_message)
+            self.conn.add_global_handler("endoflinks", self.on_server_message)
+            self.conn.add_global_handler("endofnames", self.on_pass0)
+            self.conn.add_global_handler("banlist", self.on_server_message)
+            self.conn.add_global_handler("endofbanlist", self.on_server_message)
+            self.conn.add_global_handler("endofwhowas", self.on_server_message)
+            self.conn.add_global_handler("info", self.on_server_message)
+            self.conn.add_global_handler("motd", self.on_server_message)
+            self.conn.add_global_handler("infostart", self.on_server_message)
+            self.conn.add_global_handler("endofinfo", self.on_server_message)
+            self.conn.add_global_handler("motdstart", self.on_server_message)
+            self.conn.add_global_handler("endofmotd", self.on_endofmotd)
+
+            # 400-599
+            self.conn.add_global_handler("nosuchnick", self.on_pass_if)
+            self.conn.add_global_handler("nosuchserver", self.on_server_message)
+            self.conn.add_global_handler("nosuchchannel", self.on_pass_if)
+            self.conn.add_global_handler("cannotsendtochan", self.on_pass_if)
+            self.conn.add_global_handler("toomanychannels", self.on_server_message)
+            self.conn.add_global_handler("wasnosuchnick", self.on_server_message)
+            self.conn.add_global_handler("toomanytargets", self.on_server_message)
+            self.conn.add_global_handler("noorigin", self.on_server_message)
+            self.conn.add_global_handler("invalidcapcmd", self.on_server_message)
+            self.conn.add_global_handler("norecipient", self.on_server_message)
+            self.conn.add_global_handler("notexttosend", self.on_server_message)
+            self.conn.add_global_handler("notoplevel", self.on_server_message)
+            self.conn.add_global_handler("wildtoplevel", self.on_server_message)
+            self.conn.add_global_handler("unknowncommand", self.on_server_message)
+            self.conn.add_global_handler("nomotd", self.on_server_message)
+            self.conn.add_global_handler("noadmininfo", self.on_server_message)
+            self.conn.add_global_handler("fileerror", self.on_server_message)
+            self.conn.add_global_handler("nonicknamegiven", self.on_server_message)
+            self.conn.add_global_handler("erroneusnickname", self.on_server_message)
+            self.conn.add_global_handler("nicknameinuse", self.on_nicknameinuse)
+            self.conn.add_global_handler("nickcollision", self.on_server_message)
+            self.conn.add_global_handler("unavailresource", self.on_server_message)
+            self.conn.add_global_handler("unavailresource", self.on_server_message)
+            self.conn.add_global_handler("usernotinchannel", self.on_pass1)
+            self.conn.add_global_handler("notonchannel", self.on_pass0)
+            self.conn.add_global_handler("useronchannel", self.on_pass1)
+            self.conn.add_global_handler("nologin", self.on_pass1)
+            self.conn.add_global_handler("summondisabled", self.on_server_message)
+            self.conn.add_global_handler("usersdisabled", self.on_server_message)
+            self.conn.add_global_handler("notregistered", self.on_server_message)
+            self.conn.add_global_handler("needmoreparams", self.on_server_message)
+            self.conn.add_global_handler("alreadyregistered", self.on_server_message)
+            self.conn.add_global_handler("nopermforhost", self.on_server_message)
+            self.conn.add_global_handler("passwdmismatch", self.on_server_message)
+            self.conn.add_global_handler("yourebannedcreep", self.on_server_message)
+            self.conn.add_global_handler("youwillbebanned", self.on_server_message)
+            self.conn.add_global_handler("keyset", self.on_pass)
+            self.conn.add_global_handler("channelisfull", self.on_pass)
+            self.conn.add_global_handler("unknownmode", self.on_server_message)
+            self.conn.add_global_handler("inviteonlychan", self.on_pass)
+            self.conn.add_global_handler("bannedfromchan", self.on_pass)
+            self.conn.add_global_handler("badchannelkey", self.on_pass)
+            self.conn.add_global_handler("badchanmask", self.on_pass)
+            self.conn.add_global_handler("nochanmodes", self.on_pass)
+            self.conn.add_global_handler("banlistfull", self.on_pass)
+            self.conn.add_global_handler("cannotknock", self.on_pass)
+            self.conn.add_global_handler("noprivileges", self.on_server_message)
+            self.conn.add_global_handler("chanoprivsneeded", self.on_pass)
+            self.conn.add_global_handler("cantkillserver", self.on_server_message)
+            self.conn.add_global_handler("restricted", self.on_server_message)
+            self.conn.add_global_handler("uniqopprivsneeded", self.on_server_message)
+            self.conn.add_global_handler("nooperhost", self.on_server_message)
+            self.conn.add_global_handler("noservicehost", self.on_server_message)
+            self.conn.add_global_handler("umodeunknownflag", self.on_server_message)
+            self.conn.add_global_handler("usersdontmatch", self.on_server_message)
+
+            # protocol
+            # FIXME: error
+            self.conn.add_global_handler("join", self.on_join)
+            self.conn.add_global_handler("kick", self.on_pass)
+            self.conn.add_global_handler("mode", self.on_pass)
             self.conn.add_global_handler("part", self.on_pass)
+            self.conn.add_global_handler("privmsg", self.on_privmsg)
+            self.conn.add_global_handler("privnotice", self.on_privnotice)
             self.conn.add_global_handler("pubmsg", self.on_pass)
             self.conn.add_global_handler("pubnotice", self.on_pass)
-            self.conn.add_global_handler("ctcp", self.on_pass)
+            self.conn.add_global_handler("quit", self.on_quit)
+            self.conn.add_global_handler("invite", self.on_invite)
+            # FIXME: action
+            self.conn.add_global_handler("topic", self.on_pass)
+            self.conn.add_global_handler("nick", self.on_nick)
+            self.conn.add_global_handler("umode", self.on_umode)
+
+            # generated
+            self.conn.add_global_handler("ctcp", self.on_ctcp)
 
             if not self.connected:
                 self.connected = True
@@ -307,41 +458,70 @@ class NetworkRoom(Room):
     @future
     @ircroom_event()
     async def on_pass(self, conn, event) -> None:
-        logging.warning(f"IRC room event '{event.type}' fell through, target issues?")
-        logging.warning(str(event))
-
-    @future
-    @ircroom_event(target_arg=1)
-    async def on_namreply(self, conn, event) -> None:
-        logging.warning(f"IRC room event '{event.type}' fell through.")
-
-    @future
-    @ircroom_event(target_arg=0)
-    async def on_endofnames(self, conn, event) -> None:
-        logging.warning(f"IRC room event '{event.type}' fell through.")
-        pass
+        logging.warning(f"IRC room event '{event.type}' fell through, target was from command.")
+        await self.send_notice(" ".join(event.arguments))
 
     @future
     @ircroom_event()
-    async def on_nosuchnick(self, conn, event) -> None:
-        await self.send_notice("{}: {}".format(event.arguments[0], event.arguments[1]))
+    async def on_pass_if(self, conn, event) -> None:
+        await self.send_notice(" ".join(event.arguments))
+
+    @future
+    @ircroom_event()
+    async def on_pass_or_ignore(self, conn, event) -> None:
+        pass
+
+    @future
+    @ircroom_event(target_arg=0)
+    async def on_pass0(self, conn, event) -> None:
+        logging.warning(f"IRC room event '{event.type}' fell through, target was '{event.arguments[0]}'.")
+
+    @future
+    @ircroom_event(target_arg=1)
+    async def on_pass1(self, conn, event) -> None:
+        logging.warning(f"IRC room event '{event.type}' fell through, target was '{event.arguments[1]}'.")
 
     @future
     async def on_server_message(self, conn, event) -> None:
         await self.send_notice(" ".join(event.arguments))
 
     @future
+    async def on_umodeis(self, conn, event) -> None:
+        await self.send_notice(f"Your user mode is: {event.arguments[0]}")
+
+    @future
+    async def on_umode(self, conn, event) -> None:
+        await self.send_notice(f"User mode changed for {event.target}: {event.arguments[0]}")
+
+    @future
     @ircroom_event()
     async def on_privnotice(self, conn, event) -> None:
         # show unhandled notices in server room
-        await self.send_notice_html(
-            "<b>{} ({}@{}):</b> {}".format(
-                event.source.nick if event.source else "",
-                event.source.user if event.source else "",
-                event.source.host if event.source else "",
-                event.arguments[0],
-            )
-        )
+        source = None
+        if event.source is not None:
+            source = str(event.source.nick)
+
+            if event.source.user is not None and event.source.host is not None:
+                source += f" ({event.source.user}@{event.source.host})"
+        else:
+            source = conn.server
+
+        await self.send_notice_html(f"Notice from <b>{source}:</b> {event.arguments[0]}")
+
+    @future
+    @ircroom_event()
+    async def on_ctcp(self, conn, event) -> None:
+        # show unhandled ctcps in server room
+        source = None
+        if event.source is not None:
+            source = str(event.source.nick)
+
+            if event.source.user is not None and event.source.host is not None:
+                source += f" ({event.source.user}@{event.source.host})"
+        else:
+            source = conn.server
+
+        await self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> which we ignored")
 
     @future
     async def on_endofmotd(self, conn, event) -> None:
@@ -357,6 +537,7 @@ class NetworkRoom(Room):
                 self.conn.join(room.name)
 
     @future
+    @ircroom_event()
     async def on_privmsg(self, conn, event) -> bool:
         # slightly backwards
         target = event.source.nick.lower()
@@ -370,6 +551,7 @@ class NetworkRoom(Room):
                 asyncio.ensure_future(self.serv.api.post_room_invite(self.rooms[target].id, self.user_id))
 
     @future
+    @ircroom_event()
     async def on_join(self, conn, event) -> None:
         target = event.target.lower()
 

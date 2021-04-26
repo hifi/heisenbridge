@@ -183,7 +183,7 @@ class BridgeAppService(AppService):
         body = await req.json()
 
         for event in body["events"]:
-            await self._on_mx_event(event)
+            asyncio.ensure_future(self._on_mx_event(event))
 
         return web.json_response({})
 
@@ -345,19 +345,19 @@ class BridgeAppService(AppService):
                 except MatrixError:
                     pass
 
+        runner = aiohttp.web.AppRunner(app)
+        await runner.setup()
+        site = aiohttp.web.TCPSite(runner, listen_address, listen_port)
+        await site.start()
+
         logging.info("Connecting network rooms...")
 
-        # connect network rooms
+        # connect network rooms one by one, this may take a while
         for room in self._rooms.values():
             if type(room) == NetworkRoom and room.connected:
                 await room.connect()
 
         logging.info("Init done, bridge is now running!")
-
-        runner = aiohttp.web.AppRunner(app)
-        await runner.setup()
-        site = aiohttp.web.TCPSite(runner, listen_address, listen_port)
-        await site.start()
 
         await asyncio.Event().wait()
 

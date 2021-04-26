@@ -223,13 +223,13 @@ class NetworkRoom(Room):
 
         # attach loose sub-rooms to us
         for room in self.serv.find_rooms(PrivateRoom, self.user_id):
-            if room.network_name == self.name:
+            if room.name not in self.rooms and room.network_name == self.name:
                 logging.debug(f"NetworkRoom {self.id} attaching PrivateRoom {room.id}")
                 room.network = self
                 self.rooms[room.name] = room
 
         for room in self.serv.find_rooms(ChannelRoom, self.user_id):
-            if room.network_name == self.name:
+            if room.name not in self.rooms and room.network_name == self.name:
                 logging.debug(f"NetworkRoom {self.id} attaching ChannelRoom {room.id}")
                 room.network = self
                 self.rooms[room.name] = room
@@ -438,7 +438,10 @@ class NetworkRoom(Room):
                 self.connected = True
                 await self.save()
 
+        except TimeoutError:
+            await self.send_notice("Connection timed out.")
         except irc.client.ServerConnectionError:
+            await self.send_notice("Unexpected connection error, issue was logged.")
             logging.exception("Failed to connect")
         finally:
             self.connecting = False

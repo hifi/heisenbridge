@@ -55,33 +55,47 @@ class ChannelRoom(PrivateRoom):
     async def on_namreply(self, conn, event) -> None:
         self.names_buffer.extend(event.arguments[2].split())
 
-    async def on_endofnames(self, conn, event) -> None:
-        # HACK: this callback is a synchronous queue that can be cancelled, detach from it
-        asyncio.ensure_future(self.real_endofnames(conn, event))
+    async def _add_puppet(self, nick):
+        irc_user_id = await self.serv.ensure_irc_user_id(self.network, nick)
+        await self.serv.api.post_room_invite(self.id, irc_user_id)
+        await self.serv.api.post_room_join(self.id, irc_user_id)
 
-    async def real_endofnames(self, conn, event) -> None:
+        if irc_user_id not in self.members:
+            self.members.append(irc_user_id)
+
+    async def _remove_puppet(self, user_id):
+        if user_id == self.serv.user_id or user_id == self.user_id:
+            return
+
+        await self.serv.api.post_room_leave(self.id, user_id)
+
+        if user_id in self.members:
+            self.members.remove(user_id)
+
+    async def on_endofnames(self, conn, event) -> None:
         to_remove = list(self.members)
+        to_add = []
         names = list(self.names_buffer)
         self.names_buffer = []
 
         for nick in names:
             nick = self.serv.strip_nick(nick)
 
-            if conn.real_nickname == nick:
+            # ignore us
+            if nick == conn.real_nickname:
                 continue
 
             # convert to mx id, check if we already have them
-            irc_user_id = await self.serv.ensure_irc_user_id(self.network.name, nick)
+            irc_user_id = self.serv.irc_user_id(self.network.name, nick)
 
             # make sure this user is not removed from room
             if irc_user_id in to_remove:
                 to_remove.remove(irc_user_id)
                 continue
 
-            # if this user is not in room, invite and join
+            # if this user is not in room, add to invite list
             if not self.in_room(irc_user_id):
-                await self.serv.api.post_room_invite(self.id, irc_user_id)
-                await self.serv.api.post_room_join(self.id, irc_user_id)
+                to_add.append((irc_user_id, nick))
 
         # never remove us or appservice
         if self.serv.user_id in to_remove:
@@ -89,10 +103,28 @@ class ChannelRoom(PrivateRoom):
         if self.user_id in to_remove:
             to_remove.remove(self.user_id)
 
-        for user_id in to_remove:
-            await self.serv.api.post_room_leave(self.id, user_id)
-            if user_id in self.members:
-                self.members.remove(user_id)
+        await self.send_notice(
+            "Synchronizing members:"
+            + f" got {len(names)} from server,"
+            + f" {len(self.members)} in room,"
+            + f" {len(to_add)} will be invited and {len(to_remove)} removed."
+        )
+
+        # create a big bunch of invites, aiohttp will have some limits in-place
+        for (irc_user_id, nick) in to_add:
+            # to prevent multiple NAMES commands to overlap, add to list immediately
+            if irc_user_id not in self.members:
+                self.members.append(irc_user_id)
+
+            asyncio.ensure_future(self._add_puppet(nick))
+
+        # create a big bunch of leaves
+        for irc_user_id in to_remove:
+            # to prevent multiple NAMES commands to overlap, add to list immediately
+            if irc_user_id in self.members:
+                self.members.append(irc_user_id)
+
+            asyncio.ensure_future(self._remove_puppet(irc_user_id))
 
     async def on_join(self, conn, event) -> None:
         # we don't need to sync ourself
@@ -109,9 +141,7 @@ class ChannelRoom(PrivateRoom):
         self.members.append(irc_user_id)
 
         # ensure, append, invite and join
-        irc_user_id = await self.serv.ensure_irc_user_id(self.network_name, event.source.nick)
-        await self.serv.api.post_room_invite(self.id, irc_user_id)
-        await self.serv.api.post_room_join(self.id, irc_user_id)
+        await self._add_puppet(event.source.nick)
 
     async def on_quit(self, conn, event) -> None:
         await self.on_part(conn, event)
@@ -126,9 +156,7 @@ class ChannelRoom(PrivateRoom):
         if irc_user_id not in self.members:
             return
 
-        self.members.remove(irc_user_id)
-
-        await self.serv.api.post_room_leave(self.id, irc_user_id)
+        await self._remove_puppet(irc_user_id)
 
     async def on_mode(self, conn, event) -> None:
         modes = list(event.arguments)

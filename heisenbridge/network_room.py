@@ -478,11 +478,13 @@ class NetworkRoom(Room):
     @ircroom_event(target_arg=0)
     async def on_pass0(self, conn, event) -> None:
         logging.warning(f"IRC room event '{event.type}' fell through, target was '{event.arguments[0]}'.")
+        await self.send_notice(" ".join(event.arguments))
 
     @future
     @ircroom_event(target_arg=1)
     async def on_pass1(self, conn, event) -> None:
         logging.warning(f"IRC room event '{event.type}' fell through, target was '{event.arguments[1]}'.")
+        await self.send_notice(" ".join(event.arguments))
 
     @future
     async def on_server_message(self, conn, event) -> None:

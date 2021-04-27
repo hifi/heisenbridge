@@ -621,6 +621,10 @@ class NetworkRoom(Room):
         if target not in self.rooms:
             # reuse query command to create a room
             await self.cmd_query(Namespace(nick=event.source.nick))
+
+            # push the message
+            room = self.rooms[target]
+            await room.on_privmsg(conn, event)
         else:
             room = self.rooms[target]
             if not room.in_room(self.user_id):

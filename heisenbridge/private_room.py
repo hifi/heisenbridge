@@ -95,8 +95,18 @@ class PrivateRoom(Room):
         else:
             await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.source), event.arguments[0]))
 
+        # if the user has left this room invite them back
+        if self.user_id not in self.members:
+            await self.serv.api.post_room_invite(self.id, self.user_id)
+
     async def on_privnotice(self, conn, event) -> None:
         if self.network is None:
+            return
+
+        # if the user has left this room notify in network
+        if self.user_id not in self.members:
+            source = self.network.source_text(conn, event)
+            await self.network.send_notice_html(f"Notice from <b>{source}:</b> {event.arguments[0]}")
             return
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)

@@ -39,6 +39,10 @@ class AppService(ABC):
                     "kick": 100,
                     "redact": 100,
                     "ban": 100,
+                    "events": {
+                        "m.room.name": 0,
+                        "m.room.avatar": 0,  # these work as long as rooms are private
+                    },
                 },
             }
         )

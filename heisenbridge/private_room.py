@@ -138,16 +138,13 @@ class PrivateRoom(Room):
                 return
 
             # allow commanding the appservice in rooms
-            if "formatted_body" in event["content"] and self.serv.user_id in event["content"]["formatted_body"]:
-
-                # try really hard to find the start of the message
-                # FIXME: parse the formatted part instead as it has a link inside it
-                text = re.sub(r"^[^:]+\s*:?\s*", "", event["content"]["body"])
-
+            match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", event["content"]["body"])
+            if match and match.group(1).lower() == "heisenbridge":
                 try:
-                    await self.commands.trigger(text)
+                    await self.commands.trigger(match.group(2))
                 except CommandParserError as e:
                     await self.send_notice(str(e))
-                return
+                finally:
+                    return
 
             self.network.conn.privmsg(self.name, event["content"]["body"])

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -194,8 +195,12 @@ class NetworkRoom(Room):
         if not self.conn or not self.conn.connected:
             return
 
-        # TODO: validate channel name and add # prefix if naked
-        self.conn.join(args.channel)
+        channel = args.channel
+
+        if re.match(r"^[A-Za-z0-9]", channel):
+            channel = "#" + channel
+
+        self.conn.join(channel)
 
     async def cmd_nick(self, args) -> None:
         if args.nick is None:

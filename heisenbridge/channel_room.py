@@ -1,7 +1,9 @@
 import asyncio
 import logging
+from datetime import datetime
 from typing import List
 
+from heisenbridge.command_parse import CommandParser
 from heisenbridge.private_room import PrivateRoom
 
 
@@ -11,11 +13,22 @@ class NetworkRoom:
 
 class ChannelRoom(PrivateRoom):
     names_buffer: List[str]
+    bans_buffer: List[str]
 
     def init(self) -> None:
         super().init()
 
+        cmd = CommandParser(prog="MODES", description="fetch current channel modes")
+        self.commands.register(cmd, self.cmd_modes)
+
+        cmd = CommandParser(prog="NAMES", description="resynchronize channel members")
+        self.commands.register(cmd, self.cmd_names)
+
+        cmd = CommandParser(prog="BANS", description="show channel ban list")
+        self.commands.register(cmd, self.cmd_bans)
+
         self.names_buffer = []
+        self.bans_buffer = []
 
     @staticmethod
     async def create(network: NetworkRoom, name: str) -> "ChannelRoom":
@@ -45,6 +58,18 @@ class ChannelRoom(PrivateRoom):
                 self.network.conn.part(self.name)
             if self.name in self.network.rooms:
                 del self.network.rooms[self.name]
+
+    async def cmd_modes(self, args) -> None:
+        if self.network.conn:
+            self.network.conn.mode(self.name, "")
+
+    async def cmd_names(self, args) -> None:
+        if self.network.conn:
+            self.network.conn.names(self.name)
+
+    async def cmd_bans(self, args) -> None:
+        if self.network.conn:
+            self.network.conn.mode(self.name, "+b")
 
     async def on_pubmsg(self, conn, event):
         await self.on_privmsg(conn, event)
@@ -172,3 +197,34 @@ class ChannelRoom(PrivateRoom):
     async def on_topic(self, conn, event) -> None:
         await self.send_notice("{} changed the topic".format(event.source.nick))
         await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.arguments[0]})
+
+    async def on_kick(self, conn, event) -> None:
+        target_user_id = await self.serv.ensure_irc_user_id(self.network.name, event.arguments[0])
+        await self.serv.api.post_room_kick(
+            self.id, target_user_id, f"Kicked by {event.source.nick}: {event.arguments[1]}"
+        )
+
+        if target_user_id in self.members:
+            self.members.remove(target_user_id)
+
+    async def on_banlist(self, conn, event) -> None:
+        parts = list(event.arguments)
+        parts.pop(0)
+        logging.info(parts)
+        self.bans_buffer.append(parts)
+
+    async def on_endofbanlist(self, conn, event) -> None:
+        bans = self.bans_buffer
+        self.bans_buffer = []
+
+        await self.send_notice("Current channel bans:")
+        for ban in bans:
+            bantime = datetime.utcfromtimestamp(int(ban[2])).strftime("%c %Z")
+            await self.send_notice(f"\t{ban[0]} set by {ban[1]} at {bantime}")
+
+    async def on_channelmodeis(self, conn, event) -> None:
+        await self.send_notice(f"Current channel modes: {event.arguments[1]}")
+
+    async def on_channelcreate(self, conn, event) -> None:
+        created = datetime.utcfromtimestamp(int(event.arguments[1])).strftime("%c %Z")
+        await self.send_notice(f"Channel was created at {created}")

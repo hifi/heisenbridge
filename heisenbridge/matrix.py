@@ -88,6 +88,16 @@ class Matrix:
             "/_matrix/client/r0/rooms/" + room_id + "/leave" + ("?user_id={}".format(user_id) if user_id else ""),
         )
 
+    async def post_room_kick(self, room_id, target_user_id, reason="", user_id=None):
+        return await self.call(
+            "POST",
+            "/_matrix/client/r0/rooms/" + room_id + "/kick" + ("?user_id={}".format(user_id) if user_id else ""),
+            {
+                "reason": reason,
+                "user_id": target_user_id,
+            },
+        )
+
     async def post_room_forget(self, room_id):
         return await self.call("POST", "/_matrix/client/r0/rooms/" + room_id + "/forget")
 

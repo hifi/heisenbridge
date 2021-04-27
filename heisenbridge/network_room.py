@@ -325,8 +325,8 @@ class NetworkRoom(Room):
             self.conn.add_global_handler("liststart", self.on_server_message)
             self.conn.add_global_handler("list", self.on_server_message)
             self.conn.add_global_handler("listend", self.on_server_message)
-            self.conn.add_global_handler("channelmodeis", self.on_server_message)
-            self.conn.add_global_handler("channelcreate", self.on_server_message)
+            self.conn.add_global_handler("channelmodeis", self.on_pass0)
+            self.conn.add_global_handler("channelcreate", self.on_pass0)
             self.conn.add_global_handler("whoisaccount", self.on_server_message)
             self.conn.add_global_handler("notopic", self.on_pass)
             self.conn.add_global_handler("currenttopic", self.on_pass0)
@@ -347,8 +347,8 @@ class NetworkRoom(Room):
             self.conn.add_global_handler("links", self.on_server_message)
             self.conn.add_global_handler("endoflinks", self.on_server_message)
             self.conn.add_global_handler("endofnames", self.on_pass0)
-            self.conn.add_global_handler("banlist", self.on_server_message)
-            self.conn.add_global_handler("endofbanlist", self.on_server_message)
+            self.conn.add_global_handler("banlist", self.on_pass0)
+            self.conn.add_global_handler("endofbanlist", self.on_pass0)
             self.conn.add_global_handler("endofwhowas", self.on_server_message)
             self.conn.add_global_handler("info", self.on_server_message)
             self.conn.add_global_handler("motd", self.on_server_message)
@@ -431,6 +431,9 @@ class NetworkRoom(Room):
             self.conn.add_global_handler("nick", self.on_nick)
             self.conn.add_global_handler("umode", self.on_umode)
 
+            self.conn.add_global_handler("kill", self.on_kill)
+            self.conn.add_global_handler("error", self.on_error)
+
             # generated
             self.conn.add_global_handler("ctcp", self.on_ctcp)
 
@@ -498,11 +501,9 @@ class NetworkRoom(Room):
     async def on_umode(self, conn, event) -> None:
         await self.send_notice(f"User mode changed for {event.target}: {event.arguments[0]}")
 
-    @future
-    @ircroom_event()
-    async def on_privnotice(self, conn, event) -> None:
-        # show unhandled notices in server room
+    def source_text(self, conn, event) -> str:
         source = None
+
         if event.source is not None:
             source = str(event.source.nick)
 
@@ -511,21 +512,20 @@ class NetworkRoom(Room):
         else:
             source = conn.server
 
+        return source
+
+    @future
+    @ircroom_event()
+    async def on_privnotice(self, conn, event) -> None:
+        # show unhandled notices in server room
+        source = self.source_text(conn, event)
         await self.send_notice_html(f"Notice from <b>{source}:</b> {event.arguments[0]}")
 
     @future
     @ircroom_event()
     async def on_ctcp(self, conn, event) -> None:
         # show unhandled ctcps in server room
-        source = None
-        if event.source is not None:
-            source = str(event.source.nick)
-
-            if event.source.user is not None and event.source.host is not None:
-                source += f" ({event.source.user}@{event.source.host})"
-        else:
-            source = conn.server
-
+        source = self.source_text(conn, event)
         await self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> which we ignored")
 
     @future
@@ -609,3 +609,17 @@ class NetworkRoom(Room):
             "<b>{}</b> has invited you to <b>{}</b>".format(event.source.nick, event.arguments[0])
         )
         return True
+
+    @future
+    @ircroom_event()
+    async def on_kill(self, conn, event) -> None:
+        if event.target == conn.real_nickname:
+            source = self.source_text(conn, event)
+            await self.send_notice_html(f"Killed by <b>{source}</b>: {event.arguments[0]}")
+
+            # do not reconnect after KILL
+            self.connected = False
+
+    @future
+    async def on_error(self, conn, event) -> None:
+        await self.send_notice_html(f"<b>ERROR</b>: {event.target}")

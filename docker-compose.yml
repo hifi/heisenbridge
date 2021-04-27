@@ -13,3 +13,8 @@ services:
   inspircd:
     image: inspircd/inspircd-docker:latest
     network_mode: host
+    environment:
+      # use: "/oper oper oper" to gain opers
+      INSP_OPER_HASH: 'sha256'
+      INSP_OPER_PASSWORD_HASH: 'fcbe80d4d1bcc6f21964c75ea2e5d26cdd67642ed7187d6bde8aae180a093576'
+      INSP_OPER_SSLONLY: 'no'

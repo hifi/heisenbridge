@@ -57,6 +57,8 @@ class NetworkRoom(Room):
     name: str
     connected: bool
     nick: str
+    password: str
+    autocmd: str
 
     # state
     commands: CommandManager
@@ -70,6 +72,7 @@ class NetworkRoom(Room):
         self.connected = False
         self.nick = None
         self.password = None
+        self.autocmd = None
 
         self.commands = CommandManager()
         self.conn = None
@@ -85,6 +88,11 @@ class NetworkRoom(Room):
         cmd.add_argument("password", nargs="?", help="new password")
         cmd.add_argument("--remove", action="store_true", help="remove stored password")
         self.commands.register(cmd, self.cmd_password)
+
+        cmd = CommandParser(prog="AUTOCMD", description="Run a RAW IRC command on connect (to identify)")
+        cmd.add_argument("command", nargs="*", help="raw IRC command")
+        cmd.add_argument("--remove", action="store_true", help="remove stored command")
+        self.commands.register(cmd, self.cmd_autocmd)
 
         cmd = CommandParser(prog="CONNECT", description="Connect to network")
         self.commands.register(cmd, self.cmd_connect)
@@ -129,10 +137,19 @@ class NetworkRoom(Room):
             self.nick = config["nick"]
 
         if "password" in config:
-            self.nick = config["password"]
+            self.password = config["password"]
+
+        if "autocmd" in config:
+            self.autocmd = config["autocmd"]
 
     def to_config(self) -> dict:
-        return {"name": self.name, "connected": self.connected, "nick": self.nick, "password": self.password}
+        return {
+            "name": self.name,
+            "connected": self.connected,
+            "nick": self.nick,
+            "password": self.password,
+            "autocmd": self.autocmd,
+        }
 
     def is_valid(self) -> bool:
         if self.name is None:
@@ -240,6 +257,23 @@ class NetworkRoom(Room):
         self.password = args.password
         await self.save()
         await self.send_notice(f"Password set to {self.password}")
+
+    async def cmd_autocmd(self, args) -> None:
+        autocmd = " ".join(args.command)
+
+        if args.remove:
+            self.autocmd = None
+            await self.save()
+            await self.send_notice(f"Autocmd removed.")
+            return
+
+        if autocmd == "":
+            await self.send_notice(f"Configured autocmd: {self.autocmd if self.autocmd else ''}")
+            return
+
+        self.autocmd = autocmd
+        await self.save()
+        await self.send_notice(f"Autocmd set to {self.autocmd}")
 
     async def connect(self) -> None:
         if self.connecting or (self.conn and self.conn.connected):
@@ -565,8 +599,12 @@ class NetworkRoom(Room):
     async def on_endofmotd(self, conn, event) -> None:
         await self.send_notice(" ".join(event.arguments))
 
-        # wait a bit for good measure after motd to send a join command
-        await asyncio.sleep(2)
+        if self.autocmd is not None:
+            await self.send_notice("Sending autocmd and waiting a bit before joining channels...")
+            self.conn.send_raw(self.autocmd)
+            await asyncio.sleep(5)
+        else:
+            await asyncio.sleep(2)
 
         # rejoin channels (FIXME: change to comma separated join list)
         for room in self.rooms.values():

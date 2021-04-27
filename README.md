@@ -28,6 +28,7 @@ Features
 * tested with up to 1600 users in a single channel
 * IRCnet !channels _are_ supported, you're welcome
 * any number of IRC networks and users technically possible
+* channel customization by setting the name and avatar
 
 Usage
 -----

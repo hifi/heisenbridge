@@ -133,6 +133,10 @@ class PrivateRoom(Room):
         elif event["content"]["msgtype"] == "m.image":
             self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event["content"]["url"]))
         elif event["content"]["msgtype"] == "m.text":
+            if "\n" in event["content"]["body"]:
+                await self.send_notice("Multiline text is not allowed on IRC, previous message was NOT sent.")
+                return
+
             # allow commanding the appservice in rooms
             if "formatted_body" in event["content"] and self.serv.user_id in event["content"]["formatted_body"]:
 

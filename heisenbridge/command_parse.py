@@ -1,4 +1,5 @@
 import argparse
+import shlex
 
 
 class CommandParserError(Exception):
@@ -29,7 +30,7 @@ class CommandManager:
         self._commands[cmd.prog] = (cmd, func)
 
     async def trigger(self, text):
-        args = text.split(" ")
+        args = shlex.split(text)
         command = args.pop(0).upper()
 
         if command in self._commands:

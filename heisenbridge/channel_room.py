@@ -33,8 +33,14 @@ class ChannelRoom(PrivateRoom):
     @staticmethod
     async def create(network: NetworkRoom, name: str) -> "ChannelRoom":
         logging.debug(f"ChannelRoom.create(network='{network.name}', name='{name}'")
+
+        # handle !room names properly
+        visible_name = name
+        if visible_name.startswith("!"):
+            visible_name = "!" + visible_name[6:]
+
         room_id = await network.serv.create_room(
-            f"{name} ({network.name})",
+            f"{visible_name} ({network.name})",
             "",
             [network.user_id],
         )

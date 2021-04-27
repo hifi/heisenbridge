@@ -465,7 +465,11 @@ class NetworkRoom(Room):
     @ircroom_event()
     async def on_pass(self, conn, event) -> None:
         logging.warning(f"IRC room event '{event.type}' fell through, target was from command.")
-        await self.send_notice(" ".join(event.arguments))
+        source = self.source_text(conn, event)
+        args = " ".join(event.arguments)
+        source = self.source_text(conn, event)
+        target = str(event.target)
+        await self.send_notice_html(f"<b>{source} {event.type} {target}</b> {args}")
 
     @future
     @ircroom_event()

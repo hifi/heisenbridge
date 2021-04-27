@@ -259,7 +259,7 @@ class NetworkRoom(Room):
         if args.remove:
             self.password = None
             await self.save()
-            await self.send_notice(f"Password removed.")
+            await self.send_notice("Password removed.")
             return
 
         if args.password is None:
@@ -276,7 +276,7 @@ class NetworkRoom(Room):
         if args.remove:
             self.autocmd = None
             await self.save()
-            await self.send_notice(f"Autocmd removed.")
+            await self.send_notice("Autocmd removed.")
             return
 
         if autocmd == "":

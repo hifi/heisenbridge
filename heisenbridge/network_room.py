@@ -100,6 +100,9 @@ class NetworkRoom(Room):
         cmd = CommandParser(prog="DISCONNECT", description="Disconnect from network")
         self.commands.register(cmd, self.cmd_disconnect)
 
+        cmd = CommandParser(prog="RECONNECT", description="Reconnect to network")
+        self.commands.register(cmd, self.cmd_reconnect)
+
         cmd = CommandParser(prog="RAW", description="Send raw IRC commands")
         cmd.add_argument("text", nargs="+", help="raw text")
         self.commands.register(cmd, self.cmd_raw)
@@ -192,6 +195,15 @@ class NetworkRoom(Room):
 
         await self.send_notice("Disconnecting...")
         self.conn.disconnect()
+
+    async def cmd_reconnect(self, args) -> None:
+        if not self.conn or not self.conn.connected:
+            await self.send_notice("Not connected.")
+            return
+
+        await self.send_notice("Reconnecting...")
+        self.conn.disconnect()
+        await self.connect()
 
     async def cmd_raw(self, args) -> None:
         if not self.conn or not self.conn.connected:

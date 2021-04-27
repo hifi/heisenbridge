@@ -69,6 +69,7 @@ class NetworkRoom(Room):
         self.name = None
         self.connected = False
         self.nick = None
+        self.password = None
 
         self.commands = CommandManager()
         self.conn = None
@@ -79,6 +80,11 @@ class NetworkRoom(Room):
         cmd = CommandParser(prog="NICK", description="Change nickname")
         cmd.add_argument("nick", nargs="?", help="new nickname")
         self.commands.register(cmd, self.cmd_nick)
+
+        cmd = CommandParser(prog="PASSWORD", description="Set server password")
+        cmd.add_argument("password", nargs="?", help="new password")
+        cmd.add_argument("--remove", action="store_true", help="remove stored password")
+        self.commands.register(cmd, self.cmd_password)
 
         cmd = CommandParser(prog="CONNECT", description="Connect to network")
         self.commands.register(cmd, self.cmd_connect)
@@ -122,8 +128,11 @@ class NetworkRoom(Room):
         if "nick" in config:
             self.nick = config["nick"]
 
+        if "password" in config:
+            self.nick = config["password"]
+
     def to_config(self) -> dict:
-        return {"name": self.name, "connected": self.connected, "nick": self.nick}
+        return {"name": self.name, "connected": self.connected, "nick": self.nick, "password": self.password}
 
     def is_valid(self) -> bool:
         if self.name is None:
@@ -217,6 +226,21 @@ class NetworkRoom(Room):
         if self.conn and self.conn.connected:
             self.conn.nick(args.nick)
 
+    async def cmd_password(self, args) -> None:
+        if args.remove:
+            self.password = None
+            await self.save()
+            await self.send_notice(f"Password removed.")
+            return
+
+        if args.password is None:
+            await self.send_notice(f"Configured password: {self.password if self.password else ''}")
+            return
+
+        self.password = args.password
+        await self.save()
+        await self.send_notice(f"Password set to {self.password}")
+
     async def connect(self) -> None:
         if self.connecting or (self.conn and self.conn.connected):
             await self.send_notice("Already connected.")
@@ -252,7 +276,7 @@ class NetworkRoom(Room):
             reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
             server = reactor.server()
             server.buffer_class = buffer.LenientDecodingLineBuffer
-            self.conn = await server.connect(network["servers"][0], 6667, self.nick)
+            self.conn = await server.connect(network["servers"][0], 6667, self.nick, self.password)
 
             self.conn.add_global_handler("disconnect", self.on_disconnect)
 

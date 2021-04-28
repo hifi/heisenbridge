@@ -218,6 +218,10 @@ class PrivateRoom(Room):
                 await self.send_notice("Multiline text is not allowed on IRC, previous message was NOT sent.")
                 return
 
+            if "m.new_content" in event["content"]:
+                await self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")
+                return
+
             # allow commanding the appservice in rooms
             match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", event["content"]["body"])
             if match and match.group(1).lower() == "heisenbridge":

@@ -66,16 +66,13 @@ class ChannelRoom(PrivateRoom):
                 del self.network.rooms[self.name]
 
     async def cmd_modes(self, args) -> None:
-        if self.network.conn:
-            self.network.conn.mode(self.name, "")
+        self.network.conn.mode(self.name, "")
 
     async def cmd_names(self, args) -> None:
-        if self.network.conn:
-            self.network.conn.names(self.name)
+        self.network.conn.names(self.name)
 
     async def cmd_bans(self, args) -> None:
-        if self.network.conn:
-            self.network.conn.mode(self.name, "+b")
+        self.network.conn.mode(self.name, "+b")
 
     async def on_pubmsg(self, conn, event):
         await self.on_privmsg(conn, event)

@@ -26,6 +26,19 @@ def future(f):
     return wrapper
 
 
+def connected(f):
+    async def wrapper(*args, **kwargs):
+        self = args[0]
+
+        if not self.conn or not self.conn.connected:
+            await self.send_notice("Need to be connected to use this command.")
+            return
+
+        return await f(*args, **kwargs)
+
+    return wrapper
+
+
 # forwards events to private and channel rooms or queues them
 def ircroom_event(target_arg=None):
     def outer(f):
@@ -190,39 +203,27 @@ class NetworkRoom(Room):
     async def cmd_connect(self, args) -> None:
         await self.connect()
 
+    @connected
     async def cmd_disconnect(self, args) -> None:
         if self.connected:
             self.connected = False
             await self.save()
 
-        if not self.conn or not self.conn.connected:
-            await self.send_notice("Not connected.")
-            return
-
         await self.send_notice("Disconnecting...")
         self.conn.disconnect()
 
+    @connected
     async def cmd_reconnect(self, args) -> None:
-        if not self.conn or not self.conn.connected:
-            await self.send_notice("Not connected.")
-            return
-
         await self.send_notice("Reconnecting...")
         self.conn.disconnect()
         await self.connect()
 
+    @connected
     async def cmd_raw(self, args) -> None:
-        if not self.conn or not self.conn.connected:
-            await self.send_notice("Need to be connected to use this command.")
-            return
-
         self.conn.send_raw(" ".join(args.text))
 
+    @connected
     async def cmd_query(self, args) -> None:
-        if not self.conn or not self.conn.connected:
-            await self.send_notice("Need to be connected to use this command.")
-            return
-
         # TODO: validate nick doesn't look like a channel
         target = args.nick.lower()
         message = " ".join(args.message)
@@ -240,11 +241,8 @@ class NetworkRoom(Room):
             self.conn.privmsg(target, message)
             await self.send_notice(f"Sent out-of-room message to {target}: {message}")
 
+    @connected
     async def cmd_msg(self, args) -> None:
-        if not self.conn or not self.conn.connected:
-            await self.send_notice("Need to be connected to use this command.")
-            return
-
         # TODO: validate nick doesn't look like a channel
         target = args.nick.lower()
         message = " ".join(args.message)
@@ -252,10 +250,8 @@ class NetworkRoom(Room):
         self.conn.privmsg(target, message)
         await self.send_notice(f"{self.conn.real_nickname} -> {target}: {message}")
 
+    @connected
     async def cmd_join(self, args) -> None:
-        if not self.conn or not self.conn.connected:
-            return
-
         channel = args.channel
 
         if re.match(r"^[A-Za-z0-9]", channel):

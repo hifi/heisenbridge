@@ -11,6 +11,71 @@ class NetworkRoom:
     pass
 
 
+# this is very naive and will break html tag close/open order right now
+def parse_irc_formatting(input: str) -> (str, str):
+    plain = []
+    formatted = []
+
+    have_formatting = False
+    bold = False
+    italic = False
+    underline = False
+
+    for m in re.finditer(
+        r"(\x02|\x03([0-9]+)?(,([0-9]+))?|\x1D|\x1F|\x16|\x0F)?([^\x02\x03\x1D\x1F\x16\x0F]*)", input + "\x0F"
+    ):
+        # fg is group 2, bg is group 4 but we're ignoring them now
+        (ctrl, text) = (m.group(1), m.group(5))
+
+        if ctrl:
+            have_formatting = True
+
+            if ctrl[0] == "\x02":
+                if not bold:
+                    formatted.append("<b>")
+                else:
+                    formatted.append("</b>")
+
+                bold = not bold
+            if ctrl[0] == "\x03":
+                """
+                ignoring color codes for now
+                """
+            elif ctrl[0] == "\x1D":
+                if not italic:
+                    formatted.append("<i>")
+                else:
+                    formatted.append("</i>")
+
+                italic = not italic
+            elif ctrl[0] == "\x1F":
+                if not underline:
+                    formatted.append("<u>")
+                else:
+                    formatted.append("</u>")
+
+                underline = not underline
+            elif ctrl[0] == "\x16":
+                """
+                ignore reverse
+                """
+            elif ctrl[0] == "\x0F":
+                if bold:
+                    formatted.append("</b>")
+                if italic:
+                    formatted.append("</i>")
+                if underline:
+                    formatted.append("</u>")
+
+                bold = italic = underline = False
+
+        if text:
+            plain.append(text)
+            formatted.append(text)
+
+    return ("".join(plain), "".join(formatted) if have_formatting else None)
+
+
 class PrivateRoom(Room):
     # irc nick of the other party, name for consistency
     name: str
@@ -90,10 +155,12 @@ class PrivateRoom(Room):
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
+        (plain, formatted) = parse_irc_formatting(event.arguments[0])
+
         if irc_user_id in self.members:
-            await self.send_message(event.arguments[0], irc_user_id)
+            await self.send_message(plain, irc_user_id, formatted=formatted)
         else:
-            await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.source), event.arguments[0]))
+            await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.source), plain))
 
         # if the user has left this room invite them back
         if self.user_id not in self.members:
@@ -103,18 +170,20 @@ class PrivateRoom(Room):
         if self.network is None:
             return
 
+        (plain, formatted) = parse_irc_formatting(event.arguments[0])
+
         # if the user has left this room notify in network
         if self.user_id not in self.members:
             source = self.network.source_text(conn, event)
-            await self.network.send_notice_html(f"Notice from <b>{source}:</b> {event.arguments[0]}")
+            await self.network.send_notice_html(f"Notice from <b>{source}:</b> {formatted if formatted else plain}")
             return
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
         if irc_user_id in self.members:
-            await self.send_notice(event.arguments[0], irc_user_id)
+            await self.send_notice(plain, irc_user_id, formatted=formatted)
         else:
-            await self.send_notice_html("<b>Notice from {}</b>: {}".format(str(event.source), event.arguments[0]))
+            await self.send_notice_html(f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else plain}")
 
     async def on_ctcp(self, conn, event) -> None:
         if self.network is None:
@@ -125,10 +194,12 @@ class PrivateRoom(Room):
         if event.arguments[0].upper() != "ACTION":
             return
 
+        (plain, formatted) = parse_irc_formatting(event.arguments[1])
+
         if irc_user_id in self.members:
-            await self.send_emote(event.arguments[1], irc_user_id)
+            await self.send_emote(plain, irc_user_id)
         else:
-            await self.send_notice_html("<b>Emote from {}</b>: {}".format(str(event.source), event.arguments[1]))
+            await self.send_notice_html(f"<b>Emote from {str(event.source)}</b>: {plain}")
 
     async def on_mx_message(self, event) -> None:
         if event["user_id"] != self.user_id:

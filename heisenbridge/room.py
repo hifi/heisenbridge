@@ -91,8 +91,18 @@ class Room(ABC):
             self.members.append(event["user_id"])
 
     # send message to mx user (may be puppeted)
-    async def send_message(self, text: str, user_id: Optional[str] = None) -> None:
-        await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.text", "body": text}, user_id)
+    async def send_message(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
+        if formatted:
+            await self.serv.api.put_room_send_event(
+                self.id,
+                "m.room.message",
+                {"msgtype": "m.text", "format": "org.matrix.custom.html", "body": text, "formatted_body": formatted},
+                user_id,
+            )
+        else:
+            await self.serv.api.put_room_send_event(
+                self.id, "m.room.message", {"msgtype": "m.text", "body": text}, user_id
+            )
 
     # send emote to mx user (may be puppeted)
     async def send_emote(self, text: str, user_id: Optional[str] = None) -> None:
@@ -108,7 +118,7 @@ class Room(ABC):
         await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.notice", "body": text})
 
     # send notice to mx user (may be puppeted)
-    async def send_notice(self, text: str, user_id: Optional[str] = None) -> None:
+    async def send_notice(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
         # buffer only non-puppeted notices
         if user_id is None:
             self._notice_buf.append(text)
@@ -119,9 +129,17 @@ class Room(ABC):
 
             return
 
-        await self.serv.api.put_room_send_event(
-            self.id, "m.room.message", {"msgtype": "m.notice", "body": text}, user_id
-        )
+        if formatted:
+            await self.serv.api.put_room_send_event(
+                self.id,
+                "m.room.message",
+                {"msgtype": "m.notice", "format": "org.matrix.custom.html", "body": text, "formatted_body": formatted},
+                user_id,
+            )
+        else:
+            await self.serv.api.put_room_send_event(
+                self.id, "m.room.message", {"msgtype": "m.notice", "body": text}, user_id
+            )
 
     # send notice to mx user (may be puppeted)
     async def send_notice_html(self, text: str, user_id: Optional[str] = None) -> None:

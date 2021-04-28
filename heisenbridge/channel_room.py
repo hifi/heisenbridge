@@ -12,11 +12,14 @@ class NetworkRoom:
 
 
 class ChannelRoom(PrivateRoom):
+    key: str
     names_buffer: List[str]
     bans_buffer: List[str]
 
     def init(self) -> None:
         super().init()
+
+        self.key = None
 
         cmd = CommandParser(prog="MODES", description="fetch current channel modes")
         self.commands.register(cmd, self.cmd_modes)
@@ -29,6 +32,22 @@ class ChannelRoom(PrivateRoom):
 
         self.names_buffer = []
         self.bans_buffer = []
+
+    def from_config(self, config: dict) -> None:
+        if "name" not in config:
+            raise Exception("No name key in config for ChatRoom")
+
+        if "network" not in config:
+            raise Exception("No network key in config for ChatRoom")
+
+        self.name = config["name"]
+        self.network_name = config["network"]
+
+        if "key" in config:
+            self.key = config["key"]
+
+    def to_config(self) -> dict:
+        return {"name": self.name, "network": self.network_name, "key": self.key}
 
     @staticmethod
     async def create(network: NetworkRoom, name: str) -> "ChannelRoom":
@@ -158,6 +177,8 @@ class ChannelRoom(PrivateRoom):
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
             await self.send_notice("Joined channel.")
+            # sync channel modes/key on join
+            self.network.conn.mode(self.name, "")
             return
 
         # convert to mx id, check if we already have them
@@ -186,10 +207,25 @@ class ChannelRoom(PrivateRoom):
 
         await self._remove_puppet(irc_user_id)
 
+    async def update_key(self, modes):
+        # update channel key
+        if modes[0].startswith("-") and modes[0].find('k') > -1:
+            if self.key is not None:
+                self.key = None
+                await self.save()
+        elif modes[0].startswith("+"):
+            key_pos = modes[0].find('k')
+            if key_pos > -1:
+                key = modes[key_pos]
+                if self.key != key:
+                    self.key = key
+                    await self.save()
+
     async def on_mode(self, conn, event) -> None:
         modes = list(event.arguments)
 
         await self.send_notice("{} set modes {}".format(event.source.nick, " ".join(modes)))
+        await self.update_key(modes)
 
     async def on_notopic(self, conn, event) -> None:
         await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": ""})
@@ -226,7 +262,11 @@ class ChannelRoom(PrivateRoom):
             await self.send_notice(f"\t{ban[0]} set by {ban[1]} at {bantime}")
 
     async def on_channelmodeis(self, conn, event) -> None:
-        await self.send_notice(f"Current channel modes: {event.arguments[1]}")
+        modes = list(event.arguments)
+        modes.pop(0)
+
+        await self.send_notice(f"Current channel modes: {' '.join(modes)}")
+        await self.update_key(modes)
 
     async def on_channelcreate(self, conn, event) -> None:
         created = datetime.utcfromtimestamp(int(event.arguments[1])).strftime("%c %Z")

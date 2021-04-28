@@ -132,6 +132,7 @@ class NetworkRoom(Room):
 
         cmd = CommandParser(prog="JOIN", description="Join a channel")
         cmd.add_argument("channel", help="target channel")
+        cmd.add_argument("key", nargs='?', help="channel key")
         self.commands.register(cmd, self.cmd_join)
 
         self.mx_register("m.room.message", self.on_mx_message)
@@ -257,7 +258,7 @@ class NetworkRoom(Room):
         if re.match(r"^[A-Za-z0-9]", channel):
             channel = "#" + channel
 
-        self.conn.join(channel)
+        self.conn.join(channel, args.key)
 
     async def cmd_nick(self, args) -> None:
         if args.nick is None:
@@ -641,7 +642,7 @@ class NetworkRoom(Room):
         for room in self.rooms.values():
             if type(room) is ChannelRoom:
                 await self.send_notice("Joining " + room.name)
-                self.conn.join(room.name)
+                self.conn.join(room.name, room.key)
 
     @future
     @ircroom_event()
@@ -666,10 +667,10 @@ class NetworkRoom(Room):
     async def on_join(self, conn, event) -> None:
         target = event.target.lower()
 
-        logging.debug(f"Handling JOIN to {target} by {event.source.nick} (we are {self.conn.get_nickname()})")
+        logging.debug(f"Handling JOIN to {target} by {event.source.nick} (we are {self.conn.real_nickname})")
 
         # create a ChannelRoom in response to JOIN
-        if event.source.nick == self.conn.get_nickname() and target not in self.rooms:
+        if event.source.nick == self.conn.real_nickname and target not in self.rooms:
             logging.debug("Pre-flight check for JOIN ok, going to create it...")
 
             self.rooms[target] = await ChannelRoom.create(self, event.target)

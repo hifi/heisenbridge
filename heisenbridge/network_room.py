@@ -132,7 +132,7 @@ class NetworkRoom(Room):
 
         cmd = CommandParser(prog="JOIN", description="Join a channel")
         cmd.add_argument("channel", help="target channel")
-        cmd.add_argument("key", nargs='?', help="channel key")
+        cmd.add_argument("key", nargs="?", help="channel key")
         self.commands.register(cmd, self.cmd_join)
 
         self.mx_register("m.room.message", self.on_mx_message)

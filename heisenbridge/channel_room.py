@@ -209,12 +209,12 @@ class ChannelRoom(PrivateRoom):
 
     async def update_key(self, modes):
         # update channel key
-        if modes[0].startswith("-") and modes[0].find('k') > -1:
+        if modes[0].startswith("-") and modes[0].find("k") > -1:
             if self.key is not None:
                 self.key = None
                 await self.save()
         elif modes[0].startswith("+"):
-            key_pos = modes[0].find('k')
+            key_pos = modes[0].find("k")
             if key_pos > -1:
                 key = modes[key_pos]
                 if self.key != key:

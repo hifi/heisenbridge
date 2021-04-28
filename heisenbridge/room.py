@@ -1,13 +1,12 @@
-import asyncio
 import re
 from abc import ABC
-from typing import Any
 from typing import Callable
 from typing import Dict
 from typing import List
 from typing import Optional
 
 from heisenbridge.appservice import AppService
+from heisenbridge.event_queue import EventQueue
 
 
 class RoomInvalidError(Exception):
@@ -21,8 +20,7 @@ class Room(ABC):
     members: List[str]
 
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
-    _notice_buf: List[str]
-    _notice_task: Any
+    _queue: EventQueue
 
     def __init__(self, id: str, user_id: str, serv: AppService, members: List[str]):
         self.id = id
@@ -31,8 +29,7 @@ class Room(ABC):
         self.members = members
 
         self._mx_handlers = {}
-        self._notice_buf = []
-        self._notice_task = None
+        self._queue = EventQueue(self._flush_events)
 
         # we track room members
         self.mx_register("m.room.member", self._on_mx_room_member)
@@ -90,68 +87,84 @@ class Room(ABC):
         if event["content"]["membership"] == "join" and event["user_id"] not in self.members:
             self.members.append(event["user_id"])
 
+    async def _flush_events(self, events):
+        for event in events:
+            await self.serv.api.put_room_send_event(self.id, event["type"], event["content"], event["user_id"])
+
     # send message to mx user (may be puppeted)
     async def send_message(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
         if formatted:
-            await self.serv.api.put_room_send_event(
-                self.id,
-                "m.room.message",
-                {"msgtype": "m.text", "format": "org.matrix.custom.html", "body": text, "formatted_body": formatted},
-                user_id,
-            )
+            event = {
+                "type": "m.room.message",
+                "content": {
+                    "msgtype": "m.text",
+                    "format": "org.matrix.custom.html",
+                    "body": text,
+                    "formatted_body": formatted,
+                },
+                "user_id": user_id,
+            }
         else:
-            await self.serv.api.put_room_send_event(
-                self.id, "m.room.message", {"msgtype": "m.text", "body": text}, user_id
-            )
+            event = {
+                "type": "m.room.message",
+                "content": {
+                    "msgtype": "m.text",
+                    "body": text,
+                },
+                "user_id": user_id,
+            }
+
+        self._queue.enqueue(event)
 
     # send emote to mx user (may be puppeted)
     async def send_emote(self, text: str, user_id: Optional[str] = None) -> None:
-        await self.serv.api.put_room_send_event(
-            self.id, "m.room.message", {"msgtype": "m.emote", "body": text}, user_id
-        )
+        event = {
+            "type": "m.room.message",
+            "content": {
+                "msgtype": "m.emote",
+                "body": text,
+            },
+            "user_id": user_id,
+        }
 
-    async def flush_notices(self) -> None:
-        await asyncio.sleep(0.2)
-        text = "\n".join(self._notice_buf)
-        self._notice_buf = []
-        self._notice_task = None
-        await self.serv.api.put_room_send_event(self.id, "m.room.message", {"msgtype": "m.notice", "body": text})
+        self._queue.enqueue(event)
 
     # send notice to mx user (may be puppeted)
     async def send_notice(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
-        # buffer only non-puppeted notices
-        if user_id is None:
-            self._notice_buf.append(text)
-
-            # start task if it doesn't exist
-            if self._notice_task is None:
-                self._notice_task = asyncio.ensure_future(self.flush_notices())
-
-            return
-
         if formatted:
-            await self.serv.api.put_room_send_event(
-                self.id,
-                "m.room.message",
-                {"msgtype": "m.notice", "format": "org.matrix.custom.html", "body": text, "formatted_body": formatted},
-                user_id,
-            )
+            event = {
+                "type": "m.room.message",
+                "content": {
+                    "msgtype": "m.notice",
+                    "format": "org.matrix.custom.html",
+                    "body": text,
+                    "formatted_body": formatted,
+                },
+                "user_id": user_id,
+            }
         else:
-            await self.serv.api.put_room_send_event(
-                self.id, "m.room.message", {"msgtype": "m.notice", "body": text}, user_id
-            )
+            event = {
+                "type": "m.room.message",
+                "content": {
+                    "msgtype": "m.notice",
+                    "body": text,
+                },
+                "user_id": user_id,
+            }
+
+        self._queue.enqueue(event)
 
     # send notice to mx user (may be puppeted)
     async def send_notice_html(self, text: str, user_id: Optional[str] = None) -> None:
-
-        await self.serv.api.put_room_send_event(
-            self.id,
-            "m.room.message",
-            {
+        event = {
+            "type": "m.room.message",
+            "content": {
                 "msgtype": "m.notice",
+                "body": re.sub("<[^<]+?>", "", text),
                 "format": "org.matrix.custom.html",
                 "formatted_body": text,
-                "body": re.sub("<[^<]+?>", "", text),
             },
-            user_id,
-        )
+            "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)

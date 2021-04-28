@@ -109,7 +109,13 @@ class NetworkRoom(Room):
 
         cmd = CommandParser(prog="QUERY", description="Start a private chat")
         cmd.add_argument("nick", help="target nickname")
+        cmd.add_argument("message", nargs="*", help="optional message")
         self.commands.register(cmd, self.cmd_query)
+
+        cmd = CommandParser(prog="MSG", description="Send a message without opening a DM")
+        cmd.add_argument("nick", help="target nickname")
+        cmd.add_argument("message", nargs="+", help="message")
+        self.commands.register(cmd, self.cmd_msg)
 
         cmd = CommandParser(prog="JOIN", description="Join a channel")
         cmd.add_argument("channel", help="target channel")
@@ -219,6 +225,7 @@ class NetworkRoom(Room):
 
         # TODO: validate nick doesn't look like a channel
         target = args.nick.lower()
+        message = " ".join(args.message)
 
         if target in self.rooms:
             room = self.rooms[target]
@@ -228,6 +235,22 @@ class NetworkRoom(Room):
             room = await PrivateRoom.create(self, args.nick)
             self.rooms[room.name] = room
             await self.send_notice("You have been invited to private chat with {}.".format(args.nick))
+
+        if len(message) > 0:
+            self.conn.privmsg(target, message)
+            await self.send_notice(f"Sent out-of-room message to {target}: {message}")
+
+    async def cmd_msg(self, args) -> None:
+        if not self.conn or not self.conn.connected:
+            await self.send_notice("Need to be connected to use this command.")
+            return
+
+        # TODO: validate nick doesn't look like a channel
+        target = args.nick.lower()
+        message = " ".join(args.message)
+
+        self.conn.privmsg(target, message)
+        await self.send_notice(f"{self.conn.real_nickname} -> {target}: {message}")
 
     async def cmd_join(self, args) -> None:
         if not self.conn or not self.conn.connected:

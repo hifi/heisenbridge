@@ -150,7 +150,7 @@ class ChannelRoom(PrivateRoom):
         if self.user_id in to_remove:
             to_remove.remove(self.user_id)
 
-        await self.send_notice(
+        self.send_notice(
             "Synchronizing members:"
             + f" got {len(names)} from server,"
             + f" {len(self.members)} in room,"
@@ -176,7 +176,7 @@ class ChannelRoom(PrivateRoom):
     async def on_join(self, conn, event) -> None:
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
-            await self.send_notice("Joined channel.")
+            self.send_notice("Joined channel.")
             # sync channel modes/key on join
             self.network.conn.mode(self.name, "")
             return
@@ -224,7 +224,7 @@ class ChannelRoom(PrivateRoom):
     async def on_mode(self, conn, event) -> None:
         modes = list(event.arguments)
 
-        await self.send_notice("{} set modes {}".format(event.source.nick, " ".join(modes)))
+        self.send_notice("{} set modes {}".format(event.source.nick, " ".join(modes)))
         await self.update_key(modes)
 
     async def on_notopic(self, conn, event) -> None:
@@ -234,7 +234,7 @@ class ChannelRoom(PrivateRoom):
         await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.arguments[1]})
 
     async def on_topic(self, conn, event) -> None:
-        await self.send_notice("{} changed the topic".format(event.source.nick))
+        self.send_notice("{} changed the topic".format(event.source.nick))
         await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.arguments[0]})
 
     async def on_kick(self, conn, event) -> None:
@@ -256,18 +256,18 @@ class ChannelRoom(PrivateRoom):
         bans = self.bans_buffer
         self.bans_buffer = []
 
-        await self.send_notice("Current channel bans:")
+        self.send_notice("Current channel bans:")
         for ban in bans:
             bantime = datetime.utcfromtimestamp(int(ban[2])).strftime("%c %Z")
-            await self.send_notice(f"\t{ban[0]} set by {ban[1]} at {bantime}")
+            self.send_notice(f"\t{ban[0]} set by {ban[1]} at {bantime}")
 
     async def on_channelmodeis(self, conn, event) -> None:
         modes = list(event.arguments)
         modes.pop(0)
 
-        await self.send_notice(f"Current channel modes: {' '.join(modes)}")
+        self.send_notice(f"Current channel modes: {' '.join(modes)}")
         await self.update_key(modes)
 
     async def on_channelcreate(self, conn, event) -> None:
         created = datetime.utcfromtimestamp(int(event.arguments[1])).strftime("%c %Z")
-        await self.send_notice(f"Channel was created at {created}")
+        self.send_notice(f"Channel was created at {created}")

@@ -31,7 +31,7 @@ def connected(f):
         self = args[0]
 
         if not self.conn or not self.conn.connected:
-            await self.send_notice("Need to be connected to use this command.")
+            self.send_notice("Need to be connected to use this command.")
             return
 
         return await f(*args, **kwargs)
@@ -185,12 +185,12 @@ class NetworkRoom(Room):
         return True
 
     async def show_help(self):
-        await self.send_notice_html("Welcome to the network room for <b>{}</b>!".format(self.name))
+        self.send_notice_html("Welcome to the network room for <b>{}</b>!".format(self.name))
 
         try:
             return await self.commands.trigger("HELP")
         except CommandParserError as e:
-            return await self.send_notice(str(e))
+            return self.send_notice(str(e))
 
     async def on_mx_message(self, event) -> None:
         if event["content"]["msgtype"] != "m.text" or event["user_id"] == self.serv.user_id:
@@ -199,7 +199,7 @@ class NetworkRoom(Room):
         try:
             return await self.commands.trigger(event["content"]["body"])
         except CommandParserError as e:
-            return await self.send_notice(str(e))
+            return self.send_notice(str(e))
 
     async def cmd_connect(self, args) -> None:
         await self.connect()
@@ -210,12 +210,12 @@ class NetworkRoom(Room):
             self.connected = False
             await self.save()
 
-        await self.send_notice("Disconnecting...")
+        self.send_notice("Disconnecting...")
         self.conn.disconnect()
 
     @connected
     async def cmd_reconnect(self, args) -> None:
-        await self.send_notice("Reconnecting...")
+        self.send_notice("Reconnecting...")
         self.conn.disconnect()
         await self.connect()
 
@@ -232,15 +232,15 @@ class NetworkRoom(Room):
         if target in self.rooms:
             room = self.rooms[target]
             await self.serv.api.post_room_invite(room.id, self.user_id)
-            await self.send_notice("Inviting back to private chat with {}.".format(args.nick))
+            self.send_notice("Inviting back to private chat with {}.".format(args.nick))
         else:
             room = await PrivateRoom.create(self, args.nick)
             self.rooms[room.name] = room
-            await self.send_notice("You have been invited to private chat with {}.".format(args.nick))
+            self.send_notice("You have been invited to private chat with {}.".format(args.nick))
 
         if len(message) > 0:
             self.conn.privmsg(target, message)
-            await self.send_notice(f"Sent out-of-room message to {target}: {message}")
+            self.send_notice(f"Sent out-of-room message to {target}: {message}")
 
     @connected
     async def cmd_msg(self, args) -> None:
@@ -249,7 +249,7 @@ class NetworkRoom(Room):
         message = " ".join(args.message)
 
         self.conn.privmsg(target, message)
-        await self.send_notice(f"{self.conn.real_nickname} -> {target}: {message}")
+        self.send_notice(f"{self.conn.real_nickname} -> {target}: {message}")
 
     @connected
     async def cmd_join(self, args) -> None:
@@ -263,14 +263,14 @@ class NetworkRoom(Room):
     async def cmd_nick(self, args) -> None:
         if args.nick is None:
             if self.conn and self.conn.connected:
-                await self.send_notice(f"Current nickname: {self.conn.real_nickname} (configured: {self.nick})")
+                self.send_notice(f"Current nickname: {self.conn.real_nickname} (configured: {self.nick})")
             else:
-                await self.send_notice("Configured nickname: {}".format(self.nick))
+                self.send_notice("Configured nickname: {}".format(self.nick))
             return
 
         self.nick = args.nick
         await self.save()
-        await self.send_notice("Nickname set to {}".format(self.nick))
+        self.send_notice("Nickname set to {}".format(self.nick))
 
         if self.conn and self.conn.connected:
             self.conn.nick(args.nick)
@@ -279,16 +279,16 @@ class NetworkRoom(Room):
         if args.remove:
             self.password = None
             await self.save()
-            await self.send_notice("Password removed.")
+            self.send_notice("Password removed.")
             return
 
         if args.password is None:
-            await self.send_notice(f"Configured password: {self.password if self.password else ''}")
+            self.send_notice(f"Configured password: {self.password if self.password else ''}")
             return
 
         self.password = args.password
         await self.save()
-        await self.send_notice(f"Password set to {self.password}")
+        self.send_notice(f"Password set to {self.password}")
 
     async def cmd_autocmd(self, args) -> None:
         autocmd = " ".join(args.command)
@@ -296,24 +296,24 @@ class NetworkRoom(Room):
         if args.remove:
             self.autocmd = None
             await self.save()
-            await self.send_notice("Autocmd removed.")
+            self.send_notice("Autocmd removed.")
             return
 
         if autocmd == "":
-            await self.send_notice(f"Configured autocmd: {self.autocmd if self.autocmd else ''}")
+            self.send_notice(f"Configured autocmd: {self.autocmd if self.autocmd else ''}")
             return
 
         self.autocmd = autocmd
         await self.save()
-        await self.send_notice(f"Autocmd set to {self.autocmd}")
+        self.send_notice(f"Autocmd set to {self.autocmd}")
 
     async def connect(self) -> None:
         if self.connecting or (self.conn and self.conn.connected):
-            await self.send_notice("Already connected.")
+            self.send_notice("Already connected.")
             return
 
         if self.nick is None:
-            await self.send_notice("You need to configure a nick first, see HELP")
+            self.send_notice("You need to configure a nick first, see HELP")
             return
 
         # attach loose sub-rooms to us
@@ -336,7 +336,7 @@ class NetworkRoom(Room):
         self.connecting = True
 
         network = self.serv.config["networks"][self.name]
-        await self.send_notice("Connecting...")
+        self.send_notice("Connecting...")
 
         try:
             reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
@@ -537,9 +537,9 @@ class NetworkRoom(Room):
                 await self.save()
 
         except TimeoutError:
-            await self.send_notice("Connection timed out.")
+            self.send_notice("Connection timed out.")
         except irc.client.ServerConnectionError:
-            await self.send_notice("Unexpected connection error, issue was logged.")
+            self.send_notice("Unexpected connection error, issue was logged.")
             logging.exception("Failed to connect")
         finally:
             self.connecting = False
@@ -550,11 +550,11 @@ class NetworkRoom(Room):
         self.conn = None
 
         if self.connected:
-            await self.send_notice("Disconnected, reconnecting in 10 seconds...")
+            self.send_notice("Disconnected, reconnecting in 10 seconds...")
             await asyncio.sleep(10)
             await self.connect()
         else:
-            await self.send_notice("Disconnected.")
+            self.send_notice("Disconnected.")
 
     @future
     @ircroom_event()
@@ -564,12 +564,12 @@ class NetworkRoom(Room):
         args = " ".join(event.arguments)
         source = self.source_text(conn, event)
         target = str(event.target)
-        await self.send_notice_html(f"<b>{source} {event.type} {target}</b> {args}")
+        self.send_notice_html(f"<b>{source} {event.type} {target}</b> {args}")
 
     @future
     @ircroom_event()
     async def on_pass_if(self, conn, event) -> None:
-        await self.send_notice(" ".join(event.arguments))
+        self.send_notice(" ".join(event.arguments))
 
     @future
     @ircroom_event()
@@ -580,25 +580,25 @@ class NetworkRoom(Room):
     @ircroom_event(target_arg=0)
     async def on_pass0(self, conn, event) -> None:
         logging.warning(f"IRC room event '{event.type}' fell through, target was '{event.arguments[0]}'.")
-        await self.send_notice(" ".join(event.arguments))
+        self.send_notice(" ".join(event.arguments))
 
     @future
     @ircroom_event(target_arg=1)
     async def on_pass1(self, conn, event) -> None:
         logging.warning(f"IRC room event '{event.type}' fell through, target was '{event.arguments[1]}'.")
-        await self.send_notice(" ".join(event.arguments))
+        self.send_notice(" ".join(event.arguments))
 
     @future
     async def on_server_message(self, conn, event) -> None:
-        await self.send_notice(" ".join(event.arguments))
+        self.send_notice(" ".join(event.arguments))
 
     @future
     async def on_umodeis(self, conn, event) -> None:
-        await self.send_notice(f"Your user mode is: {event.arguments[0]}")
+        self.send_notice(f"Your user mode is: {event.arguments[0]}")
 
     @future
     async def on_umode(self, conn, event) -> None:
-        await self.send_notice(f"User mode changed for {event.target}: {event.arguments[0]}")
+        self.send_notice(f"User mode changed for {event.target}: {event.arguments[0]}")
 
     def source_text(self, conn, event) -> str:
         source = None
@@ -618,21 +618,21 @@ class NetworkRoom(Room):
     async def on_privnotice(self, conn, event) -> None:
         # show unhandled notices in server room
         source = self.source_text(conn, event)
-        await self.send_notice_html(f"Notice from <b>{source}:</b> {event.arguments[0]}")
+        self.send_notice_html(f"Notice from <b>{source}:</b> {event.arguments[0]}")
 
     @future
     @ircroom_event()
     async def on_ctcp(self, conn, event) -> None:
         # show unhandled ctcps in server room
         source = self.source_text(conn, event)
-        await self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> which we ignored")
+        self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> which we ignored")
 
     @future
     async def on_endofmotd(self, conn, event) -> None:
-        await self.send_notice(" ".join(event.arguments))
+        self.send_notice(" ".join(event.arguments))
 
         if self.autocmd is not None:
-            await self.send_notice("Sending autocmd and waiting a bit before joining channels...")
+            self.send_notice("Sending autocmd and waiting a bit before joining channels...")
             self.conn.send_raw(self.autocmd)
             await asyncio.sleep(5)
         else:
@@ -641,7 +641,7 @@ class NetworkRoom(Room):
         # rejoin channels (FIXME: change to comma separated join list)
         for room in self.rooms.values():
             if type(room) is ChannelRoom:
-                await self.send_notice("Joining " + room.name)
+                self.send_notice("Joining " + room.name)
                 self.conn.join(room.name, room.key)
 
     @future
@@ -699,7 +699,7 @@ class NetworkRoom(Room):
             if type(room) is ChannelRoom:
                 if room.in_room(old_irc_user_id):
                     # notify mx user about the change
-                    await room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
+                    room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
                     await self.serv.api.post_room_leave(room.id, old_irc_user_id)
                     await self.serv.api.post_room_invite(room.id, new_irc_user_id)
                     await self.serv.api.post_room_join(room.id, new_irc_user_id)
@@ -708,13 +708,11 @@ class NetworkRoom(Room):
     async def on_nicknameinuse(self, conn, event) -> None:
         newnick = event.arguments[0] + "_"
         self.conn.nick(newnick)
-        await self.send_notice(f"Nickname {event.arguments[0]} is in use, trying {newnick}")
+        self.send_notice(f"Nickname {event.arguments[0]} is in use, trying {newnick}")
 
     @future
     async def on_invite(self, conn, event) -> bool:
-        await self.send_notice_html(
-            "<b>{}</b> has invited you to <b>{}</b>".format(event.source.nick, event.arguments[0])
-        )
+        self.send_notice_html("<b>{}</b> has invited you to <b>{}</b>".format(event.source.nick, event.arguments[0]))
         return True
 
     @future
@@ -722,11 +720,11 @@ class NetworkRoom(Room):
     async def on_kill(self, conn, event) -> None:
         if event.target == conn.real_nickname:
             source = self.source_text(conn, event)
-            await self.send_notice_html(f"Killed by <b>{source}</b>: {event.arguments[0]}")
+            self.send_notice_html(f"Killed by <b>{source}</b>: {event.arguments[0]}")
 
             # do not reconnect after KILL
             self.connected = False
 
     @future
     async def on_error(self, conn, event) -> None:
-        await self.send_notice_html(f"<b>ERROR</b>: {event.target}")
+        self.send_notice_html(f"<b>ERROR</b>: {event.target}")

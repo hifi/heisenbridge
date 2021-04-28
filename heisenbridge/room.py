@@ -92,7 +92,7 @@ class Room(ABC):
             await self.serv.api.put_room_send_event(self.id, event["type"], event["content"], event["user_id"])
 
     # send message to mx user (may be puppeted)
-    async def send_message(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
+    def send_message(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
         if formatted:
             event = {
                 "type": "m.room.message",
@@ -117,7 +117,7 @@ class Room(ABC):
         self._queue.enqueue(event)
 
     # send emote to mx user (may be puppeted)
-    async def send_emote(self, text: str, user_id: Optional[str] = None) -> None:
+    def send_emote(self, text: str, user_id: Optional[str] = None) -> None:
         event = {
             "type": "m.room.message",
             "content": {
@@ -130,7 +130,7 @@ class Room(ABC):
         self._queue.enqueue(event)
 
     # send notice to mx user (may be puppeted)
-    async def send_notice(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
+    def send_notice(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
         if formatted:
             event = {
                 "type": "m.room.message",
@@ -155,7 +155,7 @@ class Room(ABC):
         self._queue.enqueue(event)
 
     # send notice to mx user (may be puppeted)
-    async def send_notice_html(self, text: str, user_id: Optional[str] = None) -> None:
+    def send_notice_html(self, text: str, user_id: Optional[str] = None) -> None:
         event = {
             "type": "m.room.message",
             "content": {

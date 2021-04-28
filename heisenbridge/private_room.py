@@ -163,9 +163,9 @@ class PrivateRoom(Room):
         (plain, formatted) = parse_irc_formatting(event.arguments[0])
 
         if irc_user_id in self.members:
-            await self.send_message(plain, irc_user_id, formatted=formatted)
+            self.send_message(plain, irc_user_id, formatted=formatted)
         else:
-            await self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.source), plain))
+            self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.source), plain))
 
         # if the user has left this room invite them back
         if self.user_id not in self.members:
@@ -180,15 +180,15 @@ class PrivateRoom(Room):
         # if the user has left this room notify in network
         if self.user_id not in self.members:
             source = self.network.source_text(conn, event)
-            await self.network.send_notice_html(f"Notice from <b>{source}:</b> {formatted if formatted else plain}")
+            self.network.send_notice_html(f"Notice from <b>{source}:</b> {formatted if formatted else plain}")
             return
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
         if irc_user_id in self.members:
-            await self.send_notice(plain, irc_user_id, formatted=formatted)
+            self.send_notice(plain, irc_user_id, formatted=formatted)
         else:
-            await self.send_notice_html(f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else plain}")
+            self.send_notice_html(f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else plain}")
 
     async def on_ctcp(self, conn, event) -> None:
         if self.network is None:
@@ -202,16 +202,16 @@ class PrivateRoom(Room):
         (plain, formatted) = parse_irc_formatting(event.arguments[1])
 
         if irc_user_id in self.members:
-            await self.send_emote(plain, irc_user_id)
+            self.send_emote(plain, irc_user_id)
         else:
-            await self.send_notice_html(f"<b>Emote from {str(event.source)}</b>: {plain}")
+            self.send_notice_html(f"<b>Emote from {str(event.source)}</b>: {plain}")
 
     async def on_mx_message(self, event) -> None:
         if event["user_id"] != self.user_id:
             return
 
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
-            await self.send_notice("Not connected to network.")
+            self.send_notice("Not connected to network.")
             return
 
         if event["content"]["msgtype"] == "m.emote":
@@ -220,11 +220,11 @@ class PrivateRoom(Room):
             self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event["content"]["url"]))
         elif event["content"]["msgtype"] == "m.text":
             if "\n" in event["content"]["body"]:
-                await self.send_notice("Multiline text is not allowed on IRC, previous message was NOT sent.")
+                self.send_notice("Multiline text is not allowed on IRC, previous message was NOT sent.")
                 return
 
             if "m.new_content" in event["content"]:
-                await self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")
+                self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")
                 return
 
             # allow commanding the appservice in rooms
@@ -233,7 +233,7 @@ class PrivateRoom(Room):
                 try:
                     await self.commands.trigger(match.group(2))
                 except CommandParserError as e:
-                    await self.send_notice(str(e))
+                    self.send_notice(str(e))
                 finally:
                     return
 

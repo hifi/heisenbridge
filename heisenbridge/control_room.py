@@ -52,14 +52,14 @@ class ControlRoom(Room):
         return True
 
     async def show_help(self):
-        await self.send_notice_html(
+        self.send_notice_html(
             f"<b>Howdy, stranger!</b> You have been granted access to the IRC bridge of <b>{self.serv.server_name}</b>."
         )
 
         try:
             return await self.commands.trigger("HELP")
         except CommandParserError as e:
-            return await self.send_notice(str(e))
+            return self.send_notice(str(e))
 
     async def on_mx_message(self, event) -> None:
         if event["content"]["msgtype"] != "m.text" or event["user_id"] == self.serv.user_id:
@@ -68,7 +68,7 @@ class ControlRoom(Room):
         try:
             return await self.commands.trigger(event["content"]["body"])
         except CommandParserError as e:
-            return await self.send_notice(str(e))
+            return self.send_notice(str(e))
 
     async def cmd_masks(self, args):
         msg = "Configured masks:\n"
@@ -76,29 +76,29 @@ class ControlRoom(Room):
         for mask, value in self.serv.config["allow"].items():
             msg += "\t{} -> {}\n".format(mask, value)
 
-        return await self.send_notice(msg)
+        return self.send_notice(msg)
 
     async def cmd_addmask(self, args):
         masks = self.serv.config["allow"]
 
         if args.mask in masks:
-            return await self.send_notice("Mask already exists")
+            return self.send_notice("Mask already exists")
 
         masks[args.mask] = "admin" if args.admin else "user"
         await self.serv.save()
 
-        return await self.send_notice("Mask added.")
+        return self.send_notice("Mask added.")
 
     async def cmd_delmask(self, args):
         masks = self.serv.config["allow"]
 
         if args.mask not in masks:
-            return await self.send_notice("Mask does not exist")
+            return self.send_notice("Mask does not exist")
 
         del masks[args.mask]
         await self.serv.save()
 
-        return await self.send_notice("Mask removed.")
+        return self.send_notice("Mask removed.")
 
     async def cmd_networks(self, args):
         networks = self.serv.config["networks"]
@@ -108,40 +108,40 @@ class ControlRoom(Room):
         for network, data in networks.items():
             msg += network + "\n"
 
-        return await self.send_notice(msg)
+        return self.send_notice(msg)
 
     async def cmd_addnetwork(self, args):
         networks = self.serv.config["networks"]
 
         if args.name in networks:
-            return await self.send_notice("Network already exists")
+            return self.send_notice("Network already exists")
 
         networks[args.name] = {"servers": [args.server]}
         await self.serv.save()
 
-        return await self.send_notice("Network added.")
+        return self.send_notice("Network added.")
 
     async def cmd_delnetwork(self, args):
         networks = self.serv.config["networks"]
 
         if args.name not in networks:
-            return await self.send_notice("Network does not exist")
+            return self.send_notice("Network does not exist")
 
         del networks[args.name]
         await self.serv.save()
 
-        return await self.send_notice("Network removed.")
+        return self.send_notice("Network removed.")
 
     async def cmd_open(self, args):
         networks = self.serv.config["networks"]
 
         if args.name not in networks:
-            return await self.send_notice("Network does not exist")
+            return self.send_notice("Network does not exist")
 
         for room in self.serv.find_rooms(NetworkRoom, self.user_id):
             if room.name == args.name:
                 await self.serv.api.post_room_invite(room.id, self.user_id)
-                return await self.send_notice("Inviting back to {}.".format(args.name))
+                return self.send_notice("Inviting back to {}.".format(args.name))
 
         await NetworkRoom.create(self.serv, args.name, self.user_id)
-        return await self.send_notice("You have been invited to {}.".format(args.name))
+        return self.send_notice("You have been invited to {}.".format(args.name))

@@ -14,11 +14,15 @@ class EventQueue:
         self._timer = None
         self._start = 0
         self._chain = asyncio.Queue()
-        self._task = asyncio.ensure_future(self._run())
+        self._task = None
         self._timeout = 30
 
     def __del__(self):
         self._task.cancel()
+
+    def start(self):
+        if self._task is None:
+            self._task = asyncio.ensure_future(self._run())
 
     async def _run(self):
         while True:
@@ -58,6 +62,7 @@ class EventQueue:
 
             if (
                 prev["type"] == event["type"]
+                and prev["type"][0] != "_"
                 and prev["user_id"] == event["user_id"]
                 and prev["content"]["msgtype"] == event["content"]["msgtype"]
                 and prev_formatted == cur_formatted

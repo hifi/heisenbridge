@@ -50,26 +50,31 @@ class ChannelRoom(PrivateRoom):
         return {"name": self.name, "network": self.network_name, "key": self.key}
 
     @staticmethod
-    async def create(network: NetworkRoom, name: str) -> "ChannelRoom":
+    def create(network: NetworkRoom, name: str) -> "ChannelRoom":
         logging.debug(f"ChannelRoom.create(network='{network.name}', name='{name}'")
 
-        # handle !room names properly
-        visible_name = name
-        if visible_name.startswith("!"):
-            visible_name = "!" + visible_name[6:]
-
-        room_id = await network.serv.create_room(
-            f"{visible_name} ({network.name})",
-            "",
-            [network.user_id],
-        )
-        room = ChannelRoom(room_id, network.user_id, network.serv, [network.serv.user_id])
+        room = ChannelRoom(None, network.user_id, network.serv, [network.serv.user_id, network.user_id])
         room.name = name.lower()
         room.network = network
         room.network_name = network.name
-        await room.save()
-        network.serv.register_room(room)
+        asyncio.ensure_future(room._create_mx())
         return room
+
+    async def _create_mx(self):
+        # handle !room names properly
+        visible_name = self.name
+        if visible_name.startswith("!"):
+            visible_name = "!" + visible_name[6:]
+
+        self.id = await self.network.serv.create_room(
+            f"{visible_name} ({self.network.name})",
+            "",
+            [self.network.user_id],
+        )
+        self.serv.register_room(self)
+        await self.save()
+        # start event queue now that we have an id
+        self._queue.start()
 
     def is_valid(self) -> bool:
         if not self.in_room(self.user_id):
@@ -93,33 +98,29 @@ class ChannelRoom(PrivateRoom):
     async def cmd_bans(self, args) -> None:
         self.network.conn.mode(self.name, "+b")
 
-    async def on_pubmsg(self, conn, event):
-        await self.on_privmsg(conn, event)
+    def on_pubmsg(self, conn, event):
+        self.on_privmsg(conn, event)
 
-    async def on_pubnotice(self, conn, event):
-        await self.on_privnotice(conn, event)
+    def on_pubnotice(self, conn, event):
+        self.on_privnotice(conn, event)
 
-    async def on_namreply(self, conn, event) -> None:
+    def on_namreply(self, conn, event) -> None:
         self.names_buffer.extend(event.arguments[2].split())
 
-    async def _add_puppet(self, nick):
-        irc_user_id = await self.serv.ensure_irc_user_id(self.network.name, nick)
-        await self.serv.api.post_room_invite(self.id, irc_user_id)
-        await self.serv.api.post_room_join(self.id, irc_user_id)
+    def _add_puppet(self, nick):
+        irc_user_id = self.serv.irc_user_id(self.network.name, nick)
 
-        if irc_user_id not in self.members:
-            self.members.append(irc_user_id)
+        self.ensure_irc_user_id(self.network.name, nick)
+        self.invite(irc_user_id)
+        self.join(irc_user_id)
 
-    async def _remove_puppet(self, user_id):
+    def _remove_puppet(self, user_id):
         if user_id == self.serv.user_id or user_id == self.user_id:
             return
 
-        await self.serv.api.post_room_leave(self.id, user_id)
+        self.leave(user_id)
 
-        if user_id in self.members:
-            self.members.remove(user_id)
-
-    async def on_endofnames(self, conn, event) -> None:
+    def on_endofnames(self, conn, event) -> None:
         to_remove = list(self.members)
         to_add = []
         names = list(self.names_buffer)
@@ -157,23 +158,14 @@ class ChannelRoom(PrivateRoom):
             + f" {len(to_add)} will be invited and {len(to_remove)} removed."
         )
 
-        # create a big bunch of invites, aiohttp will have some limits in-place
+        # FIXME: this floods the event queue if there's a lot of people
         for (irc_user_id, nick) in to_add:
-            # to prevent multiple NAMES commands to overlap, add to list immediately
-            if irc_user_id not in self.members:
-                self.members.append(irc_user_id)
+            self._add_puppet(nick)
 
-            asyncio.ensure_future(self._add_puppet(nick))
-
-        # create a big bunch of leaves
         for irc_user_id in to_remove:
-            # to prevent multiple NAMES commands to overlap, add to list immediately
-            if irc_user_id in self.members:
-                self.members.append(irc_user_id)
+            self._remove_puppet(irc_user_id)
 
-            asyncio.ensure_future(self._remove_puppet(irc_user_id))
-
-    async def on_join(self, conn, event) -> None:
+    def on_join(self, conn, event) -> None:
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
             self.send_notice("Joined channel.")
@@ -186,16 +178,13 @@ class ChannelRoom(PrivateRoom):
         if irc_user_id in self.members:
             return
 
-        # append before ensuring so we don't do it twice
-        self.members.append(irc_user_id)
-
         # ensure, append, invite and join
-        await self._add_puppet(event.source.nick)
+        self._add_puppet(event.source.nick)
 
-    async def on_quit(self, conn, event) -> None:
-        await self.on_part(conn, event)
+    def on_quit(self, conn, event) -> None:
+        self.on_part(conn, event)
 
-    async def on_part(self, conn, event) -> None:
+    def on_part(self, conn, event) -> None:
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
             return
@@ -205,54 +194,52 @@ class ChannelRoom(PrivateRoom):
         if irc_user_id not in self.members:
             return
 
-        await self._remove_puppet(irc_user_id)
+        asyncio.ensure_future(self._remove_puppet(irc_user_id))
 
-    async def update_key(self, modes):
+    def update_key(self, modes):
         # update channel key
         if modes[0].startswith("-") and modes[0].find("k") > -1:
             if self.key is not None:
                 self.key = None
-                await self.save()
+                asyncio.ensure_future(self.save())
         elif modes[0].startswith("+"):
             key_pos = modes[0].find("k")
             if key_pos > -1:
                 key = modes[key_pos]
                 if self.key != key:
                     self.key = key
-                    await self.save()
+                    asyncio.ensure_future(self.save())
 
-    async def on_mode(self, conn, event) -> None:
+    def on_mode(self, conn, event) -> None:
         modes = list(event.arguments)
 
         self.send_notice("{} set modes {}".format(event.source.nick, " ".join(modes)))
-        await self.update_key(modes)
+        self.update_key(modes)
 
-    async def on_notopic(self, conn, event) -> None:
-        await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": ""})
+    def on_notopic(self, conn, event) -> None:
+        self.set_topic("")
 
-    async def on_currenttopic(self, conn, event) -> None:
-        await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.arguments[1]})
+    def on_currenttopic(self, conn, event) -> None:
+        self.set_topic(event.arguments[1])
 
-    async def on_topic(self, conn, event) -> None:
+    def on_topic(self, conn, event) -> None:
         self.send_notice("{} changed the topic".format(event.source.nick))
-        await self.serv.api.put_room_send_state(self.id, "m.room.topic", "", {"topic": event.arguments[0]})
+        self.set_topic(event.arguments[0])
 
-    async def on_kick(self, conn, event) -> None:
-        target_user_id = await self.serv.ensure_irc_user_id(self.network.name, event.arguments[0])
-        await self.serv.api.post_room_kick(
-            self.id, target_user_id, f"Kicked by {event.source.nick}: {event.arguments[1]}"
-        )
+    def on_kick(self, conn, event) -> None:
+        target_user_id = self.serv.irc_user_id(self.network.name, event.arguments[0])
+        self.kick(target_user_id, f"Kicked by {event.source.nick}: {event.arguments[1]}")
 
         if target_user_id in self.members:
             self.members.remove(target_user_id)
 
-    async def on_banlist(self, conn, event) -> None:
+    def on_banlist(self, conn, event) -> None:
         parts = list(event.arguments)
         parts.pop(0)
         logging.info(parts)
         self.bans_buffer.append(parts)
 
-    async def on_endofbanlist(self, conn, event) -> None:
+    def on_endofbanlist(self, conn, event) -> None:
         bans = self.bans_buffer
         self.bans_buffer = []
 
@@ -261,13 +248,13 @@ class ChannelRoom(PrivateRoom):
             bantime = datetime.utcfromtimestamp(int(ban[2])).strftime("%c %Z")
             self.send_notice(f"\t{ban[0]} set by {ban[1]} at {bantime}")
 
-    async def on_channelmodeis(self, conn, event) -> None:
+    def on_channelmodeis(self, conn, event) -> None:
         modes = list(event.arguments)
         modes.pop(0)
 
         self.send_notice(f"Current channel modes: {' '.join(modes)}")
-        await self.update_key(modes)
+        self.update_key(modes)
 
-    async def on_channelcreate(self, conn, event) -> None:
+    def on_channelcreate(self, conn, event) -> None:
         created = datetime.utcfromtimestamp(int(event.arguments[1])).strftime("%c %Z")
         self.send_notice(f"Channel was created at {created}")

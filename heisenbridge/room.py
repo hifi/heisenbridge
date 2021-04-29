@@ -1,3 +1,4 @@
+import logging
 import re
 from abc import ABC
 from typing import Callable
@@ -30,6 +31,10 @@ class Room(ABC):
 
         self._mx_handlers = {}
         self._queue = EventQueue(self._flush_events)
+
+        # start event queue
+        if self.id:
+            self._queue.start()
 
         # we track room members
         self.mx_register("m.room.member", self._on_mx_room_member)
@@ -89,7 +94,34 @@ class Room(ABC):
 
     async def _flush_events(self, events):
         for event in events:
-            await self.serv.api.put_room_send_event(self.id, event["type"], event["content"], event["user_id"])
+            try:
+                if event["type"] == "_invite":
+                    await self.serv.api.post_room_invite(self.id, event["user_id"])
+                elif event["type"] == "_join":
+                    await self.serv.api.post_room_join(self.id, event["user_id"])
+
+                    if event["user_id"] not in self.members:
+                        self.members.append(event["user_id"])
+                elif event["type"] == "_leave":
+                    if event["user_id"] in self.members:
+                        self.members.remove(event["user_id"])
+
+                    await self.serv.api.post_room_leave(self.id, event["user_id"])
+                elif event["type"] == "_kick":
+                    if event["user_id"] in self.members:
+                        self.members.remove(event["user_id"])
+
+                    await self.serv.api.post_room_kick(self.id, event["user_id"], event["reason"])
+                elif event["type"] == "_ensure_irc_user_id":
+                    await self.serv.ensure_irc_user_id(event["network"], event["nick"])
+                elif "state_key" in event:
+                    await self.serv.api.put_room_send_state(
+                        self.id, event["type"], event["state_key"], event["content"], event["user_id"]
+                    )
+                else:
+                    await self.serv.api.put_room_send_event(self.id, event["type"], event["content"], event["user_id"])
+            except Exception:
+                logging.exception("Queued event failed")
 
     # send message to mx user (may be puppeted)
     def send_message(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
@@ -165,6 +197,66 @@ class Room(ABC):
                 "formatted_body": text,
             },
             "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)
+
+    def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:
+        event = {
+            "type": "m.room.topic",
+            "content": {
+                "topic": topic,
+            },
+            "state_key": "",
+            "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)
+
+    def invite(self, user_id: str) -> None:
+        event = {
+            "type": "_invite",
+            "content": {},
+            "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)
+
+    def join(self, user_id: str) -> None:
+        event = {
+            "type": "_join",
+            "content": {},
+            "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)
+
+    def leave(self, user_id: str) -> None:
+        event = {
+            "type": "_leave",
+            "content": {},
+            "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)
+
+    def kick(self, user_id: str, reason: str) -> None:
+        event = {
+            "type": "_kick",
+            "content": {},
+            "reason": reason,
+            "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)
+
+    def ensure_irc_user_id(self, network, nick):
+        event = {
+            "type": "_ensure_irc_user_id",
+            "content": {},
+            "network": network,
+            "nick": nick,
+            "user_id": None,
         }
 
         self._queue.enqueue(event)

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from html import escape
@@ -113,16 +114,11 @@ class PrivateRoom(Room):
         return {"name": self.name, "network": self.network_name}
 
     @staticmethod
-    async def create(network: NetworkRoom, name: str) -> "PrivateRoom":
+    def create(network: NetworkRoom, name: str) -> "PrivateRoom":
         logging.debug(f"PrivateRoom.create(network='{network.name}', name='{name}')")
-        irc_user_id = await network.serv.ensure_irc_user_id(network.name, name)
-        room_id = await network.serv.create_room(
-            "{} ({})".format(name, network.name),
-            "Private chat with {} on {}".format(name, network.name),
-            [network.user_id, irc_user_id],
-        )
+        irc_user_id = network.serv.irc_user_id(network.name, name)
         room = PrivateRoom(
-            room_id,
+            None,
             network.user_id,
             network.serv,
             [network.user_id, irc_user_id, network.serv.user_id],
@@ -130,10 +126,22 @@ class PrivateRoom(Room):
         room.name = name.lower()
         room.network = network
         room.network_name = network.name
-        await room.save()
-        network.serv.register_room(room)
-        await network.serv.api.post_room_join(room.id, irc_user_id)
+        asyncio.ensure_future(room._create_mx())
         return room
+
+    async def _create_mx(self) -> None:
+        if self.id is None:
+            irc_user_id = await self.network.serv.ensure_irc_user_id(self.network.name, self.name)
+            self.id = await self.network.serv.create_room(
+                "{} ({})".format(self.name, self.network.name),
+                "Private chat with {} on {}".format(self.name, self.network.name),
+                [self.network.user_id, irc_user_id],
+            )
+            self.serv.register_room(self)
+            await self.network.serv.api.post_room_join(self.id, irc_user_id)
+            await self.save()
+            # start event queue now that we have an id
+            self._queue.start()
 
     def is_valid(self) -> bool:
         if self.network_name is None:
@@ -155,7 +163,7 @@ class PrivateRoom(Room):
         if self.network and self.name in self.network.rooms:
             del self.network.rooms[self.name]
 
-    async def on_privmsg(self, conn, event) -> None:
+    def on_privmsg(self, conn, event) -> None:
         if self.network is None:
             return
 
@@ -170,9 +178,9 @@ class PrivateRoom(Room):
 
         # if the user has left this room invite them back
         if self.user_id not in self.members:
-            await self.serv.api.post_room_invite(self.id, self.user_id)
+            asyncio.ensure_future(self.serv.api.post_room_invite(self.id, self.user_id))
 
-    async def on_privnotice(self, conn, event) -> None:
+    def on_privnotice(self, conn, event) -> None:
         if self.network is None:
             return
 
@@ -191,7 +199,7 @@ class PrivateRoom(Room):
         else:
             self.send_notice_html(f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else plain}")
 
-    async def on_ctcp(self, conn, event) -> None:
+    def on_ctcp(self, conn, event) -> None:
         if self.network is None:
             return
 

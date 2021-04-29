@@ -1,5 +1,6 @@
 import logging
 import re
+from html import escape
 from typing import Optional
 
 from heisenbridge.command_parse import CommandManager
@@ -69,7 +70,7 @@ def parse_irc_formatting(input: str) -> (str, str):
 
         if text:
             plain.append(text)
-            formatted.append(text)
+            formatted.append(escape(text))
 
     if bold:
         formatted.append("</b>")

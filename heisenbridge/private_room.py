@@ -83,6 +83,29 @@ def parse_irc_formatting(input: str) -> (str, str):
     return ("".join(plain), "".join(formatted) if have_formatting else None)
 
 
+def split_long(nick, user, host, target, message):
+    out = []
+
+    # this is an easy template to calculate the overhead of the sender and target
+    template = f":{nick}!{user}@{host} PRIVMSG {target} :\r\n"
+    maxlen = 512 - len(template.encode())
+    dots = "..."
+
+    words = []
+    for word in message.split(" "):
+        words.append(word)
+        line = " ".join(words)
+
+        if len(line.encode()) + len(dots) > maxlen:
+            words.pop()
+            out.append(" ".join(words) + dots)
+            words = [dots, word]
+
+    out.append(" ".join(words))
+
+    return out
+
+
 class PrivateRoom(Room):
     # irc nick of the other party, name for consistency
     name: str
@@ -246,4 +269,12 @@ class PrivateRoom(Room):
                 finally:
                     return
 
-            self.network.conn.privmsg(self.name, event["content"]["body"])
+            messages = split_long(
+                self.network.conn.real_nickname,
+                self.network.conn.user,
+                self.network.real_host,
+                self.name,
+                event["content"]["body"],
+            )
+            for message in messages:
+                self.network.conn.privmsg(self.name, message)

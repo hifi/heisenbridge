@@ -72,6 +72,7 @@ class NetworkRoom(Room):
     conn: Any
     rooms: Dict[str, Room]
     connecting: bool
+    real_host: str
 
     def init(self):
         self.name = None
@@ -84,6 +85,7 @@ class NetworkRoom(Room):
         self.conn = None
         self.rooms = {}
         self.connecting = False
+        self.real_host = "?" * 63  # worst case default
 
         cmd = CommandParser(prog="NICK", description="Change nickname")
         cmd.add_argument("nick", nargs="?", help="new nickname")
@@ -504,6 +506,7 @@ class NetworkRoom(Room):
             # protocol
             # FIXME: error
             self.conn.add_global_handler("join", self.on_join)
+            self.conn.add_global_handler("join", self.on_join_update_host)
             self.conn.add_global_handler("kick", self.on_pass)
             self.conn.add_global_handler("mode", self.on_pass)
             self.conn.add_global_handler("part", self.on_pass)
@@ -671,6 +674,12 @@ class NetworkRoom(Room):
 
             # pass this event through
             self.rooms[target].on_join(conn, event)
+
+    def on_join_update_host(self, conn, event) -> None:
+        # update for split long
+        if event.source.nick == self.conn.real_nickname and self.real_host != event.source.host:
+            self.real_host = event.source.host
+            logging.debug(f"Self host updated to '{self.real_host}'")
 
     def on_quit(self, conn, event) -> None:
         irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)

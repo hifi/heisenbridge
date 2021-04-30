@@ -45,9 +45,12 @@ def ircroom_event(target_arg=None):
                 room = self.rooms[target]
                 try:
                     room_f = getattr(room, "on_" + event.type)
-                    return room_f(conn, event)
+                    try:
+                        return room_f(conn, event)
+                    except Exception:
+                        logging.exception(f"Calling on_{event.type} failed for {target}")
                 except AttributeError:
-                    logging.warning(f"Expected {room.__name__} to have on_{event.type} but didn't")
+                    logging.warning(f"Expected {room} to have on_{event.type} but didn't")
 
             return f(self, conn, event)
 
@@ -336,7 +339,7 @@ class NetworkRoom(Room):
             self.conn.add_global_handler("disconnect", self.on_disconnect)
 
             # 001-099
-            self.conn.add_global_handler("welcome", self.on_server_message)
+            self.conn.add_global_handler("welcome", self.on_welcome)
             self.conn.add_global_handler("yourhost", self.on_server_message)
             self.conn.add_global_handler("created", self.on_server_message)
             self.conn.add_global_handler("myinfo", self.on_server_message)
@@ -439,7 +442,7 @@ class NetworkRoom(Room):
             self.conn.add_global_handler("infostart", self.on_server_message)
             self.conn.add_global_handler("endofinfo", self.on_server_message)
             self.conn.add_global_handler("motdstart", self.on_server_message)
-            self.conn.add_global_handler("endofmotd", self.on_endofmotd)
+            self.conn.add_global_handler("endofmotd", self.on_server_message)
 
             # 400-599
             self.conn.add_global_handler("nosuchnick", self.on_pass_if)
@@ -483,7 +486,7 @@ class NetworkRoom(Room):
             self.conn.add_global_handler("unknownmode", self.on_server_message)
             self.conn.add_global_handler("inviteonlychan", self.on_pass)
             self.conn.add_global_handler("bannedfromchan", self.on_pass)
-            self.conn.add_global_handler("badchannelkey", self.on_pass)
+            self.conn.add_global_handler("badchannelkey", self.on_pass0)
             self.conn.add_global_handler("badchanmask", self.on_pass)
             self.conn.add_global_handler("nochanmodes", self.on_pass)
             self.conn.add_global_handler("banlistfull", self.on_pass)
@@ -609,22 +612,28 @@ class NetworkRoom(Room):
         source = self.source_text(conn, event)
         self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> which we ignored")
 
-    def on_endofmotd(self, conn, event) -> None:
-        self.send_notice(" ".join(event.arguments))
+    def on_welcome(self, conn, event) -> None:
+        self.on_server_message(conn, event)
 
         async def later():
+            await asyncio.sleep(2)
+
             if self.autocmd is not None:
                 self.send_notice("Sending autocmd and waiting a bit before joining channels...")
                 self.conn.send_raw(self.autocmd)
-                await asyncio.sleep(5)
-            else:
-                await asyncio.sleep(2)
+                await asyncio.sleep(4)
 
-            # rejoin channels (FIXME: change to comma separated join list)
+            channels = []
+            keys = []
+
             for room in self.rooms.values():
                 if type(room) is ChannelRoom:
-                    self.send_notice("Joining " + room.name)
-                    self.conn.join(room.name, room.key)
+                    channels.append(room.name)
+                    keys.append(room.key if room.key else "")
+
+            if len(channels) > 0:
+                self.send_notice(f"Joining channels {', '.join(channels)}")
+                self.conn.join(",".join(channels), ",".join(keys))
 
         asyncio.ensure_future(later())
 

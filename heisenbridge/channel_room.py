@@ -255,7 +255,7 @@ class ChannelRoom(PrivateRoom):
         if irc_user_id not in self.members:
             return
 
-        asyncio.ensure_future(self._remove_puppet(irc_user_id))
+        self._remove_puppet(irc_user_id)
 
     def update_key(self, modes):
         # update channel key

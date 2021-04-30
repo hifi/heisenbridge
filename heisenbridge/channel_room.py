@@ -31,6 +31,22 @@ class ChannelRoom(PrivateRoom):
         cmd = CommandParser(prog="BANS", description="show channel ban list")
         self.commands.register(cmd, self.cmd_bans)
 
+        cmd = CommandParser(prog="OP", description="op someone")
+        cmd.add_argument("nick", help="nick to target")
+        self.commands.register(cmd, self.cmd_op)
+
+        cmd = CommandParser(prog="DEOP", description="deop someone")
+        cmd.add_argument("nick", help="nick to target")
+        self.commands.register(cmd, self.cmd_deop)
+
+        cmd = CommandParser(prog="VOICE", description="voice someone")
+        cmd.add_argument("nick", help="nick to target")
+        self.commands.register(cmd, self.cmd_voice)
+
+        cmd = CommandParser(prog="DEVOICE", description="devoice someone")
+        cmd.add_argument("nick", help="nick to target")
+        self.commands.register(cmd, self.cmd_devoice)
+
         self.names_buffer = []
         self.bans_buffer = []
 
@@ -101,6 +117,21 @@ class ChannelRoom(PrivateRoom):
 
     async def cmd_bans(self, args) -> None:
         self.network.conn.mode(self.name, "+b")
+
+    async def cmd_op(self, args) -> None:
+        self.network.conn.mode(self.name, f"+o {args.nick}")
+
+    async def cmd_deop(self, args) -> None:
+        self.network.conn.mode(self.name, f"-o {args.nick}")
+
+    async def cmd_voice(self, args) -> None:
+        self.network.conn.mode(self.name, f"+v {args.nick}")
+
+    async def cmd_devoice(self, args) -> None:
+        self.network.conn.mode(self.name, f"-v {args.nick}")
+
+    async def cmd_topic(self, args) -> None:
+        self.network.conn.topic(self.name, " ".join(args.text))
 
     def on_pubmsg(self, conn, event):
         self.on_privmsg(conn, event)

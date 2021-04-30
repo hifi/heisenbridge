@@ -21,8 +21,9 @@ class ChannelRoom(PrivateRoom):
 
         self.key = None
 
-        cmd = CommandParser(prog="MODES", description="fetch current channel modes")
-        self.commands.register(cmd, self.cmd_modes)
+        cmd = CommandParser(prog="MODE", description="send MODE command")
+        cmd.add_argument("args", nargs="*", help="MODE command arguments")
+        self.commands.register(cmd, self.cmd_mode)
 
         cmd = CommandParser(prog="NAMES", description="resynchronize channel members")
         self.commands.register(cmd, self.cmd_names)
@@ -88,6 +89,9 @@ class ChannelRoom(PrivateRoom):
                 self.network.conn.part(self.name)
             if self.name in self.network.rooms:
                 del self.network.rooms[self.name]
+
+    async def cmd_mode(self, args) -> None:
+        self.network.conn.mode(self.name, " ".join(args.args))
 
     async def cmd_modes(self, args) -> None:
         self.network.conn.mode(self.name, "")

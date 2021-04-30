@@ -129,9 +129,16 @@ class ChannelRoom(PrivateRoom):
         to_add = []
         names = list(self.names_buffer)
         self.names_buffer = []
+        modes = {}
 
         for nick in names:
-            nick = self.serv.strip_nick(nick)
+            nick, mode = self.serv.strip_nick(nick)
+
+            if mode:
+                if mode not in modes:
+                    modes[mode] = []
+
+                modes[mode].append(nick)
 
             # ignore us
             if nick == conn.real_nickname:
@@ -161,6 +168,25 @@ class ChannelRoom(PrivateRoom):
             + f" {len(self.members)} in room,"
             + f" {len(to_add)} will be invited and {len(to_remove)} removed."
         )
+
+        # known common mode names
+        modenames = {
+            "~": "owner",
+            "&": "admin",
+            "@": "op",
+            "%": "half-op",
+            "+": "voice",
+        }
+
+        # show modes from top to bottom
+        for mode, name in modenames.items():
+            if mode in modes:
+                self.send_notice(f"Users with {name} ({mode}): {', '.join(modes[mode])}")
+                del modes[mode]
+
+        # show unknown modes
+        for mode, nicks in modes.items():
+            self.send_notice(f"Users with '{mode}': {', '.join(nicks)}")
 
         # FIXME: this floods the event queue if there's a lot of people
         for (irc_user_id, nick) in to_add:

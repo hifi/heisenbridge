@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import random
+import re
 import string
 import sys
 import urllib
@@ -69,10 +70,15 @@ class BridgeAppService(AppService):
         return False
 
     def strip_nick(self, nick):
-        return nick.strip("@+&")
+        m = re.match(r"^([~&@%\+]?)(.+)$", nick)
+        if m:
+            return (m.group(2), (m.group(1) if len(m.group(1)) > 0 else None))
+        else:
+            raise TypeError(f"Input nick is not valid: '{nick}'")
 
     def irc_user_id(self, network, nick, at=True, server=True):
-        ret = f"{'@' if at else ''}irc_{network}_{self.strip_nick(nick).lower()}"
+        nick, mode = self.strip_nick(nick)
+        ret = f"{'@' if at else ''}irc_{network}_{nick.lower()}"
         if server:
             ret += ":" + self.server_name
         return ret

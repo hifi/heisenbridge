@@ -10,7 +10,7 @@ class Identd():
         try:
             data = await reader.read(128)
             query = data.decode()
-            req_addr, req_port = writer.get_extra_info("peername")
+            req_addr, req_port, *_ = writer.get_extra_info("peername")
 
             m = re.match(r"^(\d+)\s*,\s*(\d+)", query)
             if m:
@@ -25,8 +25,8 @@ class Identd():
                     if not room.conn or not room.conn.connected:
                         continue
 
-                    remote_addr, remote_port = room.conn.transport.get_extra_info("peername")
-                    local_addr, local_port = room.conn.transport.get_extra_info("sockname")
+                    remote_addr, remote_port, *_ = room.conn.transport.get_extra_info("peername") or ("", "")
+                    local_addr, local_port, *_ = room.conn.transport.get_extra_info("sockname") or ("", "")
 
                     if remote_addr == req_addr and remote_port == dst_port and local_port == src_port:
                         username = room.get_username()

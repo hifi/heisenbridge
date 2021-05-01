@@ -24,7 +24,7 @@ def connected(f):
 
         if not self.conn or not self.conn.connected:
             self.send_notice("Need to be connected to use this command.")
-            return
+            return asyncio.sleep(0)
 
         return f(*args, **kwargs)
 
@@ -85,8 +85,8 @@ class NetworkRoom(Room):
         self.commands = CommandManager()
         self.conn = None
         self.rooms = {}
-        self.connecting = False
         self.connlock = asyncio.Lock()
+        self.disconnect = True
         self.real_host = "?" * 63  # worst case default
 
         cmd = CommandParser(prog="NICK", description="Change nickname")
@@ -201,9 +201,9 @@ class NetworkRoom(Room):
         await self.connect()
 
     async def cmd_disconnect(self, args) -> None:
-        if self.connecting:
-            self.connecting = False
-            self.send_notice("Cancelling connection attempt...")
+        if not self.disconnect:
+            self.send_notice("Aborting connection attempt after backoff.")
+            self.disconnect = True
 
         if self.connected:
             self.connected = False
@@ -316,7 +316,9 @@ class NetworkRoom(Room):
             await self._connect()
 
     async def _connect(self) -> None:
-        if self.connecting or (self.conn and self.conn.connected):
+        self.disconnect = False
+
+        if self.conn and self.conn.connected:
             self.send_notice("Already connected.")
             return
 
@@ -341,24 +343,29 @@ class NetworkRoom(Room):
         if self.conn:
             self.conn = None
 
-        if self.name not in self.serv.config["networks"]:
-            self.send_notice("This network does not exist on this bridge anymore.")
-            return
-
         network = self.serv.config["networks"][self.name]
 
-        if len(network["servers"]) == 0:
-            self.connected = False
-            self.send_notice("No servers to connect for this network.")
-            await self.save()
-            return
+        backoff = 10
 
-        self.connecting = True
+        while not self.disconnect:
+            if self.name not in self.serv.config["networks"]:
+                self.send_notice("This network does not exist on this bridge anymore.")
+                return
 
-        while self.connecting:
-            for server in network["servers"]:
+            if len(network["servers"]) == 0:
+                self.connected = False
+                self.send_notice("No servers to connect for this network.")
+                await self.save()
+                return
+
+            for i, server in enumerate(network["servers"]):
+                if i > 0:
+                    await asyncio.sleep(10)
+
                 try:
-                    self.send_notice(f"Connecting to {server['address']}:{server['port']}...")
+                    self.send_notice(
+                        f"Connecting to {server['address']}:{server['port']}{' with TLS' if server['tls'] else ''}..."
+                    )
 
                     reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
                     irc_server = reactor.server()
@@ -475,6 +482,8 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("endofinfo", self.on_server_message)
                     self.conn.add_global_handler("motdstart", self.on_server_message)
                     self.conn.add_global_handler("endofmotd", self.on_server_message)
+                    self.conn.add_global_handler("youreoper", self.on_server_message)
+                    self.conn.add_global_handler("396", self.on_server_message)  # new host
 
                     # 400-599
                     self.conn.add_global_handler("nosuchnick", self.on_pass_if)
@@ -557,11 +566,11 @@ class NetworkRoom(Room):
                     # generated
                     self.conn.add_global_handler("ctcp", self.on_ctcp)
 
-                    self.connecting = False
-
                     if not self.connected:
                         self.connected = True
                         await self.save()
+
+                    self.disconnect = False
 
                     return
                 except TimeoutError:
@@ -573,8 +582,12 @@ class NetworkRoom(Room):
                     self.send_notice(f"Failed to connect: {str(e)}")
                     logging.exception("Failed to connect")
 
-                # try next server
-                await asyncio.sleep(10)
+            if not self.disconnect:
+                self.send_notice(f"Tried all servers, waiting {backoff} seconds before trying again.")
+                await asyncio.sleep(backoff)
+
+                if backoff < 60:
+                    backoff += 5
 
         self.send_notice("Connection aborted.")
 
@@ -582,8 +595,8 @@ class NetworkRoom(Room):
         self.conn.disconnect()
         self.conn = None
 
-        if self.connected:
-            self.send_notice("Disconnected, reconnecting in 10 seconds...")
+        if self.connected and not self.disconnect:
+            self.send_notice("Disconnected, reconnecting...")
 
             async def later():
                 await asyncio.sleep(10)

@@ -304,6 +304,20 @@ class NetworkRoom(Room):
         if self.conn and self.conn.connected:
             self.conn.nick(args.nick)
 
+    def get_username(self):
+        # allow admins to spoof
+        if self.serv.is_admin(self.user_id) and self.username:
+            return self.username
+
+        parts = self.user_id.split(":")
+
+        # disallow identd response for remote users
+        if parts[1] != self.serv.server_name:
+            return None
+
+        # return local part of mx id for local users
+        return parts[0][1:]
+
     async def cmd_username(self, args) -> None:
         if args.remove:
             self.username = None

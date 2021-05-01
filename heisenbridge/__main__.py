@@ -1,7 +1,9 @@
 import argparse
 import asyncio
+import grp
 import logging
 import os
+import pwd
 import random
 import re
 import string
@@ -19,6 +21,7 @@ from aiohttp import web
 from heisenbridge.appservice import AppService
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.control_room import ControlRoom
+from heisenbridge.identd import Identd
 from heisenbridge.matrix import Matrix
 from heisenbridge.matrix import MatrixError
 from heisenbridge.matrix import MatrixUserInUse
@@ -397,6 +400,14 @@ parser.add_argument(
 )
 parser.add_argument("-l", "--listen-address", help="bridge listen address", default="127.0.0.1")
 parser.add_argument("-p", "--listen-port", help="bridge listen port", type=int, default="9898")
+parser.add_argument("-u", "--uid", help="user id to run as", default=None)
+parser.add_argument("-g", "--gid", help="group id to run as", default=None)
+parser.add_argument(
+    "-i",
+    "--identd",
+    action="store_true",
+    help="enable identd on TCP port 113, requires root",
+)
 parser.add_argument(
     "--generate",
     action="store_true",
@@ -459,8 +470,30 @@ elif "reset" in args:
     loop.run_until_complete(service.reset(args.config, args.homeserver))
     loop.close()
 else:
-    service = BridgeAppService()
     loop = asyncio.get_event_loop()
+    identd = None
+
+    if args.identd:
+        identd = Identd()
+        loop.run_until_complete(identd.start_listening("0.0.0.0"))
+
+    if os.getuid() == 0:
+        if args.gid:
+            gid = grp.getgrnam(args.gid).gr_gid
+            os.setgid(gid)
+            os.setgroups([])
+
+        if args.uid:
+            uid = pwd.getpwnam(args.uid).pw_uid
+            os.setuid(uid)
+
+    os.umask(0o077)
+
+    service = BridgeAppService()
+
+    if identd:
+        loop.create_task(identd.run(service))
+
     loop.run_until_complete(
         service.run(args.config, args.listen_address, args.listen_port, args.homeserver, args.owner)
     )

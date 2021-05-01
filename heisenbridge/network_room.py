@@ -65,6 +65,8 @@ class NetworkRoom(Room):
     name: str
     connected: bool
     nick: str
+    username: str
+    ircname: str
     password: str
     autocmd: str
 
@@ -79,6 +81,8 @@ class NetworkRoom(Room):
         self.name = None
         self.connected = False
         self.nick = None
+        self.username = None
+        self.ircname = None
         self.password = None
         self.autocmd = None
 
@@ -92,6 +96,16 @@ class NetworkRoom(Room):
         cmd = CommandParser(prog="NICK", description="Change nickname")
         cmd.add_argument("nick", nargs="?", help="new nickname")
         self.commands.register(cmd, self.cmd_nick)
+
+        cmd = CommandParser(prog="USERNAME", description="Change username")
+        cmd.add_argument("username", nargs="?", help="new username")
+        cmd.add_argument("--remove", action="store_true", help="remove stored username")
+        self.commands.register(cmd, self.cmd_username)
+
+        cmd = CommandParser(prog="IRCNAME", description="Change ircname")
+        cmd.add_argument("ircname", nargs="?", help="new ircname")
+        cmd.add_argument("--remove", action="store_true", help="remove stored ircname")
+        self.commands.register(cmd, self.cmd_ircname)
 
         cmd = CommandParser(prog="PASSWORD", description="Set server password")
         cmd.add_argument("password", nargs="?", help="new password")
@@ -155,6 +169,12 @@ class NetworkRoom(Room):
         if "nick" in config:
             self.nick = config["nick"]
 
+        if "username" in config:
+            self.username = config["username"]
+
+        if "ircname" in config:
+            self.ircname = config["ircname"]
+
         if "password" in config:
             self.password = config["password"]
 
@@ -166,6 +186,8 @@ class NetworkRoom(Room):
             "name": self.name,
             "connected": self.connected,
             "nick": self.nick,
+            "username": self.username,
+            "ircname": self.ircname,
             "password": self.password,
             "autocmd": self.autocmd,
         }
@@ -260,12 +282,19 @@ class NetworkRoom(Room):
 
         self.conn.join(channel, args.key)
 
+    def get_nick(self):
+        if self.nick:
+            return self.nick
+
+        return self.user_id.split(":")[0][1:]
+
     async def cmd_nick(self, args) -> None:
         if args.nick is None:
+            nick = self.get_nick()
             if self.conn and self.conn.connected:
-                self.send_notice(f"Current nickname: {self.conn.real_nickname} (configured: {self.nick})")
+                self.send_notice(f"Current nickname: {self.conn.real_nickname} (configured: {nick})")
             else:
-                self.send_notice("Configured nickname: {}".format(self.nick))
+                self.send_notice(f"Configured nickname: {nick}")
             return
 
         self.nick = args.nick
@@ -274,6 +303,36 @@ class NetworkRoom(Room):
 
         if self.conn and self.conn.connected:
             self.conn.nick(args.nick)
+
+    async def cmd_username(self, args) -> None:
+        if args.remove:
+            self.username = None
+            await self.save()
+            self.send_notice("Username removed.")
+            return
+
+        if args.username is None:
+            self.send_notice(f"Configured username: {str(self.username)}")
+            return
+
+        self.username = args.username
+        await self.save()
+        self.send_notice(f"Username set to {self.username}")
+
+    async def cmd_ircname(self, args) -> None:
+        if args.remove:
+            self.ircname = None
+            await self.save()
+            self.send_notice("Ircname removed.")
+            return
+
+        if args.ircname is None:
+            self.send_notice(f"Configured ircname: {str(self.ircname)}")
+            return
+
+        self.ircname = args.ircname
+        await self.save()
+        self.send_notice(f"Ircname set to {self.ircname}")
 
     async def cmd_password(self, args) -> None:
         if args.remove:
@@ -322,10 +381,6 @@ class NetworkRoom(Room):
             self.send_notice("Already connected.")
             return
 
-        if self.nick is None:
-            self.send_notice("You need to configure a nick first, see HELP")
-            return
-
         # attach loose sub-rooms to us
         for room in self.serv.find_rooms(PrivateRoom, self.user_id):
             if room.name not in self.rooms and room.network_name == self.name:
@@ -372,7 +427,13 @@ class NetworkRoom(Room):
                     irc_server.buffer_class = buffer.LenientDecodingLineBuffer
                     factory = irc.connection.AioFactory(ssl=server["tls"])
                     self.conn = await irc_server.connect(
-                        server["address"], server["port"], self.nick, self.password, connect_factory=factory
+                        server["address"],
+                        server["port"],
+                        self.get_nick(),
+                        self.password,
+                        username=self.username,
+                        ircname=self.ircname,
+                        connect_factory=factory,
                     )
 
                     self.conn.add_global_handler("disconnect", self.on_disconnect)

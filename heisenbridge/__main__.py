@@ -166,7 +166,7 @@ class BridgeAppService(AppService):
                 logging.info(f"Non-whitelisted user {event['user_id']} tried to invite us, ignoring.")
                 return
 
-            logging.info("Whitelisted user {event['user_id'} invited us, going to accept.")
+            logging.info(f"Whitelisted user {event['user_id']} invited us, going to accept.")
 
             # accept invite sequence
             try:
@@ -277,6 +277,19 @@ class BridgeAppService(AppService):
 
         # load config from HS
         await self.load()
+
+        # do a little migration for servers, remove this later
+        for network in self.config["networks"].values():
+            new_servers = []
+
+            for server in network["servers"]:
+                if isinstance(server, str):
+                    new_servers.append({"address": server, "port": 6667, "tls": False})
+
+            if len(new_servers) > 0:
+                logging.debug("Migrating servers from old to new config format")
+                network["servers"] = new_servers
+
         logging.debug(f"Merged configuration from HS: {self.config}")
 
         # honor command line owner

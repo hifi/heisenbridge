@@ -23,7 +23,9 @@ def parse_irc_formatting(input: str) -> (str, str):
     italic = False
     underline = False
 
-    for m in re.finditer(r"(\x02|\x03([0-9]{1,2})?(,([0-9]{1,2}))?|\x1D|\x1F|\x16|\x0F)?([^\x02\x03\x1D\x1F\x16\x0F]*)", input):
+    for m in re.finditer(
+        r"(\x02|\x03([0-9]{1,2})?(,([0-9]{1,2}))?|\x1D|\x1F|\x16|\x0F)?([^\x02\x03\x1D\x1F\x16\x0F]*)", input
+    ):
         # fg is group 2, bg is group 4 but we're ignoring them now
         (ctrl, text) = (m.group(1), m.group(5))
 

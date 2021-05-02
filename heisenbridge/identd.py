@@ -1,19 +1,26 @@
 import asyncio
+import ipaddress
 import logging
 import re
+import socket
 
-from heisenbridge.appservice import AppService
 from heisenbridge.network_room import NetworkRoom
 
-class Identd():
+
+class Identd:
     async def handle(self, reader, writer):
         try:
             data = await reader.read(128)
             query = data.decode()
-            req_addr, req_port, *_ = writer.get_extra_info("peername")
 
             m = re.match(r"^(\d+)\s*,\s*(\d+)", query)
             if m:
+                _req_addr, req_port, *_ = writer.get_extra_info("peername")
+                req_addr = ipaddress.ip_address(_req_addr)
+
+                if isinstance(req_addr, ipaddress.IPv4Address):
+                    req_addr = ipaddress.ip_address("::ffff:" + _req_addr)
+
                 src_port = int(m.group(1))
                 dst_port = int(m.group(2))
 
@@ -25,8 +32,12 @@ class Identd():
                     if not room.conn or not room.conn.connected:
                         continue
 
-                    remote_addr, remote_port, *_ = room.conn.transport.get_extra_info("peername") or ("", "")
+                    _remote_addr, remote_port, *_ = room.conn.transport.get_extra_info("peername") or ("", "")
                     local_addr, local_port, *_ = room.conn.transport.get_extra_info("sockname") or ("", "")
+                    remote_addr = ipaddress.ip_address(_remote_addr)
+
+                    if isinstance(remote_addr, ipaddress.IPv4Address):
+                        remote_addr = ipaddress.ip_address("::ffff:" + _remote_addr)
 
                     if remote_addr == req_addr and remote_port == dst_port and local_port == src_port:
                         username = room.get_username()
@@ -42,11 +53,17 @@ class Identd():
         finally:
             writer.close()
 
-    async def start_listening(self, listen_address):
-        self.server = await asyncio.start_server(self.handle, listen_address, 113)
-
-    async def run(self, serv):
+    async def start_listening(self, serv):
         self.serv = serv
 
+        # XXX: this only works if dual stack is enabled which usually is
+        if socket.has_ipv6:
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+            sock.bind(("::", 113))
+            self.server = await asyncio.start_server(self.handle, sock=sock, loop=asyncio.get_event_loop())
+        else:
+            self.server = await asyncio.start_server(self.handle, "0.0.0.0", 113)
+
+    async def run(self):
         async with self.server:
             await self.server.serve_forever()

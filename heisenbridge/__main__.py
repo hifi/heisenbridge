@@ -471,11 +471,12 @@ elif "reset" in args:
     loop.close()
 else:
     loop = asyncio.get_event_loop()
+    service = BridgeAppService()
     identd = None
 
     if args.identd:
         identd = Identd()
-        loop.run_until_complete(identd.start_listening("0.0.0.0"))
+        loop.run_until_complete(identd.start_listening(service))
 
     if os.getuid() == 0:
         if args.gid:
@@ -489,10 +490,8 @@ else:
 
     os.umask(0o077)
 
-    service = BridgeAppService()
-
     if identd:
-        loop.create_task(identd.run(service))
+        loop.create_task(identd.run())
 
     loop.run_until_complete(
         service.run(args.config, args.listen_address, args.listen_port, args.homeserver, args.owner)

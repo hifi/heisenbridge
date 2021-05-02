@@ -17,42 +17,57 @@ Use [matrix-appservice-irc](https://github.com/matrix-org/matrix-appservice-irc)
 
 Features
 --------
-* "zero configuration" - just run the appservice!
-* no databases or other storage required
+* "zero configuration" - no databases or storage required
+* brings IRC to Matrix rather than Matrix to IRC - not annoying to folks on IRC
 * completely managed through admin room - just DM `@Heisenbridge`!
+* channel management through bridge bot - type `Heisenbridge: help` to get started!
 * online help within Matrix
 * access control for local and federated users
-* brings IRC to Matrix rather than Matrix to IRC - not annoying to folks on IRC
-* fully puppeted users from IRC
-* no ghosting on channels, users join and leave as they do on IRC
+* fully puppeted users from IRC, they come and go as they would on Matrix
 * tested with up to 1600 users in a single channel
 * IRCnet !channels _are_ supported, you're welcome
 * any number of IRC networks and users technically possible
 * channel customization by setting the name and avatar
+* TLS support for networks that have it
+* customizable ident support
+* long message splitting directly to IRC
+* automatic identify/auth with server password or command on connect
 
 Usage
 -----
 ```
-usage: python -m heisenbridge [-h] [-v] -c CONFIG [-l LISTEN_ADDRESS] [-p LISTEN_PORT] [--generate] [--reset] [-o OWNER] [homeserver]
+usage: python -m heisenbridge [-h] [-v] -c CONFIG [-l LISTEN_ADDRESS]
+                              [-p LISTEN_PORT] [-u UID] [-g GID] [-i]
+                              [--generate] [--reset] [-o OWNER]
+                              [homeserver]
 
 a Matrix IRC bridge
 
 positional arguments:
-  homeserver            URL of Matrix homeserver (default: http://localhost:8008)
+  homeserver            URL of Matrix homeserver (default:
+                        http://localhost:8008)
 
 optional arguments:
   -h, --help            show this help message and exit
-  -v, --verbose         logging verbosity level: once is info, twice is debug (default: 0)
+  -v, --verbose         logging verbosity level: once is info, twice is debug
+                        (default: 0)
   -c CONFIG, --config CONFIG
-                        registration YAML file path, must be writable if generating (default: None)
+                        registration YAML file path, must be writable if
+                        generating (default: None)
   -l LISTEN_ADDRESS, --listen-address LISTEN_ADDRESS
                         bridge listen address (default: 127.0.0.1)
   -p LISTEN_PORT, --listen-port LISTEN_PORT
                         bridge listen port (default: 9898)
+  -u UID, --uid UID     user id to run as (default: None)
+  -g GID, --gid GID     group id to run as (default: None)
+  -i, --identd          enable identd on TCP port 113, requires root (default:
+                        False)
   --generate            generate registration YAML for Matrix homeserver
-  --reset               reset ALL bridge configuration from homeserver and exit
+  --reset               reset ALL bridge configuration from homeserver and
+                        exit
   -o OWNER, --owner OWNER
-                        set owner MXID (eg: @user:homeserver) or first talking local user will claim the bridge (default: None)
+                        set owner MXID (eg: @user:homeserver) or first talking
+                        local user will claim the bridge (default: None)
 ```
 
 Install

@@ -3,7 +3,7 @@ name: Build & test package
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: ["master", "main"]
 
 jobs:
   build:
@@ -39,3 +39,43 @@ jobs:
 
         - name: Build
           run: python setup.py build
+  
+  type-check:
+    name: "Mypy type check"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - name: Checkout repo
+        uses: "actions/checkout@v2"
+
+      - name: Setup python environment
+        uses: "actions/setup-python@v2"
+        with:
+          python-version: "3.6"
+
+      - name: Type check
+        uses: "jpetrucciani/mypy-check@master"
+
+  linting:
+    name: "Flake8"
+    runs-on: "ubuntu-latest"
+
+    steps:
+      - name: Checkout repo
+        uses: "actions/checkout@v2"
+
+      - name: Setup python environment
+        uses: "actions/setup-python@v2"
+        with:
+          python-version: "3.6"
+
+      - name: Install dependencies
+        run: |
+          python -VV
+          python -m site
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install flake8
+          python -m pip install flake8-github-actions
+
+      - name: Lint
+        run: "flake8 --format github"

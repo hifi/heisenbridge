@@ -155,3 +155,9 @@ class Matrix:
             "/_matrix/client/r0/profile/{}/displayname?user_id={}".format(user_id, user_id),
             {"displayname": displayname},
         )
+
+    async def get_synapse_admin_users_admin(self, user_id):
+        return await self.call("GET", f"/_synapse/admin/v1/users/{user_id}/admin")
+
+    async def post_synapse_admin_room_join(self, room_id, user_id):
+        return await self.call("POST", f"/_synapse/admin/v1/join/{room_id}", {"user_id": user_id})

@@ -96,9 +96,13 @@ class Room(ABC):
         for event in events:
             try:
                 if event["type"] == "_invite":
-                    await self.serv.api.post_room_invite(self.id, event["user_id"])
+                    if not self.serv.synapse_admin:
+                        await self.serv.api.post_room_invite(self.id, event["user_id"])
                 elif event["type"] == "_join":
-                    await self.serv.api.post_room_join(self.id, event["user_id"])
+                    if not self.serv.synapse_admin:
+                        await self.serv.api.post_room_join(self.id, event["user_id"])
+                    else:
+                        await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
 
                     if event["user_id"] not in self.members:
                         self.members.append(event["user_id"])

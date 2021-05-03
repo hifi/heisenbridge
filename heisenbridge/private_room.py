@@ -253,10 +253,6 @@ class PrivateRoom(Room):
         elif event["content"]["msgtype"] == "m.image":
             self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event["content"]["url"]))
         elif event["content"]["msgtype"] == "m.text":
-            if "\n" in event["content"]["body"]:
-                self.send_notice("Multiline text is not allowed on IRC, previous message was NOT sent.")
-                return
-
             if "m.new_content" in event["content"]:
                 self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")
                 return
@@ -271,12 +267,17 @@ class PrivateRoom(Room):
                 finally:
                     return
 
-            messages = split_long(
-                self.network.conn.real_nickname,
-                self.network.conn.user,
-                self.network.real_host,
-                self.name,
-                event["content"]["body"],
-            )
-            for message in messages:
-                self.network.conn.privmsg(self.name, message)
+            for line in event["content"]["body"].split("\n"):
+                if line == "":
+                    continue
+
+                messages = split_long(
+                    self.network.conn.real_nickname,
+                    self.network.conn.user,
+                    self.network.real_host,
+                    self.name,
+                    line,
+                )
+
+                for message in messages:
+                    self.network.conn.privmsg(self.name, message)

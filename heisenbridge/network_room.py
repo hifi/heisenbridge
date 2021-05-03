@@ -14,6 +14,7 @@ from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
+from heisenbridge.irc import HeisenReactor
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 
@@ -436,7 +437,7 @@ class NetworkRoom(Room):
                         f"Connecting to {server['address']}:{server['port']}{' with TLS' if server['tls'] else ''}..."
                     )
 
-                    reactor = irc.client_aio.AioReactor(loop=asyncio.get_event_loop())
+                    reactor = HeisenReactor(loop=asyncio.get_event_loop())
                     irc_server = reactor.server()
                     irc_server.buffer_class = buffer.LenientDecodingLineBuffer
                     factory = irc.connection.AioFactory(ssl=server["tls"])

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 from irc.client_aio import AioConnection
 from irc.client_aio import AioReactor

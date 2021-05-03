@@ -676,7 +676,8 @@ class NetworkRoom(Room):
 
             async def later():
                 await asyncio.sleep(10)
-                await self.connect()
+                if not self.disconnect:
+                    await self.connect()
 
             asyncio.ensure_future(later())
         else:

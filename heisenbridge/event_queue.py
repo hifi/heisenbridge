@@ -16,6 +16,7 @@ class EventQueue:
         self._chain = asyncio.Queue()
         self._task = None
         self._timeout = 30
+        self._last_notice = 0
 
     def __del__(self):
         self._task.cancel()
@@ -30,6 +31,26 @@ class EventQueue:
                 task = await self._chain.get()
             except asyncio.CancelledError:
                 return
+
+            # tell the queue size every 30 seconds
+            now = self._loop.time()
+            qsize = self._chain.qsize()
+            if qsize > 50 and now > self._last_notice + 30:
+                try:
+                    nag = self._callback([{
+                        "type": "m.room.message",
+                        "content": {
+                            "msgtype": "m.notice",
+                            "body": f"Hold up \u270B! Looks like there are {qsize} events in queue, trying to catch up \U0001F3C3."
+                        },
+                        "user_id": None,
+                    }])
+                    await asyncio.wait_for(nag, timeout=self._timeout)
+                except asyncio.TimeoutError:
+                    logging.warning("EventQueue nag task timed out.")
+                except Exception:
+                    pass
+                self._last_notice = now
 
             try:
                 await asyncio.wait_for(task, timeout=self._timeout)

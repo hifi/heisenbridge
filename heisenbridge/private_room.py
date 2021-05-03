@@ -3,6 +3,7 @@ import logging
 import re
 from html import escape
 from typing import Optional
+from typing import Tuple
 
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParserError
@@ -14,7 +15,7 @@ class NetworkRoom:
 
 
 # this is very naive and will break html tag close/open order right now
-def parse_irc_formatting(input: str) -> (str, str):
+def parse_irc_formatting(input: str) -> Tuple[str, Optional[str]]:
     plain = []
     formatted = []
 

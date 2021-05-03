@@ -150,5 +150,8 @@ Thumbs.db
 # profiling data
 .prof
 
+# Direnv https://direnv.net/
+\.envrc
+\.direnv
 
 # End of https://www.toptal.com/developers/gitignore/api/python

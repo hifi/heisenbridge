@@ -770,7 +770,7 @@ class NetworkRoom(Room):
         asyncio.ensure_future(later())
 
     @ircroom_event()
-    def on_privmsg(self, conn, event) -> bool:
+    def on_privmsg(self, conn, event) -> None:
         # slightly backwards
         target = event.source.nick.lower()
 

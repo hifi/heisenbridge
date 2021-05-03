@@ -12,6 +12,7 @@ import urllib
 from fnmatch import fnmatch
 from typing import Dict
 from typing import List
+from typing import Tuple
 
 import aiohttp
 import yaml
@@ -72,7 +73,7 @@ class BridgeAppService(AppService):
 
         return False
 
-    def strip_nick(self, nick):
+    def strip_nick(self, nick: str) -> Tuple[str, str]:
         m = re.match(r"^([~&@%\+]?)(.+)$", nick)
         if m:
             return (m.group(2), (m.group(1) if len(m.group(1)) > 0 else None))

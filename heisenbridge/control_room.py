@@ -77,7 +77,7 @@ class ControlRoom(Room):
         except CommandParserError as e:
             return self.send_notice(str(e))
 
-    async def on_mx_message(self, event) -> None:
+    async def on_mx_message(self, event) -> bool:
         if event["content"]["msgtype"] != "m.text" or event["user_id"] == self.serv.user_id:
             return True
 

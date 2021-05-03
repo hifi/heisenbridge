@@ -1,7 +1,9 @@
 import asyncio
 import logging
 from datetime import datetime
+from typing import Dict
 from typing import List
+from typing import Optional
 
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.private_room import PrivateRoom
@@ -12,7 +14,7 @@ class NetworkRoom:
 
 
 class ChannelRoom(PrivateRoom):
-    key: str
+    key: Optional[str]
     names_buffer: List[str]
     bans_buffer: List[str]
 
@@ -160,7 +162,7 @@ class ChannelRoom(PrivateRoom):
         to_add = []
         names = list(self.names_buffer)
         self.names_buffer = []
-        modes = {}
+        modes: Dict[str, List[str]] = {}
 
         for nick in names:
             nick, mode = self.serv.strip_nick(nick)

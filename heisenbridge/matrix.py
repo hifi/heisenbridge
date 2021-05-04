@@ -1,5 +1,8 @@
+import asyncio
+import logging
 import time
 
+from aiohttp import ClientError
 from aiohttp import ClientSession
 from aiohttp import TCPConnector
 
@@ -49,13 +52,18 @@ class Matrix:
         async with ClientSession(
             headers={"Authorization": "Bearer " + self.token}, connector=self.conn, connector_owner=False
         ) as session:
-            resp = await session.request(method, self.url + uri, json=data)
-            data = await resp.json()
+            for i in range(0, 60):
+                try:
+                    resp = await session.request(method, self.url + uri, json=data)
+                    data = await resp.json()
 
-            if resp.status > 299:
-                raise self._matrix_error(data)
+                    if resp.status > 299:
+                        raise self._matrix_error(data)
 
-            return data
+                    return data
+                except ClientError:
+                    logging.warning(f"Request to HS failed, assuming it is down, retry {i+1}/60...")
+                    await asyncio.sleep(30)
 
     async def get_user_whoami(self):
         return await self.call("GET", "/_matrix/client/r0/account/whoami")

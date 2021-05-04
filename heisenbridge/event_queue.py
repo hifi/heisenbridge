@@ -15,7 +15,7 @@ class EventQueue:
         self._start = 0
         self._chain = asyncio.Queue()
         self._task = None
-        self._timeout = 30
+        self._timeout = 3600
 
     def __del__(self):
         self._task.cancel()

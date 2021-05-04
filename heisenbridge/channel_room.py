@@ -6,11 +6,8 @@ from typing import List
 from typing import Optional
 
 from heisenbridge.command_parse import CommandParser
+from heisenbridge.network_room import NetworkRoom
 from heisenbridge.private_room import PrivateRoom
-
-
-class NetworkRoom:
-    pass
 
 
 class ChannelRoom(PrivateRoom):
@@ -18,8 +15,8 @@ class ChannelRoom(PrivateRoom):
     names_buffer: List[str]
     bans_buffer: List[str]
 
-    def init(self) -> None:
-        super().init()
+    def __init__(self, network: NetworkRoom, name: str) -> None:
+        super().__init__(network, name, [network.serv.user_id, network.user_id])
 
         self.key = None
 
@@ -52,6 +49,8 @@ class ChannelRoom(PrivateRoom):
         self.names_buffer = []
         self.bans_buffer = []
 
+        logging.debug(f"ChannelRoom.create(network='{network.name}', name='{name}'")
+
     def from_config(self, config: dict) -> None:
         if "name" not in config:
             raise Exception("No name key in config for ChatRoom")
@@ -67,17 +66,6 @@ class ChannelRoom(PrivateRoom):
 
     def to_config(self) -> dict:
         return {"name": self.name, "network": self.network_name, "key": self.key}
-
-    @staticmethod
-    def create(network: NetworkRoom, name: str) -> "ChannelRoom":
-        logging.debug(f"ChannelRoom.create(network='{network.name}', name='{name}'")
-
-        room = ChannelRoom(None, network.user_id, network.serv, [network.serv.user_id, network.user_id])
-        room.name = name.lower()
-        room.network = network
-        room.network_name = network.name
-        asyncio.ensure_future(room._create_mx())
-        return room
 
     async def _create_mx(self):
         # handle !room names properly

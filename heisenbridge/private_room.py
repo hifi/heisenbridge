@@ -2,16 +2,14 @@ import asyncio
 import logging
 import re
 from html import escape
+from typing import List
 from typing import Optional
 from typing import Tuple
 
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParserError
+from heisenbridge.network_room import NetworkRoom
 from heisenbridge.room import Room
-
-
-class NetworkRoom:
-    pass
 
 
 # this is very naive and will break html tag close/open order right now
@@ -117,14 +115,28 @@ class PrivateRoom(Room):
 
     commands: CommandManager
 
-    def init(self) -> None:
-        self.name = None
-        self.network = None
-        self.network_name = None
+    def __init__(self, network: NetworkRoom, name: str, members: Optional[List[str]] = None) -> None:
+        if members is None:
+            irc_user_id = network.serv.irc_user_id(network.name, name)
+            members = [network.user_id, irc_user_id, network.serv.user_id]
 
-        self.commands = CommandManager()
+        super().__init__(
+            None,
+            network.user_id,
+            network.serv,
+            members,
+        )
 
         self.mx_register("m.room.message", self.on_mx_message)
+
+        logging.debug(f"PrivateRoom.create(network='{network.name}', name='{name}')")
+
+        self.name = name.lower()
+        self.network = network
+        self.network_name = network.name
+        self.commands = CommandManager()
+
+        asyncio.ensure_future(self._create_mx())
 
     def from_config(self, config: dict) -> None:
         if "name" not in config:
@@ -138,22 +150,6 @@ class PrivateRoom(Room):
 
     def to_config(self) -> dict:
         return {"name": self.name, "network": self.network_name}
-
-    @staticmethod
-    def create(network: NetworkRoom, name: str) -> "PrivateRoom":
-        logging.debug(f"PrivateRoom.create(network='{network.name}', name='{name}')")
-        irc_user_id = network.serv.irc_user_id(network.name, name)
-        room = PrivateRoom(
-            None,
-            network.user_id,
-            network.serv,
-            [network.user_id, irc_user_id, network.serv.user_id],
-        )
-        room.name = name.lower()
-        room.network = network
-        room.network_name = network.name
-        asyncio.ensure_future(room._create_mx())
-        return room
 
     async def _create_mx(self) -> None:
         if self.id is None:

@@ -8,7 +8,7 @@ from heisenbridge.room import Room
 class ControlRoom(Room):
     commands: CommandManager
 
-    def init(self):
+    def __init__(self) -> None:
         self.commands = CommandManager()
 
         cmd = CommandParser(prog="NETWORKS", description="List networks")

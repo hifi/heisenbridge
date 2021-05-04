@@ -78,7 +78,7 @@ class NetworkRoom(Room):
     connecting: bool
     real_host: str
 
-    def init(self):
+    def __init__(self, serv, name, user_id) -> None:
         self.name = None
         self.connected = False
         self.nick = None
@@ -148,6 +148,7 @@ class NetworkRoom(Room):
 
         self.mx_register("m.room.message", self.on_mx_message)
 
+    # This is the real constructor, but Python does not have async __init__
     @staticmethod
     async def create(serv, name, user_id):
         room_id = await serv.create_room(name, "Network room for {}".format(name), [user_id])
@@ -257,7 +258,7 @@ class NetworkRoom(Room):
             await self.serv.api.post_room_invite(room.id, self.user_id)
             self.send_notice("Inviting back to private chat with {}.".format(args.nick))
         else:
-            room = PrivateRoom.create(self, args.nick)
+            room = PrivateRoom(self, args.nick)
             self.rooms[room.name] = room
             self.send_notice("You have been invited to private chat with {}.".format(args.nick))
 
@@ -799,7 +800,7 @@ class NetworkRoom(Room):
         # create a ChannelRoom in response to JOIN
         if event.source.nick == self.conn.real_nickname and target not in self.rooms:
             logging.debug("Pre-flight check for JOIN ok, going to create it...")
-            self.rooms[target] = ChannelRoom.create(self, event.target)
+            self.rooms[target] = ChannelRoom(self, event.target)
 
             # pass this event through
             self.rooms[target].on_join(conn, event)

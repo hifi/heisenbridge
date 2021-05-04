@@ -23,7 +23,7 @@ class Room(ABC):
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
     _queue: EventQueue
 
-    def __init__(self, id: str, user_id: str, serv: AppService, members: List[str]):
+    def __init__(self, id: str, user_id: str, serv: AppService, members: List[str]) -> None:
         self.id = id
         self.user_id = user_id
         self.serv = serv
@@ -39,12 +39,7 @@ class Room(ABC):
         # we track room members
         self.mx_register("m.room.member", self._on_mx_room_member)
 
-        self.init()
-
     def from_config(self, config: dict) -> None:
-        pass
-
-    def init(self) -> None:
         pass
 
     def is_valid(self) -> bool:

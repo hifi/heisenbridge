@@ -83,7 +83,7 @@ class BridgeAppService(AppService):
 
     def irc_user_id(self, network, nick, at=True, server=True):
         nick, mode = self.strip_nick(nick)
-        ret = f"{'@' if at else ''}irc_{network}_{nick.lower()}"
+        ret = f"{'@' if at else ''}{self.puppet_prefix}{network}_{nick}".lower()
         if server:
             ret += ":" + self.server_name
         return ret
@@ -263,6 +263,22 @@ class BridgeAppService(AppService):
 
         app = aiohttp.web.Application()
         app.router.add_put("/transactions/{id}", self._transaction)
+
+        if 'namespaces' not in registration or 'users' not in registration['namespaces'] or len(registration['namespaces']['users']) != 1:
+            print('A single user namespace is required for puppets in the registration file.')
+            sys.exit(1)
+
+        user_namespace = registration['namespaces']['users'][0]
+        if 'exclusive' not in user_namespace or not user_namespace['exclusive']:
+            print('User namespace must be exclusive.')
+            sys.exit(1)
+
+        m = re.match(r"^@([^.]+)\.\*$", user_namespace['regex'])
+        if not m:
+            print("User namespace regex must be a prefix like '@irc_.*' and not contain anything else.")
+            sys.exit(1)
+
+        self.puppet_prefix = m.group(1)
 
         self.api = Matrix(homeserver_url, registration["as_token"])
 
@@ -467,7 +483,7 @@ if "generate" in args:
         "rate_limited": False,
         "sender_localpart": "heisenbridge",
         "namespaces": {
-            "users": [{"regex": "@irc_*", "exclusive": True}],
+            "users": [{"regex": "@irc_.*", "exclusive": True}],
             "aliases": [],
             "rooms": [],
         },

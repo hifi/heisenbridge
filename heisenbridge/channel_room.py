@@ -147,6 +147,10 @@ class ChannelRoom(PrivateRoom):
     def _add_puppet(self, nick):
         irc_user_id = self.serv.irc_user_id(self.network.name, nick)
 
+        # assume adding puppet will work, prevents messages from outside the room being queued
+        if irc_user_id not in self.members:
+            self.members.append(irc_user_id)
+
         self.ensure_irc_user_id(self.network.name, nick)
         self.invite(irc_user_id)
         self.join(irc_user_id)
@@ -234,11 +238,6 @@ class ChannelRoom(PrivateRoom):
             self.send_notice("Joined channel.")
             # sync channel modes/key on join
             self.network.conn.mode(self.name, "")
-            return
-
-        # convert to mx id, check if we already have them
-        irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)
-        if irc_user_id in self.members:
             return
 
         # ensure, append, invite and join

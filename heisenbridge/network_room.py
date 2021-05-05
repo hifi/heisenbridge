@@ -820,25 +820,21 @@ class NetworkRoom(Room):
                     asyncio.ensure_future(self.serv.api.post_room_leave(room.id, irc_user_id))
 
     def on_nick(self, conn, event) -> None:
-        async def later():
-            old_irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
-            new_irc_user_id = await self.serv.ensure_irc_user_id(self.name, event.target)
+        old_irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
+        new_irc_user_id = self.serv.ensure_irc_user_id(self.name, event.target)
 
-            # special case where only cases change, ensure will update displayname
-            if old_irc_user_id == new_irc_user_id:
-                return
+        # special case where only cases change, ensure will update displayname sometime in the future
+        if old_irc_user_id == new_irc_user_id:
+            asyncio.ensure_future(self.serv.ensure_irc_user_id(self.name, event.target))
+            return
 
-            # leave and join channels
-            for room in self.rooms.values():
-                if type(room) is ChannelRoom:
-                    if room.in_room(old_irc_user_id):
-                        # notify mx user about the change
-                        room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
-                        await self.serv.api.post_room_leave(room.id, old_irc_user_id)
-                        await self.serv.api.post_room_invite(room.id, new_irc_user_id)
-                        await self.serv.api.post_room_join(room.id, new_irc_user_id)
-
-        asyncio.ensure_future(later())
+        # leave and join channels
+        for room in self.rooms.values():
+            if type(room) is ChannelRoom and room.in_room(old_irc_user_id):
+                # notify mx user about the change
+                room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
+                room._remove_puppet(old_irc_user_id)
+                room._add_puppet(event.target)
 
     def on_nicknameinuse(self, conn, event) -> None:
         newnick = event.arguments[0] + "_"

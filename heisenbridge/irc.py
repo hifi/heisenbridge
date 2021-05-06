@@ -56,3 +56,15 @@ class HeisenConnection(AioConnection):
 
 class HeisenReactor(AioReactor):
     connection_class = HeisenConnection
+
+    def _handle_event(self, connection, event):
+        with self.mutex:
+            matching_handlers = sorted(self.handlers.get("all_events", []) + self.handlers.get(event.type, []))
+
+            if len(matching_handlers) == 0 and event.type != "all_raw_messages":
+                matching_handlers += self.handlers.get("unhandled_events", [])
+
+            for handler in matching_handlers:
+                result = handler.callback(connection, event)
+                if result == "NO MORE":
+                    return

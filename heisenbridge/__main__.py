@@ -264,16 +264,20 @@ class BridgeAppService(AppService):
         app = aiohttp.web.Application()
         app.router.add_put("/transactions/{id}", self._transaction)
 
-        if 'namespaces' not in registration or 'users' not in registration['namespaces'] or len(registration['namespaces']['users']) != 1:
-            print('A single user namespace is required for puppets in the registration file.')
+        if (
+            "namespaces" not in registration
+            or "users" not in registration["namespaces"]
+            or len(registration["namespaces"]["users"]) != 1
+        ):
+            print("A single user namespace is required for puppets in the registration file.")
             sys.exit(1)
 
-        user_namespace = registration['namespaces']['users'][0]
-        if 'exclusive' not in user_namespace or not user_namespace['exclusive']:
-            print('User namespace must be exclusive.')
+        user_namespace = registration["namespaces"]["users"][0]
+        if "exclusive" not in user_namespace or not user_namespace["exclusive"]:
+            print("User namespace must be exclusive.")
             sys.exit(1)
 
-        m = re.match(r"^@([^.]+)\.\*$", user_namespace['regex'])
+        m = re.match(r"^@([^.]+)\.\*$", user_namespace["regex"])
         if not m:
             print("User namespace regex must be a prefix like '@irc_.*' and not contain anything else.")
             sys.exit(1)

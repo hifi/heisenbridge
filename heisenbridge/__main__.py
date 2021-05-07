@@ -257,22 +257,24 @@ class BridgeAppService(AppService):
 
         print("All done!")
 
-    async def run(self, config_file, listen_address, listen_port, homeserver_url, owner):
+    def load_reg(self, config_file):
         with open(config_file) as f:
-            registration = yaml.safe_load(f)
+            self.registration = yaml.safe_load(f)
+
+    async def run(self, listen_address, listen_port, homeserver_url, owner):
 
         app = aiohttp.web.Application()
         app.router.add_put("/transactions/{id}", self._transaction)
 
         if (
-            "namespaces" not in registration
-            or "users" not in registration["namespaces"]
-            or len(registration["namespaces"]["users"]) != 1
+            "namespaces" not in self.registration
+            or "users" not in self.registration["namespaces"]
+            or len(self.registration["namespaces"]["users"]) != 1
         ):
             print("A single user namespace is required for puppets in the registration file.")
             sys.exit(1)
 
-        user_namespace = registration["namespaces"]["users"][0]
+        user_namespace = self.registration["namespaces"]["users"][0]
         if "exclusive" not in user_namespace or not user_namespace["exclusive"]:
             print("User namespace must be exclusive.")
             sys.exit(1)
@@ -284,7 +286,7 @@ class BridgeAppService(AppService):
 
         self.puppet_prefix = m.group(1)
 
-        self.api = Matrix(homeserver_url, registration["as_token"])
+        self.api = Matrix(homeserver_url, self.registration["as_token"])
 
         whoami = await self.api.get_user_whoami()
         logging.info("We are " + whoami["user_id"])
@@ -341,7 +343,7 @@ class BridgeAppService(AppService):
             await self.api.post_user_register(
                 {
                     "type": "m.login.application_service",
-                    "username": registration["sender_localpart"],
+                    "username": self.registration["sender_localpart"],
                 }
             )
             logging.debug("Appservice user registration succeeded.")
@@ -507,6 +509,8 @@ else:
     service = BridgeAppService()
     identd = None
 
+    service.load_reg(args.config)
+
     if args.identd:
         identd = Identd()
         loop.run_until_complete(identd.start_listening(service))
@@ -526,7 +530,5 @@ else:
     if identd:
         loop.create_task(identd.run())
 
-    loop.run_until_complete(
-        service.run(args.config, args.listen_address, args.listen_port, args.homeserver, args.owner)
-    )
+    loop.run_until_complete(service.run(args.listen_address, args.listen_port, args.homeserver, args.owner))
     loop.close()

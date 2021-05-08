@@ -49,6 +49,10 @@ class EventQueue:
     def enqueue(self, event):
         now = self._loop.time()
 
+        # always cancel timer when we enqueue
+        if self._timer and not self._timer.cancelled():
+            self._timer.cancel()
+
         # stamp start time when we queue first event, always append event
         if len(self._events) == 0:
             self._start = now
@@ -60,24 +64,30 @@ class EventQueue:
             prev_formatted = "format" in prev["content"]
             cur_formatted = "format" in event["content"]
 
+            # calculate content length if we need to flush anyway to stay within max event size
+            prev_len = 0
+            if "content" in prev:
+                if "body" in prev["content"]:
+                    prev_len += len(prev["content"]["body"])
+                if "formatted_body" in prev["content"]:
+                    prev_len += len(prev["content"]["formatted_body"])
+
             if (
                 prev["type"] == event["type"]
                 and prev["type"][0] != "_"
                 and prev["user_id"] == event["user_id"]
                 and prev["content"]["msgtype"] == event["content"]["msgtype"]
                 and prev_formatted == cur_formatted
+                and prev_len < 64_000  # a single IRC event can't overflow with this
             ):
                 prev["content"]["body"] += "\n" + event["content"]["body"]
                 if cur_formatted:
                     prev["content"]["formatted_body"] += "<br>" + event["content"]["formatted_body"]
             else:
-                # can't merge, force flush
-                self._start = 0
+                # can't merge, force flush but enqueue the next event
+                self._flush()
+                self._start = now
                 self._events.append(event)
-
-        # always cancel timer when we enqueue
-        if self._timer and not self._timer.cancelled():
-            self._timer.cancel()
 
         # if we have bumped ourself for a full second, flush now
         if now >= self._start + 1.0:

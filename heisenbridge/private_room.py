@@ -231,15 +231,17 @@ class PrivateRoom(Room):
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
-        if event.arguments[0].upper() != "ACTION":
-            return
+        command = event.arguments[0].upper()
 
-        (plain, formatted) = parse_irc_formatting(event.arguments[1])
+        if command == "ACTION" and len(event.arguments) > 1:
+            (plain, formatted) = parse_irc_formatting(event.arguments[1])
 
-        if irc_user_id in self.members:
-            self.send_emote(plain, irc_user_id)
+            if irc_user_id in self.members:
+                self.send_emote(plain, irc_user_id)
+            else:
+                self.send_notice_html(f"<b>Emote from {str(event.source)}</b>: {plain}")
         else:
-            self.send_notice_html(f"<b>Emote from {str(event.source)}</b>: {plain}")
+            self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {command}</b (ignored)")
 
     async def on_mx_message(self, event) -> None:
         if event["user_id"] != self.user_id:

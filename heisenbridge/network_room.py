@@ -508,6 +508,7 @@ class NetworkRoom(Room):
 
                     # generated
                     self.conn.add_global_handler("ctcp", self.on_ctcp)
+                    self.conn.add_global_handler("action", lambda conn, event: None)
 
                     # anything not handled above
                     self.conn.add_global_handler("unhandled_events", self.on_server_message)
@@ -612,7 +613,7 @@ class NetworkRoom(Room):
     def on_ctcp(self, conn, event) -> None:
         # show unhandled ctcps in server room
         source = self.source_text(conn, event)
-        self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> which we ignored")
+        self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> (ignored)")
 
     def on_welcome(self, conn, event) -> None:
         self.on_server_message(conn, event)

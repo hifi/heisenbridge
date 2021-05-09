@@ -692,7 +692,7 @@ class NetworkRoom(Room):
 
     def on_nick(self, conn, event) -> None:
         old_irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
-        new_irc_user_id = self.serv.ensure_irc_user_id(self.name, event.target)
+        new_irc_user_id = self.serv.irc_user_id(self.name, event.target)
 
         # special case where only cases change, ensure will update displayname sometime in the future
         if old_irc_user_id == new_irc_user_id:

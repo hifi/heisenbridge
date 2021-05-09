@@ -411,6 +411,7 @@ class NetworkRoom(Room):
 
         # force cleanup
         if self.conn:
+            self.conn.close()
             self.conn = None
 
         network = self.serv.config["networks"][self.name]
@@ -540,6 +541,7 @@ class NetworkRoom(Room):
 
     def on_disconnect(self, conn, event) -> None:
         self.conn.disconnect()
+        self.conn.close()
         self.conn = None
 
         if self.connected and not self.disconnect:

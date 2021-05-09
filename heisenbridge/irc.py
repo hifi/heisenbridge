@@ -11,8 +11,10 @@ class HeisenConnection(AioConnection):
         self._queue = asyncio.Queue()
         self._task = asyncio.ensure_future(self._run())
 
-    def __del__(self):
+    def close(self):
+        logging.debug("Canceling IRC event queue")
         self._task.cancel()
+        super().close()
 
     async def _run(self):
         loop = asyncio.get_event_loop()
@@ -44,11 +46,13 @@ class HeisenConnection(AioConnection):
                 # this needs to be reset if we slept
                 last = loop.time()
             except asyncio.CancelledError:
-                return
+                break
             except Exception:
                 logging.exception("Failed to flush IRC queue")
 
             self._queue.task_done()
+
+        logging.debug("IRC event queue ended")
 
     def send_raw(self, string):
         self._queue.put_nowait(string)

@@ -137,7 +137,7 @@ class BridgeAppService(AppService):
             except RoomInvalidError:
                 logging.info(f"Event handler for {event['type']} threw RoomInvalidError, leaving and cleaning up.")
                 self.unregister_room(room.id)
-                await room.cleanup()
+                room.cleanup()
 
                 try:
                     await self.api.post_room_leave(room.id)
@@ -386,7 +386,7 @@ class BridgeAppService(AppService):
                 if room.is_valid():
                     self._rooms[room_id] = room
                 else:
-                    await room.cleanup()
+                    room.cleanup()
                     raise Exception("Room validation failed after init")
             except Exception:
                 logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")

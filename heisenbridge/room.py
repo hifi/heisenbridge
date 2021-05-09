@@ -50,8 +50,8 @@ class Room(ABC):
     def is_valid(self) -> bool:
         return True
 
-    async def cleanup(self):
-        pass
+    def cleanup(self):
+        self._queue.stop()
 
     def to_config(self) -> dict:
         return {}

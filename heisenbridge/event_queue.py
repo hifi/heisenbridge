@@ -17,22 +17,28 @@ class EventQueue:
         self._task = None
         self._timeout = 3600
 
-    def __del__(self):
-        self._task.cancel()
-
     def start(self):
         if self._task is None:
             self._task = asyncio.ensure_future(self._run())
+
+    def stop(self):
+        if self._task:
+            self._task.cancel()
+            self._task = None
 
     async def _run(self):
         while True:
             try:
                 task = await self._chain.get()
             except asyncio.CancelledError:
+                logging.debug("EventQueue was cancelled.")
                 return
 
             try:
                 await asyncio.wait_for(task, timeout=self._timeout)
+            except asyncio.CancelledError:
+                logging.debug("EventQueue task was cancelled.")
+                return
             except asyncio.TimeoutError:
                 logging.warning("EventQueue task timed out.")
             finally:

@@ -198,10 +198,12 @@ class PrivateRoom(Room):
 
         return True
 
-    async def cleanup(self) -> None:
+    def cleanup(self) -> None:
         # cleanup us from network rooms
         if self.network and self.name in self.network.rooms:
             del self.network.rooms[self.name]
+
+        super().cleanup()
 
     def on_privmsg(self, conn, event) -> None:
         if self.network is None:

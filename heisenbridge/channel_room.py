@@ -105,12 +105,12 @@ class ChannelRoom(PrivateRoom):
 
         return super().is_valid()
 
-    async def cleanup(self) -> None:
+    def cleanup(self) -> None:
         if self.network:
             if self.network.conn and self.network.conn.connected:
                 self.network.conn.part(self.name)
-            if self.name in self.network.rooms:
-                del self.network.rooms[self.name]
+
+        super().cleanup()
 
     async def cmd_mode(self, args) -> None:
         self.network.conn.mode(self.name, " ".join(args.args))

@@ -1,6 +1,8 @@
 import asyncio
 import logging
 import re
+from datetime import datetime
+from datetime import timezone
 from html import escape
 from typing import Optional
 from typing import Tuple
@@ -12,6 +14,15 @@ from heisenbridge.room import Room
 
 class NetworkRoom:
     pass
+
+
+def unix_to_local(timestamp: Optional[str]):
+    try:
+        dt = datetime.fromtimestamp(int(timestamp), timezone.utc)
+        return dt.strftime("%c %Z")  # intentionally UTC for now
+    except ValueError:
+        logging.debug("Tried to convert '{timestamp}' to int")
+        return timestamp
 
 
 # this is very naive and will break html tag close/open order right now

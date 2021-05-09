@@ -457,9 +457,9 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("umodeis", self.on_umodeis)
                     self.conn.add_global_handler("channelmodeis", self.on_pass0)
                     self.conn.add_global_handler("channelcreate", self.on_pass0)
-                    self.conn.add_global_handler("notopic", self.on_pass)
+                    self.conn.add_global_handler("notopic", self.on_pass0)
                     self.conn.add_global_handler("currenttopic", self.on_pass0)
-                    # self.conn.add_global_handler("topicinfo", self.on_server_message) # not needed right now
+                    self.conn.add_global_handler("topicinfo", self.on_pass0)
                     self.conn.add_global_handler("namreply", self.on_pass1)
                     self.conn.add_global_handler("endofnames", self.on_pass0)
                     self.conn.add_global_handler("banlist", self.on_pass0)
@@ -483,7 +483,7 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("nochanmodes", self.on_pass)
                     self.conn.add_global_handler("banlistfull", self.on_pass)
                     self.conn.add_global_handler("cannotknock", self.on_pass)
-                    self.conn.add_global_handler("chanoprivsneeded", self.on_pass)
+                    self.conn.add_global_handler("chanoprivsneeded", self.on_pass0)
 
                     # protocol
                     # FIXME: error

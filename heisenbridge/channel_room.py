@@ -1,12 +1,12 @@
 import asyncio
 import logging
-from datetime import datetime
 from typing import Dict
 from typing import List
 from typing import Optional
 
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.private_room import PrivateRoom
+from heisenbridge.private_room import unix_to_local
 
 
 class NetworkRoom:
@@ -29,6 +29,10 @@ class ChannelRoom(PrivateRoom):
 
         cmd = CommandParser(prog="NAMES", description="resynchronize channel members")
         self.commands.register(cmd, self.cmd_names)
+
+        cmd = CommandParser(prog="TOPIC", description="show or set channel topic")
+        cmd.add_argument("text", nargs="*", help="topic text if setting")
+        self.commands.register(cmd, self.cmd_topic)
 
         cmd = CommandParser(prog="BANS", description="show channel ban list")
         self.commands.register(cmd, self.cmd_bans)
@@ -272,6 +276,15 @@ class ChannelRoom(PrivateRoom):
                     self.key = key
                     asyncio.ensure_future(self.save())
 
+    def on_badchannelkey(self, conn, event) -> None:
+        self.send_notice(event.arguments[1] if len(event.arguments) > 1 else "Incorrect channel key, join failed.")
+        self.send_notice_html(
+            f"Use <b>JOIN {event.arguments[0]} &lt;key&gt;</b> in the network room to rejoin this channel."
+        )
+
+    def on_chanoprivsneeded(self, conn, event) -> None:
+        self.send_notice(event.arguments[1] if len(event.arguments) > 1 else "You're not operator.")
+
     def on_mode(self, conn, event) -> None:
         modes = list(event.arguments)
 
@@ -279,10 +292,16 @@ class ChannelRoom(PrivateRoom):
         self.update_key(modes)
 
     def on_notopic(self, conn, event) -> None:
+        self.send_notice(event.arguments[1] if len(event.arguments) > 1 else "No topic is set.")
         self.set_topic("")
 
     def on_currenttopic(self, conn, event) -> None:
+        self.send_notice(f"Topic is '{event.arguments[1]}'")
         self.set_topic(event.arguments[1])
+
+    def on_topicinfo(self, conn, event) -> None:
+        settime = unix_to_local(event.arguments[2]) if len(event.arguments) > 2 else "?"
+        self.send_notice(f"Topic set by {event.arguments[1]} at {settime}")
 
     def on_topic(self, conn, event) -> None:
         self.send_notice("{} changed the topic".format(event.source.nick))
@@ -307,8 +326,15 @@ class ChannelRoom(PrivateRoom):
 
         self.send_notice("Current channel bans:")
         for ban in bans:
-            bantime = datetime.utcfromtimestamp(int(ban[2])).strftime("%c %Z")
-            self.send_notice(f"\t{ban[0]} set by {ban[1]} at {bantime}")
+            strban = f"\t{ban[0]}"
+
+            # all other argumenta are optional
+            if len(ban) > 1:
+                strban += f" set by {ban[1]}"
+            if len(ban) > 2:
+                strban += f" at {unix_to_local(ban[2])}"
+
+            self.send_notice(strban)
 
     def on_channelmodeis(self, conn, event) -> None:
         modes = list(event.arguments)
@@ -318,5 +344,5 @@ class ChannelRoom(PrivateRoom):
         self.update_key(modes)
 
     def on_channelcreate(self, conn, event) -> None:
-        created = datetime.utcfromtimestamp(int(event.arguments[1])).strftime("%c %Z")
+        created = unix_to_local(event.arguments[1])
         self.send_notice(f"Channel was created at {created}")

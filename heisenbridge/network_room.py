@@ -697,15 +697,18 @@ class NetworkRoom(Room):
         # special case where only cases change, ensure will update displayname sometime in the future
         if old_irc_user_id == new_irc_user_id:
             asyncio.ensure_future(self.serv.ensure_irc_user_id(self.name, event.target))
-            return
 
         # leave and join channels
         for room in self.rooms.values():
             if type(room) is ChannelRoom and room.in_room(old_irc_user_id):
                 # notify mx user about the change
-                room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
-                room._remove_puppet(old_irc_user_id)
-                room._add_puppet(event.target)
+                if old_irc_user_id != new_irc_user_id:
+                    room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
+                    room._remove_puppet(old_irc_user_id)
+                    room._add_puppet(event.target)
+                else:
+                    # update displayname in room even if only cases change
+                    room.displaynames[new_irc_user_id] = event.target
 
     def on_nicknameinuse(self, conn, event) -> None:
         newnick = event.arguments[0] + "_"

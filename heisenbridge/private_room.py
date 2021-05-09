@@ -4,6 +4,7 @@ import re
 from datetime import datetime
 from datetime import timezone
 from html import escape
+from typing import Dict
 from typing import Optional
 from typing import Tuple
 
@@ -127,6 +128,7 @@ class PrivateRoom(Room):
     network_name: str
 
     commands: CommandManager
+    displaynames: Dict[str, str]
 
     def init(self) -> None:
         self.name = None
@@ -134,6 +136,7 @@ class PrivateRoom(Room):
         self.network_name = None
 
         self.commands = CommandManager()
+        self.displaynames = {}
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -262,8 +265,19 @@ class PrivateRoom(Room):
             self.send_notice("Not connected to network.")
             return
 
+        body = None
+        if "body" in event["content"]:
+            body = event["content"]["body"]
+
+            # replace mentioning us with our name
+            body = body.replace(self.serv.user_id, "Heisenbridge")
+
+            # try to replace puppet matrix id mentions with displaynames
+            for user_id, displayname in self.displaynames.items():
+                body = body.replace(user_id, displayname)
+
         if event["content"]["msgtype"] == "m.emote":
-            self.network.conn.action(self.name, event["content"]["body"])
+            self.network.conn.action(self.name, body)
         elif event["content"]["msgtype"] == "m.image":
             self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event["content"]["url"]))
         elif event["content"]["msgtype"] == "m.text":
@@ -272,7 +286,7 @@ class PrivateRoom(Room):
                 return
 
             # allow commanding the appservice in rooms
-            match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", event["content"]["body"])
+            match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", body)
             if match and match.group(1).lower() == "heisenbridge":
                 try:
                     await self.commands.trigger(match.group(2))
@@ -281,7 +295,7 @@ class PrivateRoom(Room):
                 finally:
                     return
 
-            for line in event["content"]["body"].split("\n"):
+            for line in body.split("\n"):
                 if line == "":
                     continue
 

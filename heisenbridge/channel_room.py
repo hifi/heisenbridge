@@ -23,11 +23,32 @@ class ChannelRoom(PrivateRoom):
 
         self.key = None
 
-        cmd = CommandParser(prog="MODE", description="send MODE command")
+        cmd = CommandParser(
+            prog="MODE",
+            description="send MODE command",
+            epilog=(
+                "Can be used to change channel modes, ban lists or invoke/manage custom lists.\n"
+                "It is very network specific what modes or lists are supported, please see their documentation"
+                " for comprehensive help.\n"
+                "\n"
+                "Note: Some common modes and lists may have a command, see HELP.\n"
+            ),
+        )
         cmd.add_argument("args", nargs="*", help="MODE command arguments")
         self.commands.register(cmd, self.cmd_mode)
 
-        cmd = CommandParser(prog="NAMES", description="resynchronize channel members")
+        cmd = CommandParser(
+            prog="NAMES",
+            description="list channel members",
+            epilog=(
+                "Sends a NAMES command to server.\n"
+                "\n"
+                "This can be used to see what IRC permissions users currently have on this channel.\n"
+                "\n"
+                "Note: In addition this will resynchronize the Matrix room members list and may cause joins/leaves"
+                " if it has fallen out of sync.\n"
+            ),
+        )
         self.commands.register(cmd, self.cmd_names)
 
         cmd = CommandParser(prog="TOPIC", description="show or set channel topic")

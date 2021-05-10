@@ -11,46 +11,59 @@ class ControlRoom(Room):
     def init(self):
         self.commands = CommandManager()
 
-        cmd = CommandParser(prog="NETWORKS", description="List networks")
+        cmd = CommandParser(prog="NETWORKS", description="list available networks")
         self.commands.register(cmd, self.cmd_networks)
 
-        cmd = CommandParser(prog="SERVERS", description="List servers")
-        cmd.add_argument("network", help="network name")
+        cmd = CommandParser(prog="SERVERS", description="list servers for a network")
+        cmd.add_argument("network", help="network name (see NETWORKS)")
         self.commands.register(cmd, self.cmd_servers)
 
-        cmd = CommandParser(prog="OPEN", description="Open network room to connect")
-        cmd.add_argument("name", help="network name")
+        cmd = CommandParser(prog="OPEN", description="open network for connecting")
+        cmd.add_argument("name", help="network name (see NETWORKS)")
         self.commands.register(cmd, self.cmd_open)
 
         if self.serv.is_admin(self.user_id):
-            cmd = CommandParser(prog="MASKS", description="List allow masks")
+            cmd = CommandParser(prog="MASKS", description="list allow masks")
             self.commands.register(cmd, self.cmd_masks)
 
-            cmd = CommandParser(prog="ADDMASK", description="Add allow mask")
+            cmd = CommandParser(
+                prog="ADDMASK",
+                description="add new allow mask",
+                epilog=(
+                    "For anyone else than the owner to use this bridge they need to be allowed to talk with the bridge bot.\n"
+                    "This is accomplished by adding an allow mask that determines their permission level when using the bridge.\n"
+                    "\n"
+                    "Only admins can manage networks, normal users can just connect.\n"
+                ),
+            )
             cmd.add_argument("mask", help="Matrix ID mask (eg: @friend:contoso.com or *:contoso.com)")
             cmd.add_argument("--admin", help="Admin level access", action="store_true")
             self.commands.register(cmd, self.cmd_addmask)
 
-            cmd = CommandParser(prog="DELMASK", description="Remove allow mask")
+            cmd = CommandParser(
+                prog="DELMASK",
+                description="delete allow mask",
+                epilog="Note: Removing a mask only prevents starting a new DM with the bridge bot.",
+            )
             cmd.add_argument("mask", help="Matrix ID mask (eg: @friend:contoso.com or *:contoso.com)")
             self.commands.register(cmd, self.cmd_delmask)
 
-            cmd = CommandParser(prog="ADDNETWORK", description="Add network")
+            cmd = CommandParser(prog="ADDNETWORK", description="add new network")
             cmd.add_argument("name", help="network name")
             self.commands.register(cmd, self.cmd_addnetwork)
 
-            cmd = CommandParser(prog="DELNETWORK", description="Delete network")
+            cmd = CommandParser(prog="DELNETWORK", description="delete network")
             cmd.add_argument("name", help="network name")
             self.commands.register(cmd, self.cmd_delnetwork)
 
-            cmd = CommandParser(prog="ADDSERVER", description="Add server to network")
+            cmd = CommandParser(prog="ADDSERVER", description="add server to a network")
             cmd.add_argument("network", help="network name")
             cmd.add_argument("address", help="server address")
             cmd.add_argument("port", nargs="?", type=int, help="server port", default=6667)
             cmd.add_argument("--tls", action="store_true", help="use TLS encryption", default=False)
             self.commands.register(cmd, self.cmd_addserver)
 
-            cmd = CommandParser(prog="DELSERVER", description="Delete server from network")
+            cmd = CommandParser(prog="DELSERVER", description="delete server from a network")
             cmd.add_argument("network", help="network name")
             cmd.add_argument("address", help="server address")
             cmd.add_argument("port", nargs="?", type=int, help="server port", default=6667)

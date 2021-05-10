@@ -2,11 +2,22 @@ import argparse
 import shlex
 
 
+class CommandParserFormatter(argparse.ArgumentDefaultsHelpFormatter, argparse.RawTextHelpFormatter):
+    pass
+
+
 class CommandParserError(Exception):
     pass
 
 
 class CommandParser(argparse.ArgumentParser):
+    def __init__(self, *args, formatter_class=CommandParserFormatter, **kwargs):
+        super().__init__(*args, formatter_class=formatter_class, **kwargs)
+
+    @property
+    def short_description(self):
+        return self.description.split("\n")[0]
+
     def error(self, message):
         raise CommandParserError(message)
 
@@ -39,7 +50,7 @@ class CommandManager:
         elif command == "HELP":
             out = ["Following commands are supported:", ""]
             for (cmd, func) in self._commands.values():
-                out.append("\t{} - {}".format(cmd.prog, cmd.description))
+                out.append("\t{} - {}".format(cmd.prog, cmd.short_description))
 
             out.append("")
             out.append("To get more help, add -h to any command without arguments.")

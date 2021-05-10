@@ -94,54 +94,141 @@ class NetworkRoom(Room):
         self.disconnect = True
         self.real_host = "?" * 63  # worst case default
 
-        cmd = CommandParser(prog="NICK", description="Change nickname")
+        cmd = CommandParser(
+            prog="NICK",
+            description="set/change nickname",
+            epilog=(
+                "You can always see your current nickname on the network without arguments.\n"
+                "If connected new nickname will be sent to the server immediately. It may be rejected and an underscore appended"
+                " to it automatically.\n"
+            ),
+        )
         cmd.add_argument("nick", nargs="?", help="new nickname")
         self.commands.register(cmd, self.cmd_nick)
 
-        cmd = CommandParser(prog="USERNAME", description="Change username")
+        cmd = CommandParser(
+            prog="USERNAME",
+            description="set username",
+            epilog=(
+                "Setting a new username requires reconnecting to the network.\n"
+                "\n"
+                "Note: If identd is enabled and you are a local user it will be replaced by the local part of your Matrix ID"
+                " automatically. Bridge admins have an exception where username will be respected and sent as their ident.\n"
+            ),
+        )
         cmd.add_argument("username", nargs="?", help="new username")
         cmd.add_argument("--remove", action="store_true", help="remove stored username")
         self.commands.register(cmd, self.cmd_username)
 
-        cmd = CommandParser(prog="IRCNAME", description="Change ircname")
+        cmd = CommandParser(
+            prog="IRCNAME",
+            description="set ircname (realname)",
+            epilog=("Setting a new ircname requires reconnecting to the network.\n"),
+        )
         cmd.add_argument("ircname", nargs="?", help="new ircname")
         cmd.add_argument("--remove", action="store_true", help="remove stored ircname")
         self.commands.register(cmd, self.cmd_ircname)
 
-        cmd = CommandParser(prog="PASSWORD", description="Set server password")
+        cmd = CommandParser(
+            prog="PASSWORD",
+            description="set server password",
+            epilog=(
+                "You can store your network password using this command and it will be automatically offered on connect.\n"
+                "Some networks allow using this to identify with NickServ on connect without sending a separate message.\n"
+                "\n"
+                "Note: Bridge administrators can trivially see the stored password if they want to.\n"
+            ),
+        )
         cmd.add_argument("password", nargs="?", help="new password")
         cmd.add_argument("--remove", action="store_true", help="remove stored password")
         self.commands.register(cmd, self.cmd_password)
 
-        cmd = CommandParser(prog="AUTOCMD", description="Run a RAW IRC command on connect (to identify)")
+        cmd = CommandParser(
+            prog="AUTOCMD",
+            description="send raw IRC command on connect (to identify)",
+            epilog=(
+                "If the network you are connecting to does not support server password to identify you automatically"
+                " can set this to send a command before joining channels.\n"
+                "\n"
+                "Example: AUTOCMD msg Q@CServe.quakenet.org :auth foo bar\n"
+                "\n"
+                "Note: The syntax of this command might change in the future.\n"
+            ),
+        )
         cmd.add_argument("command", nargs="*", help="raw IRC command")
         cmd.add_argument("--remove", action="store_true", help="remove stored command")
         self.commands.register(cmd, self.cmd_autocmd)
 
-        cmd = CommandParser(prog="CONNECT", description="Connect to network")
+        cmd = CommandParser(
+            prog="CONNECT",
+            description="connect to network",
+            epilog=(
+                "When this command is invoked the connection to this network will be persisted across disconnects and"
+                " bridge restart.\n"
+                "Only if the server KILLs your connection it will stay disconnected until CONNECT is invoked again.\n"
+                "\n"
+                "If you want to cancel automatic reconnect you need to issue the DISCONNECT command.\n"
+            ),
+        )
         self.commands.register(cmd, self.cmd_connect)
 
-        cmd = CommandParser(prog="DISCONNECT", description="Disconnect from network")
+        cmd = CommandParser(
+            prog="DISCONNECT",
+            description="disconnect from network",
+            epilog=(
+                "In addition to disconnecting from an active network connection this will also cancel any automatic"
+                "reconnection attempt.\n"
+            ),
+        )
         self.commands.register(cmd, self.cmd_disconnect)
 
-        cmd = CommandParser(prog="RECONNECT", description="Reconnect to network")
+        cmd = CommandParser(prog="RECONNECT", description="reconnect to network")
         self.commands.register(cmd, self.cmd_reconnect)
 
-        cmd = CommandParser(prog="RAW", description="Send raw IRC commands")
+        cmd = CommandParser(
+            prog="RAW",
+            description="send raw IRC commands",
+            epilog=(
+                "Arguments (text) are not quoted in any way so it's possible to send ANY command to the server.\n"
+                "This is meant as a last resort if the bridge does not have built-in support for some IRC command.\n"
+                "\n"
+                "Note: You may need to use colon (:) for multi-word arguments, see the IRC RFC for details.\n"
+            ),
+        )
         cmd.add_argument("text", nargs="+", help="raw text")
         self.commands.register(cmd, self.cmd_raw)
 
-        cmd = CommandParser(prog="QUERY", description="Start a private chat")
+        cmd = CommandParser(
+            prog="QUERY",
+            description="start a private chat",
+            epilog=(
+                "Creates a new DM with the target nick. They do not need to be connected for this command to work.\n"
+            ),
+        )
         cmd.add_argument("nick", help="target nickname")
         cmd.add_argument("message", nargs="*", help="optional message")
         self.commands.register(cmd, self.cmd_query)
 
-        cmd = CommandParser(prog="MSG", description="Send a message without opening a DM")
+        cmd = CommandParser(
+            prog="MSG",
+            description="send a message without opening a DM",
+            epilog=(
+                "If the target nick does not exist on the network an error reply may be generated by the server.\n"
+            ),
+        )
         cmd.add_argument("nick", help="target nickname")
         cmd.add_argument("message", nargs="+", help="message")
         self.commands.register(cmd, self.cmd_msg)
 
-        cmd = CommandParser(prog="JOIN", description="Join a channel")
+        cmd = CommandParser(
+            prog="JOIN",
+            description="join a channel",
+            epilog=(
+                "Any channels joined will be persisted between reconnects.\n"
+                "\n"
+                "Note: Bridge administrators can trivially see the stored channel key if they want to.\n"
+            ),
+        )
         cmd.add_argument("channel", help="target channel")
         cmd.add_argument("key", nargs="?", help="channel key")
         self.commands.register(cmd, self.cmd_join)

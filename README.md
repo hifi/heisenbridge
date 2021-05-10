@@ -1,7 +1,7 @@
 Heisenbridge
 ============
 
-a bouncer style Matrix IRC bridge.
+a bouncer-style Matrix IRC bridge.
 
 Heisenbridge brings IRC to Matrix by creating an environment where every user connects to each network individually like they would with a traditional IRC bouncer.
 Simplicity is achieved by exposing IRC in the most straightforward way as possible where it makes sense so it feels familiar for long time IRC users and prevents hiding protocol level events to help diagnose integration issues.
@@ -32,6 +32,14 @@ Features
 * customizable ident support
 * long message splitting directly to IRC
 * automatic identify/auth with server password or command on connect
+
+Docker
+------
+The master branch is automatically published to [Docker Hub](https://hub.docker.com/r/hif1/heisenbridge):
+```
+docker pull hif1/heisenbridge
+docker run --rm hif1/heisenbridge -h
+```
 
 Usage
 -----

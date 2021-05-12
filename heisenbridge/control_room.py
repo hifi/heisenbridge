@@ -61,6 +61,12 @@ class ControlRoom(Room):
             cmd.add_argument("address", help="server address")
             cmd.add_argument("port", nargs="?", type=int, help="server port", default=6667)
             cmd.add_argument("--tls", action="store_true", help="use TLS encryption", default=False)
+            cmd.add_argument(
+                "--tls-insecure",
+                action="store_true",
+                help="ignore TLS verification errors (hostname, self-signed, expired)",
+                default=False,
+            )
             self.commands.register(cmd, self.cmd_addserver)
 
             cmd = CommandParser(prog="DELSERVER", description="delete server from a network")
@@ -183,7 +189,13 @@ class ControlRoom(Room):
         self.send_notice(f"Configured servers for {network['name']}:")
 
         for server in network["servers"]:
-            self.send_notice(f"\t{server['address']}:{server['port']} {'with TLS' if server['tls'] else ''}")
+            with_tls = ""
+            if server["tls"]:
+                if "tls_insecure" in server and server["tls_insecure"]:
+                    with_tls = "with insecure TLS"
+                else:
+                    with_tls = "with TLS"
+            self.send_notice(f"\t{server['address']}:{server['port']} {with_tls}")
 
     async def cmd_addserver(self, args):
         networks = self.networks()
@@ -199,7 +211,7 @@ class ControlRoom(Room):
                 return self.send_notice("This server already exists.")
 
         self.serv.config["networks"][network["name"]]["servers"].append(
-            {"address": address, "port": args.port, "tls": args.tls}
+            {"address": address, "port": args.port, "tls": args.tls, "tls_insecure": args.tls_insecure}
         )
         await self.serv.save()
 

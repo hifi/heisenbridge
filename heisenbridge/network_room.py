@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+import ssl
 from argparse import Namespace
 from typing import Any
 from typing import Dict
@@ -521,14 +522,23 @@ class NetworkRoom(Room):
                     await asyncio.sleep(10)
 
                 try:
-                    self.send_notice(
-                        f"Connecting to {server['address']}:{server['port']}{' with TLS' if server['tls'] else ''}..."
-                    )
+                    with_tls = ""
+                    ssl_ctx = False
+                    if server["tls"]:
+                        ssl_ctx = ssl.SSLContext()
+                        if "tls_insecure" in server and server["tls_insecure"]:
+                            with_tls = " with insecure TLS"
+                            ssl_ctx.verify_mode = ssl.CERT_NONE
+                        else:
+                            with_tls = " with TLS"
+                            ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+
+                    self.send_notice(f"Connecting to {server['address']}:{server['port']}{with_tls}...")
 
                     reactor = HeisenReactor(loop=asyncio.get_event_loop())
                     irc_server = reactor.server()
                     irc_server.buffer_class = buffer.LenientDecodingLineBuffer
-                    factory = irc.connection.AioFactory(ssl=server["tls"])
+                    factory = irc.connection.AioFactory(ssl=ssl_ctx)
                     self.conn = await irc_server.connect(
                         server["address"],
                         server["port"],

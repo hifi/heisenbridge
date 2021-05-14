@@ -61,7 +61,7 @@ class Matrix:
                         raise self._matrix_error(data)
 
                     return data
-                except (ClientError, asyncio.exceptions.TimeoutError):
+                except (ClientError, asyncio.TimeoutError):
                     logging.warning(f"Request to HS failed, assuming it is down, retry {i+1}/60...")
                     await asyncio.sleep(30)
 

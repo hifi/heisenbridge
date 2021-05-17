@@ -326,6 +326,7 @@ class ControlRoom(Room):
         for room in rooms:
             if type(room) == NetworkRoom and room.conn and room.conn.connected:
                 self.send_notice(f"Disconnecting {args.user} from {room.name}...")
+                room.cmd_disconnect()
 
         self.send_notice(f"Leaving all {len(rooms)} rooms {args.user} was in...")
 
@@ -342,7 +343,7 @@ class ControlRoom(Room):
             except MatrixError:
                 pass
 
-        self.send_notice("Done, I have forgotten about {args.user}")
+        self.send_notice(f"Done, I have forgotten about {args.user}")
 
     async def cmd_open(self, args):
         networks = self.networks()
@@ -372,6 +373,7 @@ class ControlRoom(Room):
         for room in rooms:
             if type(room) == NetworkRoom and room.conn and room.conn.connected:
                 self.send_notice(f"Disconnecting from {room.name}...")
+                room.cmd_disconnect()
 
         self.send_notice("Closing all channels and private messages...")
 

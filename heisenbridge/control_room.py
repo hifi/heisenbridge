@@ -1,4 +1,5 @@
 import asyncio
+from argparse import Namespace
 
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
@@ -326,7 +327,7 @@ class ControlRoom(Room):
         for room in rooms:
             if type(room) == NetworkRoom and room.conn and room.conn.connected:
                 self.send_notice(f"Disconnecting {args.user} from {room.name}...")
-                room.cmd_disconnect()
+                await room.cmd_disconnect(Namespace())
 
         self.send_notice(f"Leaving all {len(rooms)} rooms {args.user} was in...")
 
@@ -373,7 +374,7 @@ class ControlRoom(Room):
         for room in rooms:
             if type(room) == NetworkRoom and room.conn and room.conn.connected:
                 self.send_notice(f"Disconnecting from {room.name}...")
-                room.cmd_disconnect()
+                await room.cmd_disconnect(Namespace())
 
         self.send_notice("Closing all channels and private messages...")
 

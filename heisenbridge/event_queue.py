@@ -56,7 +56,7 @@ class EventQueue:
         now = self._loop.time()
 
         # always cancel timer when we enqueue
-        if self._timer and not self._timer.cancelled():
+        if self._timer:
             self._timer.cancel()
 
         # stamp start time when we queue first event, always append event

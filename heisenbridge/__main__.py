@@ -181,7 +181,15 @@ class BridgeAppService(AppService):
                 room = ControlRoom(id=event["room_id"], user_id=event["user_id"], serv=self, members=[event["user_id"]])
                 await room.save()
                 self.register_room(room)
-                await self.api.post_room_join(room.id)
+
+                # sometimes federated rooms take a while to join
+                for i in range(6):
+                    try:
+                        await self.api.post_room_join(room.id)
+                        break
+                    except MatrixForbidden:
+                        logging.debug("Responding to invite failed, retrying")
+                        await asyncio.sleep((i + 1) * 5)
 
                 # show help on open
                 await room.show_help()

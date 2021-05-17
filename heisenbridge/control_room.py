@@ -1,9 +1,12 @@
+import asyncio
+
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.matrix import MatrixError
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.room import Room
+from heisenbridge.room import RoomInvalidError
 
 
 class ControlRoom(Room):
@@ -22,6 +25,17 @@ class ControlRoom(Room):
         cmd = CommandParser(prog="OPEN", description="open network for connecting")
         cmd.add_argument("name", help="network name (see NETWORKS)")
         self.commands.register(cmd, self.cmd_open)
+
+        cmd = CommandParser(
+            prog="QUIT",
+            description="disconnect from all networks",
+            epilog=(
+                "For quickly leaving all networks and removing configurations in a single command.\n"
+                "\n"
+                "Additionally this will close current DM session with the bridge.\n"
+            ),
+        )
+        self.commands.register(cmd, self.cmd_quit)
 
         if self.serv.is_admin(self.user_id):
             cmd = CommandParser(prog="MASKS", description="list allow masks")
@@ -350,3 +364,33 @@ class ControlRoom(Room):
 
         self.send_notice(f"You have been invited to {network['name']}")
         await NetworkRoom.create(self.serv, network["name"], self.user_id)
+
+    async def cmd_quit(self, args):
+        rooms = self.serv.find_rooms(None, self.user_id)
+
+        # disconnect each network room in first pass
+        for room in rooms:
+            if type(room) == NetworkRoom and room.conn and room.conn.connected:
+                self.send_notice(f"Disconnecting from {room.name}...")
+
+        self.send_notice("Closing all channels and private messages...")
+
+        # then just forget everything
+        for room in rooms:
+            if room.id == self.id:
+                continue
+
+            self.serv.unregister_room(room.id)
+
+            try:
+                await self.serv.api.post_room_leave(room.id)
+            except MatrixError:
+                pass
+            try:
+                await self.serv.api.post_room_forget(room.id)
+            except MatrixError:
+                pass
+
+        self.send_notice("Goodbye!")
+        await asyncio.sleep(1)
+        raise RoomInvalidError("Leaving")

@@ -45,11 +45,14 @@ class BridgeAppService(AppService):
             del self._rooms[room_id]
 
     # this is mostly used by network rooms at init, it's a bit slow
-    def find_rooms(self, type, user_id=None) -> List[Room]:
+    def find_rooms(self, rtype=None, user_id=None) -> List[Room]:
         ret = []
 
+        if rtype is not None and type(rtype) != str:
+            rtype = rtype.__name__
+
         for room in self._rooms.values():
-            if room.__class__ == type and (user_id is None or room.user_id == user_id):
+            if (rtype is None or room.__class__.__name__ == rtype) and (user_id is None or room.user_id == user_id):
                 ret.append(room)
 
         return ret

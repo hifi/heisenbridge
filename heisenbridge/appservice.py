@@ -54,5 +54,5 @@ class AppService(ABC):
         pass
 
     @abstractmethod
-    def find_rooms(self, type, user_id: str = None) -> List[Room]:
+    def find_rooms(self, type=None, user_id: str = None) -> List[Room]:
         pass

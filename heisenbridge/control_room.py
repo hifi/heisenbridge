@@ -1,6 +1,7 @@
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
+from heisenbridge.matrix import MatrixError
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.room import Room
 
@@ -43,7 +44,10 @@ class ControlRoom(Room):
             cmd = CommandParser(
                 prog="DELMASK",
                 description="delete allow mask",
-                epilog="Note: Removing a mask only prevents starting a new DM with the bridge bot.",
+                epilog=(
+                    "Note: Removing a mask only prevents starting a new DM with the bridge bot. Use FORGET for ending existing"
+                    " sessions."
+                ),
             )
             cmd.add_argument("mask", help="Matrix ID mask (eg: @friend:contoso.com or *:contoso.com)")
             self.commands.register(cmd, self.cmd_delmask)
@@ -74,6 +78,24 @@ class ControlRoom(Room):
             cmd.add_argument("address", help="server address")
             cmd.add_argument("port", nargs="?", type=int, help="server port", default=6667)
             self.commands.register(cmd, self.cmd_delserver)
+
+            cmd = CommandParser(prog="STATUS", description="list active users")
+            self.commands.register(cmd, self.cmd_status)
+
+            cmd = CommandParser(
+                prog="FORGET",
+                description="remove all connections and configuration of a user",
+                epilog=(
+                    "Kills all connections of this user, removes all user set configuration and makes the bridge leave all rooms"
+                    " where this user is in.\n"
+                    "If the user still has an allow mask they can DM the bridge again to reconfigure and reconnect.\n"
+                    "\n"
+                    "This is meant as a way to kick users after removing an allow mask or resetting a user after losing access to"
+                    " existing account/rooms for any reason.\n"
+                ),
+            )
+            cmd.add_argument("user", help="Matrix ID (eg: @ex-friend:contoso.com)")
+            self.commands.register(cmd, self.cmd_forget)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -239,6 +261,74 @@ class ControlRoom(Room):
         await self.serv.save()
 
         self.send_notice("Server deleted.")
+
+    async def cmd_status(self, args):
+        users = set()
+
+        for room in self.serv.find_rooms():
+            users.add(room.user_id)
+
+        self.send_notice(f"I have {len(users)} known users:")
+        for user in users:
+            ncontrol = len(self.serv.find_rooms("ControlRoom", user))
+
+            self.send_notice(f"\t{user} ({ncontrol} open control rooms):")
+
+            for network in self.serv.find_rooms("NetworkRoom", user):
+                connected = "not connected"
+                channels = "not on any channel"
+                privates = "not in any DMs"
+
+                if network.conn and network.conn.connected:
+                    connected = f"connected as {network.conn.real_nickname}"
+
+                nchannels = 0
+                nprivates = 0
+
+                for room in network.rooms.values():
+                    if type(room).__name__ == "PrivateRoom":
+                        nprivates += 1
+                    if type(room).__name__ == "ChannelRoom":
+                        nchannels += 1
+
+                if nprivates > 0:
+                    privates = f"in {nprivates} DMs"
+
+                if nchannels > 0:
+                    channels = f"on {nchannels} channels"
+
+                self.send_notice(f"\t\t{network.name}, {connected}, {channels}, {privates}")
+
+    async def cmd_forget(self, args):
+        if args.user == self.user_id:
+            return self.send_notice("I can't forget you, silly!")
+
+        rooms = self.serv.find_rooms(None, args.user)
+
+        if len(rooms) == 0:
+            return self.send_notice("No such user. See STATUS for list of users.")
+
+        # disconnect each network room in first pass
+        for room in rooms:
+            if type(room) == NetworkRoom and room.conn and room.conn.connected:
+                self.send_notice(f"Disconnecting {args.user} from {room.name}...")
+
+        self.send_notice(f"Leaving all {len(rooms)} rooms {args.user} was in...")
+
+        # then just forget everything
+        for room in rooms:
+            self.serv.unregister_room(room.id)
+
+            try:
+                await self.serv.api.post_room_leave(room.id)
+            except MatrixError:
+                pass
+            try:
+                await self.serv.api.post_room_forget(room.id)
+            except MatrixError:
+                pass
+
+        self.send_notice("Done, I have forgotten about {args.user}")
 
     async def cmd_open(self, args):
         networks = self.networks()

@@ -525,7 +525,7 @@ class NetworkRoom(Room):
                     with_tls = ""
                     ssl_ctx = False
                     if server["tls"]:
-                        ssl_ctx = ssl.SSLContext()
+                        ssl_ctx = ssl.create_default_context()
                         if "tls_insecure" in server and server["tls_insecure"]:
                             with_tls = " with insecure TLS"
                             ssl_ctx.verify_mode = ssl.CERT_NONE

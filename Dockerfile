@@ -9,5 +9,5 @@ RUN pip install -e . && \
 
 # identd also needs to be enabled with --identd in CMD
 EXPOSE 9898/tcp 113/tcp
-ENTRYPOINT ["/usr/local/bin/python", "-m", "heisenbridge"]
+ENTRYPOINT ["/usr/local/bin/python", "-m", "heisenbridge", "-l", "0.0.0.0"]
 CMD []

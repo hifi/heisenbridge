@@ -217,7 +217,7 @@ class BridgeAppService(AppService):
                     "GET",
                     "https://{}/.well-known/matrix/client".format(self.server_name),
                 )
-                data = await resp.json()
+                data = await resp.json(content_type=None)
                 return data["m.homeserver"]["base_url"]
             except Exception:
                 logging.debug("Did not find .well-known for HS")
@@ -225,7 +225,7 @@ class BridgeAppService(AppService):
             # try https directly
             try:
                 resp = await session.request("GET", "https://{}/_matrix/client/versions".format(self.server_name))
-                await resp.json()
+                await resp.json(content_type=None)
                 return "https://{}".format(self.server_name)
             except Exception:
                 logging.debug("Could not use direct connection to HS")

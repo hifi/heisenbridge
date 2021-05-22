@@ -95,27 +95,64 @@ class Room(ABC):
     async def _flush_events(self, events):
         for event in events:
             try:
-                if event["type"] == "_invite":
-                    if not self.serv.synapse_admin:
-                        await self.serv.api.post_room_invite(self.id, event["user_id"])
-                elif event["type"] == "_join":
-                    if not self.serv.synapse_admin:
-                        await self.serv.api.post_room_join(self.id, event["user_id"])
-                    else:
-                        await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
-
+                if event["type"] == "_join":
                     if event["user_id"] not in self.members:
-                        self.members.append(event["user_id"])
+                        if not self.serv.synapse_admin:
+                            await self.serv.api.post_room_invite(self.id, event["user_id"])
+                            await self.serv.api.post_room_join(self.id, event["user_id"])
+                        else:
+                            await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
+
+                            self.members.append(event["user_id"])
                 elif event["type"] == "_leave":
                     if event["user_id"] in self.members:
+                        await self.serv.api.post_room_leave(self.id, event["user_id"])
                         self.members.remove(event["user_id"])
+                elif event["type"] == "_rename":
+                    old_irc_user_id = self.serv.irc_user_id(self.network.name, event["old_nick"])
 
-                    await self.serv.api.post_room_leave(self.id, event["user_id"])
+                    # this event is created for all rooms, skip if irrelevant
+                    if old_irc_user_id not in self.members:
+                        continue
+
+                    new_irc_user_id = self.serv.irc_user_id(self.network.name, event["new_nick"])
+
+                    # check if we can just update the displayname
+                    if old_irc_user_id != new_irc_user_id:
+                        # ensure we have the new puppet
+                        await self.serv.ensure_irc_user_id(self.network.name, event["new_nick"])
+
+                        # and we need to announce in the room immediately
+                        await self.serv.api.put_room_send_event(
+                            self.id,
+                            "m.room.message",
+                            {
+                                "msgtype": "m.notice",
+                                "body": f"{event['old_nick']} is changing nick to {event['new_nick']}",
+                            },
+                        )
+
+                        # old puppet away
+                        await self.serv.api.post_room_leave(self.id, old_irc_user_id)
+                        self.members.remove(old_irc_user_id)
+
+                        # new puppet in
+                        if new_irc_user_id not in self.members:
+                            if not self.serv.synapse_admin:
+                                await self.serv.api.post_room_invite(self.id, new_irc_user_id)
+                                await self.serv.api.post_room_join(self.id, new_irc_user_id)
+                            else:
+                                await self.serv.api.post_synapse_admin_room_join(self.id, new_irc_user_id)
+
+                            self.members.append(new_irc_user_id)
+                    else:
+                        # update displayname in room even if only cases change
+                        self.displaynames[new_irc_user_id] = event["displayname"]
+
                 elif event["type"] == "_kick":
                     if event["user_id"] in self.members:
+                        await self.serv.api.post_room_kick(self.id, event["user_id"], event["reason"])
                         self.members.remove(event["user_id"])
-
-                    await self.serv.api.post_room_kick(self.id, event["user_id"], event["reason"])
                 elif event["type"] == "_ensure_irc_user_id":
                     await self.serv.ensure_irc_user_id(event["network"], event["nick"])
                 elif "state_key" in event:
@@ -123,12 +160,33 @@ class Room(ABC):
                         self.id, event["type"], event["state_key"], event["content"], event["user_id"]
                     )
                 else:
+                    # if we get an event from unknown user (outside room for some reason) we may have a fallback
+                    if event["user_id"] is not None and event["user_id"] not in self.members:
+                        if "fallback_html" in event and event["fallback_html"] is not None:
+                            fallback_html = event["fallback_html"]
+                        else:
+                            fallback_html = (
+                                f"{event['user_id']} sent {event['type']} but is not in the room, this is a bug."
+                            )
+
+                        # create fallback event
+                        event["content"] = {
+                            "msgtype": "m.notice",
+                            "body": re.sub("<[^<]+?>", "", event["fallback_html"]),
+                            "format": "org.matrix.custom.html",
+                            "formatted_body": fallback_html,
+                        }
+
+                        # unpuppet
+                        event["user_id"] = None
                     await self.serv.api.put_room_send_event(self.id, event["type"], event["content"], event["user_id"])
             except Exception:
                 logging.exception("Queued event failed")
 
     # send message to mx user (may be puppeted)
-    def send_message(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
+    def send_message(
+        self, text: str, user_id: Optional[str] = None, formatted=None, fallback_html: Optional[str] = None
+    ) -> None:
         if formatted:
             event = {
                 "type": "m.room.message",
@@ -139,6 +197,7 @@ class Room(ABC):
                     "formatted_body": formatted,
                 },
                 "user_id": user_id,
+                "fallback_html": fallback_html,
             }
         else:
             event = {
@@ -148,12 +207,13 @@ class Room(ABC):
                     "body": text,
                 },
                 "user_id": user_id,
+                "fallback_html": fallback_html,
             }
 
         self._queue.enqueue(event)
 
     # send emote to mx user (may be puppeted)
-    def send_emote(self, text: str, user_id: Optional[str] = None) -> None:
+    def send_emote(self, text: str, user_id: Optional[str] = None, fallback_html: Optional[str] = None) -> None:
         event = {
             "type": "m.room.message",
             "content": {
@@ -161,12 +221,15 @@ class Room(ABC):
                 "body": text,
             },
             "user_id": user_id,
+            "fallback_html": fallback_html,
         }
 
         self._queue.enqueue(event)
 
     # send notice to mx user (may be puppeted)
-    def send_notice(self, text: str, user_id: Optional[str] = None, formatted=None) -> None:
+    def send_notice(
+        self, text: str, user_id: Optional[str] = None, formatted=None, fallback_html: Optional[str] = None
+    ) -> None:
         if formatted:
             event = {
                 "type": "m.room.message",
@@ -177,6 +240,7 @@ class Room(ABC):
                     "formatted_body": formatted,
                 },
                 "user_id": user_id,
+                "fallback_html": fallback_html,
             }
         else:
             event = {
@@ -186,6 +250,7 @@ class Room(ABC):
                     "body": text,
                 },
                 "user_id": user_id,
+                "fallback_html": fallback_html,
             }
 
         self._queue.enqueue(event)
@@ -217,15 +282,6 @@ class Room(ABC):
 
         self._queue.enqueue(event)
 
-    def invite(self, user_id: str) -> None:
-        event = {
-            "type": "_invite",
-            "content": {},
-            "user_id": user_id,
-        }
-
-        self._queue.enqueue(event)
-
     def join(self, user_id: str) -> None:
         event = {
             "type": "_join",
@@ -240,6 +296,16 @@ class Room(ABC):
             "type": "_leave",
             "content": {},
             "user_id": user_id,
+        }
+
+        self._queue.enqueue(event)
+
+    def rename(self, old_nick: str, new_nick: str) -> None:
+        event = {
+            "type": "_rename",
+            "content": {},
+            "old_nick": old_nick,
+            "new_nick": new_nick,
         }
 
         self._queue.enqueue(event)

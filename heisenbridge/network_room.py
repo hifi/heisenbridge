@@ -787,8 +787,7 @@ class NetworkRoom(Room):
         # leave channels
         for room in self.rooms.values():
             if type(room) is ChannelRoom:
-                if room.in_room(irc_user_id):
-                    asyncio.ensure_future(self.serv.api.post_room_leave(room.id, irc_user_id))
+                room._remove_puppet(irc_user_id)
 
     def on_nick(self, conn, event) -> None:
         old_irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
@@ -800,15 +799,8 @@ class NetworkRoom(Room):
 
         # leave and join channels
         for room in self.rooms.values():
-            if type(room) is ChannelRoom and room.in_room(old_irc_user_id):
-                # notify mx user about the change
-                if old_irc_user_id != new_irc_user_id:
-                    room.send_notice("{} is changing nick to {}".format(event.source.nick, event.target))
-                    room._remove_puppet(old_irc_user_id)
-                    room._add_puppet(event.target)
-                else:
-                    # update displayname in room even if only cases change
-                    room.displaynames[new_irc_user_id] = event.target
+            if type(room) is ChannelRoom:
+                room.rename(event.source.nick, event.target)
 
     def on_nicknameinuse(self, conn, event) -> None:
         newnick = event.arguments[0] + "_"

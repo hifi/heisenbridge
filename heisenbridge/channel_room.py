@@ -175,20 +175,12 @@ class ChannelRoom(PrivateRoom):
         # keep displayname map fresh
         self.displaynames[irc_user_id] = nick
 
-        # assume adding puppet will work, prevents messages from outside the room being queued
-        if irc_user_id not in self.members:
-            self.members.append(irc_user_id)
-
         self.ensure_irc_user_id(self.network.name, nick)
-        self.invite(irc_user_id)
         self.join(irc_user_id)
 
     def _remove_puppet(self, user_id):
         if user_id == self.serv.user_id or user_id == self.user_id:
             return
-
-        if user_id in self.displaynames:
-            del self.displaynames[user_id]
 
         self.leave(user_id)
 
@@ -286,10 +278,6 @@ class ChannelRoom(PrivateRoom):
             return
 
         irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)
-
-        if irc_user_id not in self.members:
-            return
-
         self._remove_puppet(irc_user_id)
 
     def update_key(self, modes):
@@ -340,9 +328,6 @@ class ChannelRoom(PrivateRoom):
     def on_kick(self, conn, event) -> None:
         target_user_id = self.serv.irc_user_id(self.network.name, event.arguments[0])
         self.kick(target_user_id, f"Kicked by {event.source.nick}: {event.arguments[1]}")
-
-        if target_user_id in self.members:
-            self.members.remove(target_user_id)
 
     def on_banlist(self, conn, event) -> None:
         parts = list(event.arguments)

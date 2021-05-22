@@ -212,13 +212,14 @@ class PrivateRoom(Room):
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
         (plain, formatted) = parse_irc_formatting(event.arguments[0])
+        self.send_message(
+            plain,
+            irc_user_id,
+            formatted=formatted,
+            fallback_html="<b>Message from {}</b>: {}".format(str(event.source), plain),
+        )
 
-        if irc_user_id in self.members:
-            self.send_message(plain, irc_user_id, formatted=formatted)
-        else:
-            self.send_notice_html("<b>Message from {}</b>: {}".format(str(event.source), plain))
-
-        # if the user has left this room invite them back
+        # if the local user has left this room invite them back
         if self.user_id not in self.members:
             asyncio.ensure_future(self.serv.api.post_room_invite(self.id, self.user_id))
 
@@ -228,18 +229,19 @@ class PrivateRoom(Room):
 
         (plain, formatted) = parse_irc_formatting(event.arguments[0])
 
-        # if the user has left this room notify in network
+        # if the local user has left this room notify in network
         if self.user_id not in self.members:
             source = self.network.source_text(conn, event)
             self.network.send_notice_html(f"Notice from <b>{source}:</b> {formatted if formatted else plain}")
             return
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
-
-        if irc_user_id in self.members:
-            self.send_notice(plain, irc_user_id, formatted=formatted)
-        else:
-            self.send_notice_html(f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else plain}")
+        self.send_notice(
+            plain,
+            irc_user_id,
+            formatted=formatted,
+            fallback_html=f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else plain}",
+        )
 
     def on_ctcp(self, conn, event) -> None:
         if self.network is None:
@@ -251,11 +253,7 @@ class PrivateRoom(Room):
 
         if command == "ACTION" and len(event.arguments) > 1:
             (plain, formatted) = parse_irc_formatting(event.arguments[1])
-
-            if irc_user_id in self.members:
-                self.send_emote(plain, irc_user_id)
-            else:
-                self.send_notice_html(f"<b>Emote from {str(event.source)}</b>: {plain}")
+            self.send_emote(plain, irc_user_id, fallback_html=f"<b>Emote from {str(event.source)}</b>: {plain}")
         else:
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {command}</b (ignored)")
 

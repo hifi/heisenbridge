@@ -103,7 +103,7 @@ class Room(ABC):
                         else:
                             await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
 
-                            self.members.append(event["user_id"])
+                        self.members.append(event["user_id"])
                 elif event["type"] == "_leave":
                     if event["user_id"] in self.members:
                         await self.serv.api.post_room_leave(self.id, event["user_id"])

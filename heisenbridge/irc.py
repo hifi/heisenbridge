@@ -1,9 +1,12 @@
 import asyncio
+import base64
 import logging
 
+from irc.client import ServerConnectionError
 from irc.client_aio import AioConnection
 from irc.client_aio import AioReactor
 from irc.client_aio import IrcProtocol
+from irc.connection import AioFactory
 
 
 class HeisenProtocol(IrcProtocol):
@@ -51,6 +54,107 @@ class HeisenConnection(AioConnection):
         super().__init__(reactor)
         self._queue = asyncio.Queue()
         self._task = asyncio.ensure_future(self._run())
+
+        self._cap_event = asyncio.Event()
+        self._cap_sasl = False
+        self._authenticate_event = asyncio.Event()
+        self._authenticate_cont = False
+        self._authreply_event = asyncio.Event()
+        self._authreply_error = None
+
+        self.add_global_handler("cap", self._on_cap)
+        self.add_global_handler("authenticate", self._on_authenticate)
+        self.add_global_handler("903", self._on_auth_ok)
+        self.add_global_handler("904", self._on_auth_fail)
+        self.add_global_handler("908", self._on_auth_fail)
+
+    def _on_cap(self, connection, event):
+        if event.arguments and event.arguments[0] == "ACK":
+            self._cap_sasl = True
+
+        self._cap_event.set()
+
+    def _on_authenticate(self, connection, event):
+        self._authenticate_cont = event.target == "+"
+        self._authenticate_event.set()
+
+    def _on_auth_ok(self, connection, event):
+        self._authreply_event.set()
+
+    def _on_auth_fail(self, connection, event):
+        self._authreply_error = event.arguments[0]
+        self._authreply_event.set()
+
+    async def connect(
+        self,
+        server,
+        port,
+        nickname,
+        password=None,
+        username=None,
+        ircname=None,
+        connect_factory=AioFactory(),
+        sasl_username=None,
+        sasl_password=None,
+    ):
+        if self.connected:
+            self.disconnect("Changing servers")
+
+        self.buffer = self.buffer_class()
+        self.handlers = {}
+        self.real_server_name = ""
+        self.real_nickname = nickname
+        self.server = server
+        self.port = port
+        self.server_address = (server, port)
+        self.nickname = nickname
+        self.username = username or nickname
+        self.ircname = ircname or nickname
+        self.password = password
+        self.connect_factory = connect_factory
+
+        protocol_instance = self.protocol_class(self, self.reactor.loop)
+        connection = self.connect_factory(protocol_instance, self.server_address)
+        transport, protocol = await connection
+
+        self.transport = transport
+        self.protocol = protocol
+
+        self.connected = True
+        self.reactor._on_connect(self.protocol, self.transport)
+
+        # SASL stuff
+        if sasl_username is not None and sasl_password is not None:
+            self.cap("REQ", "sasl")
+
+            try:
+                await asyncio.wait_for(self._cap_event.wait(), 30)
+
+                if not self._cap_sasl:
+                    raise ServerConnectionError("SASL requested but not supported.")
+
+                self.send_raw("AUTHENTICATE PLAIN")
+                await asyncio.wait_for(self._authenticate_event.wait(), 30)
+                if not self._authenticate_cont:
+                    raise ServerConnectionError("AUTHENTICATE was rejected.")
+
+                sasl = f"{sasl_username}\0{sasl_username}\0{sasl_password}"
+                self.send_raw("AUTHENTICATE " + base64.b64encode(sasl.encode("utf8")).decode("utf8"))
+                await asyncio.wait_for(self._authreply_event.wait(), 30)
+
+                if self._authreply_error is not None:
+                    raise ServerConnectionError(self._authreply_error)
+            except asyncio.TimeoutError:
+                raise ServerConnectionError("SASL authentication timed out.")
+
+            self.cap("END")
+
+        # Log on...
+        if self.password:
+            self.pass_(self.password)
+        self.nick(self.nickname)
+        self.user(self.username, self.ircname)
+        return self
 
     def close(self):
         logging.debug("Canceling IRC event queue")

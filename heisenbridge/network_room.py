@@ -70,6 +70,8 @@ class NetworkRoom(Room):
     username: str
     ircname: str
     password: str
+    sasl_username: str
+    sasl_password: str
     autocmd: str
 
     # state
@@ -86,6 +88,8 @@ class NetworkRoom(Room):
         self.username = None
         self.ircname = None
         self.password = None
+        self.sasl_username = None
+        self.sasl_password = None
         self.autocmd = None
 
         self.commands = CommandManager()
@@ -143,6 +147,20 @@ class NetworkRoom(Room):
         cmd.add_argument("password", nargs="?", help="new password")
         cmd.add_argument("--remove", action="store_true", help="remove stored password")
         self.commands.register(cmd, self.cmd_password)
+
+        cmd = CommandParser(
+            prog="SASL",
+            description="set SASL PLAIN credentials",
+            epilog=(
+                "If the network supports SASL authentication you can configure them with this command.\n"
+                "\n"
+                "Note: Bridge administrators can trivially see the stored password if they want to.\n"
+            ),
+        )
+        cmd.add_argument("--username", help="SASL username")
+        cmd.add_argument("--password", help="SASL password")
+        cmd.add_argument("--remove", action="store_true", help="remove stored credentials")
+        self.commands.register(cmd, self.cmd_sasl)
 
         cmd = CommandParser(
             prog="AUTOCMD",
@@ -267,6 +285,12 @@ class NetworkRoom(Room):
         if "password" in config:
             self.password = config["password"]
 
+        if "sasl_username" in config:
+            self.sasl_username = config["sasl_username"]
+
+        if "sasl_password" in config:
+            self.sasl_password = config["sasl_password"]
+
         if "autocmd" in config:
             self.autocmd = config["autocmd"]
 
@@ -278,6 +302,8 @@ class NetworkRoom(Room):
             "username": self.username,
             "ircname": self.ircname,
             "password": self.password,
+            "sasl_username": self.sasl_username,
+            "sasl_password": self.sasl_password,
             "autocmd": self.autocmd,
         }
 
@@ -452,6 +478,28 @@ class NetworkRoom(Room):
         await self.save()
         self.send_notice(f"Password set to {self.password}")
 
+    async def cmd_sasl(self, args) -> None:
+        if args.remove:
+            self.sasl_username = None
+            self.sasl_password = None
+            await self.save()
+            self.send_notice("SASL credentials removed.")
+            return
+
+        if args.username is None and args.password is None:
+            self.send_notice(f"SASL username: {self.sasl_username}")
+            self.send_notice(f"SASL password: {self.sasl_password}")
+            return
+
+        if args.username:
+            self.sasl_username = args.username
+
+        if args.password:
+            self.sasl_password = args.password
+
+        await self.save()
+        self.send_notice("SASL credentials updated.")
+
     async def cmd_autocmd(self, args) -> None:
         autocmd = " ".join(args.command)
 
@@ -536,6 +584,9 @@ class NetworkRoom(Room):
 
                     self.send_notice(f"Connecting to {server['address']}:{server['port']}{with_tls}...")
 
+                    if self.sasl_username and self.sasl_password:
+                        self.send_notice(f"Using SASL credentials for username {self.sasl_username}")
+
                     reactor = HeisenReactor(loop=asyncio.get_event_loop())
                     irc_server = reactor.server()
                     irc_server.buffer_class = buffer.LenientDecodingLineBuffer
@@ -548,6 +599,8 @@ class NetworkRoom(Room):
                         username=self.username,
                         ircname=self.ircname,
                         connect_factory=factory,
+                        sasl_username=self.sasl_username,
+                        sasl_password=self.sasl_password,
                     )
 
                     self.conn.add_global_handler("disconnect", self.on_disconnect)
@@ -621,9 +674,10 @@ class NetworkRoom(Room):
                     return
                 except TimeoutError:
                     self.send_notice("Connection timed out.")
-                except irc.client.ServerConnectionError:
-                    self.send_notice("Unexpected connection error, issue was logged.")
+                except irc.client.ServerConnectionError as e:
+                    self.send_notice(str(e))
                     logging.exception("Failed to connect")
+                    self.disconnect = True
                 except Exception as e:
                     self.send_notice(f"Failed to connect: {str(e)}")
                     logging.exception("Failed to connect")

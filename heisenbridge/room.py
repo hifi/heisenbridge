@@ -147,7 +147,7 @@ class Room(ABC):
                             self.members.append(new_irc_user_id)
                     else:
                         # update displayname in room even if only cases change
-                        self.displaynames[new_irc_user_id] = event["displayname"]
+                        self.displaynames[new_irc_user_id] = event["new_nick"]
 
                 elif event["type"] == "_kick":
                     if event["user_id"] in self.members:

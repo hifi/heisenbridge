@@ -261,7 +261,7 @@ class ChannelRoom(PrivateRoom):
     def on_join(self, conn, event) -> None:
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
-            self.send_notice("Joined channel.")
+            self.send_notice(f"Joined {event.target}")
             # sync channel modes/key on join
             self.network.conn.mode(self.name, "")
             return

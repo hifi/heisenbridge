@@ -52,8 +52,13 @@ class PlumbedRoom(ChannelRoom):
             self._queue.stop()
 
             for member in self.members:
-                if member.startswith("@" + self.serv.puppet_prefix):
-                    await self.serv.api.post_room_leave(self.id, member)
+                (name, server) = member.split(":")
+
+                if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:
+                    try:
+                        await self.serv.api.post_room_leave(self.id, member)
+                    except Exception:
+                        logging.exception("Removing puppet on relaybot leave failed")
 
         await super()._on_mx_room_member(event)
 
@@ -61,8 +66,10 @@ class PlumbedRoom(ChannelRoom):
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
             return
 
+        (name, server) = event["user_id"].split(":")
+
         # prevent re-sending federated messages back
-        if event["user_id"].startswith("@" + self.serv.puppet_prefix):
+        if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:
             return
 
         body = None
@@ -100,17 +107,23 @@ class PlumbedRoom(ChannelRoom):
                 finally:
                     return
 
+            messages = []
+
             for line in body.split("\n"):
                 if line == "":
                     continue
 
-                messages = split_long(
+                messages += split_long(
                     self.network.conn.real_nickname,
                     self.network.conn.user,
                     self.network.real_host,
                     self.name,
-                    line,
+                    f"<{event['user_id']}> {line}",
                 )
 
-                for message in messages:
-                    self.network.conn.privmsg(self.name, "<{}> {}".format(event["user_id"], body))
+            for i, message in enumerate(messages):
+                if i == 4:
+                    self.send_notice("Message was truncated to four lines for IRC.")
+                    self.network.conn.privmsg(self.name, "... (message truncated)")
+                    return
+                self.network.conn.privmsg(self.name, message)

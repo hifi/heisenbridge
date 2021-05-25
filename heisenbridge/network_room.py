@@ -1,8 +1,10 @@
 import asyncio
+import hashlib
 import logging
 import re
 import ssl
 from argparse import Namespace
+from base64 import b32encode
 from typing import Any
 from typing import Dict
 
@@ -118,8 +120,9 @@ class NetworkRoom(Room):
             epilog=(
                 "Setting a new username requires reconnecting to the network.\n"
                 "\n"
-                "Note: If identd is enabled and you are a local user it will be replaced by the local part of your Matrix ID"
-                " automatically. Bridge admins have an exception where username will be respected and sent as their ident.\n"
+                "Note: If you are a local user it will be replaced by the local part of your Matrix ID.\n"
+                "Federated users are generated a shortened digest of their Matrix ID. Bridge admins have an"
+                " exception where username will be respected and sent as their ident.\n"
             ),
         )
         cmd.add_argument("username", nargs="?", help="new username")
@@ -454,9 +457,15 @@ class NetworkRoom(Room):
 
         parts = self.user_id.split(":")
 
-        # disallow identd response for remote users
+        # return mxid digest if federated
         if parts[1] != self.serv.server_name:
-            return None
+            return (
+                "mx-"
+                + b32encode(hashlib.sha1(self.user_id.encode("utf-8")).digest())
+                .decode("utf-8")
+                .replace("=", "")[:13]
+                .lower()
+            )
 
         # return local part of mx id for local users
         return parts[0][1:]

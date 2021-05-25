@@ -283,6 +283,9 @@ class ControlRoom(Room):
         for room in self.serv.find_rooms():
             users.add(room.user_id)
 
+        users = list(users)
+        users.sort()
+
         self.send_notice(f"I have {len(users)} known users:")
         for user in users:
             ncontrol = len(self.serv.find_rooms("ControlRoom", user))
@@ -295,7 +298,7 @@ class ControlRoom(Room):
                 privates = "not in any DMs"
 
                 if network.conn and network.conn.connected:
-                    connected = f"connected as {network.conn.real_nickname}"
+                    connected = f"connected as {network.conn.real_nickname} ({network.get_username()})"
 
                 nchannels = 0
                 nprivates = 0

@@ -19,6 +19,7 @@ class Room(ABC):
     user_id: str
     serv: AppService
     members: List[str]
+    need_invite: bool = True
 
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
     _queue: EventQueue
@@ -81,16 +82,16 @@ class Room(ABC):
         pass
 
     async def _on_mx_room_member(self, event: dict) -> None:
-        if event["content"]["membership"] == "leave" and event["user_id"] in self.members:
-            self.members.remove(event["user_id"])
+        if event["content"]["membership"] == "leave" and event["state_key"] in self.members:
+            self.members.remove(event["state_key"])
 
             if not self.is_valid():
                 raise RoomInvalidError(
                     f"Room {self.id} ended up invalid after membership change, returning false from event handler."
                 )
 
-        if event["content"]["membership"] == "join" and event["user_id"] not in self.members:
-            self.members.append(event["user_id"])
+        if event["content"]["membership"] == "join" and event["state_key"] not in self.members:
+            self.members.append(event["state_key"])
 
     async def _flush_events(self, events):
         for event in events:
@@ -98,7 +99,8 @@ class Room(ABC):
                 if event["type"] == "_join":
                     if event["user_id"] not in self.members:
                         if not self.serv.synapse_admin:
-                            await self.serv.api.post_room_invite(self.id, event["user_id"])
+                            if self.need_invite:
+                                await self.serv.api.post_room_invite(self.id, event["user_id"])
                             await self.serv.api.post_room_join(self.id, event["user_id"])
                         else:
                             await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
@@ -139,7 +141,8 @@ class Room(ABC):
                         # new puppet in
                         if new_irc_user_id not in self.members:
                             if not self.serv.synapse_admin:
-                                await self.serv.api.post_room_invite(self.id, new_irc_user_id)
+                                if self.need_invite:
+                                    await self.serv.api.post_room_invite(self.id, new_irc_user_id)
                                 await self.serv.api.post_room_join(self.id, new_irc_user_id)
                             else:
                                 await self.serv.api.post_synapse_admin_room_join(self.id, new_irc_user_id)

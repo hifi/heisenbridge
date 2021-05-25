@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import time
+import urllib
 
 from aiohttp import ClientError
 from aiohttp import ClientSession
@@ -116,6 +117,15 @@ class Matrix:
         return await self.call(
             "POST",
             "/_matrix/client/r0/rooms/" + room_id + "/join" + ("?user_id={}".format(user_id) if user_id else ""),
+        )
+
+    async def post_room_join_alias(self, room_alias, user_id=None):
+        server_name = room_alias.split(":")[1]
+        room_alias = urllib.parse.quote(room_alias)
+        return await self.call(
+            "POST",
+            f"/_matrix/client/r0/join/{room_alias}?server_name={server_name}"
+            + ("&user_id={}".format(user_id) if user_id else ""),
         )
 
     async def post_room_invite(self, room_id, user_id):

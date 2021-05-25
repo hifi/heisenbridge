@@ -28,6 +28,7 @@ from heisenbridge.matrix import MatrixError
 from heisenbridge.matrix import MatrixForbidden
 from heisenbridge.matrix import MatrixUserInUse
 from heisenbridge.network_room import NetworkRoom
+from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
@@ -366,7 +367,7 @@ class BridgeAppService(AppService):
         await self.api.put_user_displayname(self.user_id, "Heisenbridge")
 
         # room types and their init order, network must be before chat and group
-        room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom]
+        room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom]
 
         room_type_map = {}
         for room_type in room_types:

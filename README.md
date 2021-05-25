@@ -24,7 +24,8 @@ Features
 * online help within Matrix
 * access control for local and federated users
 * fully puppeted users from IRC, they come and go as they would on Matrix
-* tested with up to 1600 users in a single channel
+* tested with up to 2000 users in a single channel
+* optional public room plumbing with single puppeting Matrix <-> relay bot on IRC
 * IRCnet !channels _are_ supported, you're welcome
 * any number of IRC networks and users technically possible
 * channel customization by setting the name and avatar

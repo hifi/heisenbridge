@@ -16,6 +16,7 @@ from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.irc import HeisenReactor
+from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 
@@ -252,6 +253,19 @@ class NetworkRoom(Room):
         cmd.add_argument("key", nargs="?", help="channel key")
         self.commands.register(cmd, self.cmd_join)
 
+        cmd = CommandParser(
+            prog="PLUMB",
+            description="plumb a room",
+            epilog=(
+                "Plumbs a channel in single-puppeted mode. This will make the bridge join the room and then join the"
+                " configured IRC channel.\n"
+            ),
+        )
+        cmd.add_argument("room", help="target Matrix room ID (eg. !uniqueid:your-homeserver)")
+        cmd.add_argument("channel", help="target channel")
+        cmd.add_argument("key", nargs="?", help="channel key")
+        self.commands.register(cmd, self.cmd_plumb)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -396,6 +410,20 @@ class NetworkRoom(Room):
             channel = "#" + channel
 
         self.conn.join(channel, args.key)
+
+    @connected
+    async def cmd_plumb(self, args) -> None:
+        channel = args.channel
+
+        if re.match(r"^[A-Za-z0-9]", channel):
+            channel = "#" + channel
+
+        if not self.serv.is_admin(self.user_id):
+            self.send_notice("Plumbing is currently reserved for admins only.")
+            return
+
+        room = await PlumbedRoom.create(id=args.room, network=self, channel=channel, key=args.key)
+        self.conn.join(room.name, room.key)
 
     def get_nick(self):
         if self.nick:
@@ -542,6 +570,12 @@ class NetworkRoom(Room):
         for room in self.serv.find_rooms(ChannelRoom, self.user_id):
             if room.name not in self.rooms and room.network_name == self.name:
                 logging.debug(f"NetworkRoom {self.id} attaching ChannelRoom {room.id}")
+                room.network = self
+                self.rooms[room.name] = room
+
+        for room in self.serv.find_rooms(PlumbedRoom, self.user_id):
+            if room.name not in self.rooms and room.network_name == self.name:
+                logging.debug(f"NetworkRoom {self.id} attaching PlumbedRoom {room.id}")
                 room.network = self
                 self.rooms[room.name] = room
 
@@ -784,7 +818,7 @@ class NetworkRoom(Room):
             keys = []
 
             for room in self.rooms.values():
-                if type(room) is ChannelRoom:
+                if type(room) is ChannelRoom or type(room) is PlumbedRoom:
                     channels.append(room.name)
                     keys.append(room.key if room.key else "")
 
@@ -840,7 +874,7 @@ class NetworkRoom(Room):
 
         # leave channels
         for room in self.rooms.values():
-            if type(room) is ChannelRoom:
+            if type(room) is ChannelRoom or type(room) is PlumbedRoom:
                 room._remove_puppet(irc_user_id)
 
     def on_nick(self, conn, event) -> None:
@@ -853,7 +887,7 @@ class NetworkRoom(Room):
 
         # leave and join channels
         for room in self.rooms.values():
-            if type(room) is ChannelRoom:
+            if type(room) is ChannelRoom or type(room) is PlumbedRoom:
                 room.rename(event.source.nick, event.target)
 
     def on_nicknameinuse(self, conn, event) -> None:

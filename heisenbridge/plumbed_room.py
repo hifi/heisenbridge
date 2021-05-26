@@ -91,7 +91,6 @@ class PlumbedRoom(ChannelRoom):
             )
         elif event["content"]["msgtype"] == "m.text":
             if "m.new_content" in event["content"]:
-                self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")
                 return
 
             # allow commanding the appservice in rooms

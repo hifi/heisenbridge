@@ -19,8 +19,8 @@ Features
 --------
 * "zero configuration" - no databases or storage required
 * brings IRC to Matrix rather than Matrix to IRC - not annoying to folks on IRC
-* completely managed through admin room - just DM `@Heisenbridge`!
-* channel management through bridge bot - type `Heisenbridge: help` to get started!
+* completely managed through admin room - just DM `@heisenbridge`!
+* channel management through bridge bot - type `heisenbridge: help` to get started!
 * online help within Matrix
 * access control for local and federated users
 * fully puppeted users from IRC, they come and go as they would on Matrix

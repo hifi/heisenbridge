@@ -174,6 +174,13 @@ class Matrix:
             {"displayname": displayname},
         )
 
+    async def put_user_avatar_url(self, user_id, url):
+        return await self.call(
+            "PUT",
+            "/_matrix/client/r0/profile/{}/avatar_url?user_id={}".format(user_id, user_id),
+            {"avatar_url": url},
+        )
+
     async def get_synapse_admin_users_admin(self, user_id):
         return await self.call("GET", f"/_synapse/admin/v1/users/{user_id}/admin")
 

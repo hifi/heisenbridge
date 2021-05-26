@@ -112,6 +112,14 @@ class ControlRoom(Room):
             cmd.add_argument("user", help="Matrix ID (eg: @ex-friend:contoso.com)")
             self.commands.register(cmd, self.cmd_forget)
 
+            cmd = CommandParser(prog="DISPLAYNAME", description="change bridge displayname")
+            cmd.add_argument("displayname", help="new bridge displayname")
+            self.commands.register(cmd, self.cmd_displayname)
+
+            cmd = CommandParser(prog="AVATAR", description="change bridge avatar")
+            cmd.add_argument("url", help="new avatar URL (mxc:// format)")
+            self.commands.register(cmd, self.cmd_avatar)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     def is_valid(self) -> bool:
@@ -348,6 +356,18 @@ class ControlRoom(Room):
                 pass
 
         self.send_notice(f"Done, I have forgotten about {args.user}")
+
+    async def cmd_displayname(self, args):
+        try:
+            await self.serv.api.put_user_displayname(self.serv.user_id, args.displayname)
+        except MatrixError as e:
+            self.send_notice(f"Failed to set displayname: {str(e)}")
+
+    async def cmd_avatar(self, args):
+        try:
+            await self.serv.api.put_user_avatar_url(self.serv.user_id, args.url)
+        except MatrixError as e:
+            self.send_notice(f"Failed to set avatar: {str(e)}")
 
     async def cmd_open(self, args):
         networks = self.networks()

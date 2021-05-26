@@ -364,8 +364,6 @@ class BridgeAppService(AppService):
         except Exception:
             logging.exception("Unexpected failure when registering appservice user.")
 
-        await self.api.put_user_displayname(self.user_id, "Heisenbridge")
-
         # room types and their init order, network must be before chat and group
         room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom]
 

@@ -93,9 +93,9 @@ class PlumbedRoom(ChannelRoom):
             if "m.new_content" in event["content"]:
                 return
 
-            # allow commanding the appservice in rooms
+            # allow commanding the appservice in rooms using id
             match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", body)
-            if match and match.group(1).lower() == "heisenbridge":
+            if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:
                 if event["user_id"] != self.user_id:
                     self.send_notice("I only obey {self.user_id}.")
                     return

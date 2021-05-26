@@ -287,7 +287,7 @@ class PrivateRoom(Room):
 
             # allow commanding the appservice in rooms
             match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", body)
-            if match and match.group(1).lower() == "heisenbridge":
+            if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:
                 try:
                     await self.commands.trigger(match.group(2))
                 except CommandParserError as e:

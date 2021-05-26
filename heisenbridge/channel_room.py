@@ -185,11 +185,18 @@ class ChannelRoom(PrivateRoom):
         self.leave(user_id)
 
     def on_endofnames(self, conn, event) -> None:
-        to_remove = list(self.members)
+        to_remove = []
         to_add = []
         names = list(self.names_buffer)
         self.names_buffer = []
         modes: Dict[str, List[str]] = {}
+
+        # build to_remove list from our own puppets
+        for member in self.members:
+            (name, server) = member.split(":")
+
+            if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:
+                to_remove.append(member)
 
         for nick in names:
             nick, mode = self.serv.strip_nick(nick)

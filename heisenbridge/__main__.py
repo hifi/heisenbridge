@@ -420,9 +420,15 @@ class BridgeAppService(AppService):
         logging.info("Connecting network rooms...")
 
         # connect network rooms one by one, this may take a while
+        wait = 1
         for room in self._rooms.values():
             if type(room) == NetworkRoom and room.connected:
-                await room.connect()
+
+                def sync_connect(room):
+                    asyncio.ensure_future(room.connect())
+
+                asyncio.get_event_loop().call_later(wait, sync_connect, room)
+                wait += 1
 
         logging.info("Init done, bridge is now running!")
 

@@ -307,6 +307,19 @@ class BridgeAppService(AppService):
 
         self.api = Matrix(homeserver_url, self.registration["as_token"])
 
+        try:
+            await self.api.post_user_register(
+                {
+                    "type": "m.login.application_service",
+                    "username": self.registration["sender_localpart"],
+                }
+            )
+            logging.debug("Appservice user registration succeeded.")
+        except MatrixUserInUse:
+            logging.debug("Appservice user is already registered.")
+        except Exception:
+            logging.exception("Unexpected failure when registering appservice user.")
+
         whoami = await self.api.get_user_whoami()
         logging.info("We are " + whoami["user_id"])
 
@@ -357,19 +370,6 @@ class BridgeAppService(AppService):
 
         resp = await self.api.get_user_joined_rooms()
         logging.debug(f"Appservice rooms: {resp['joined_rooms']}")
-
-        try:
-            await self.api.post_user_register(
-                {
-                    "type": "m.login.application_service",
-                    "username": self.registration["sender_localpart"],
-                }
-            )
-            logging.debug("Appservice user registration succeeded.")
-        except MatrixUserInUse:
-            logging.debug("Appservice user is already registered.")
-        except Exception:
-            logging.exception("Unexpected failure when registering appservice user.")
 
         # room types and their init order, network must be before chat and group
         room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom]

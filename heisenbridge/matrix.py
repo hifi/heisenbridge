@@ -4,6 +4,7 @@ import time
 import urllib
 
 from aiohttp import ClientError
+from aiohttp import ClientResponseError
 from aiohttp import ClientSession
 from aiohttp import TCPConnector
 
@@ -49,7 +50,7 @@ class Matrix:
         self.seq += 1
         return self.session + "-" + str(self.seq)
 
-    async def call(self, method, uri, data=None):
+    async def call(self, method, uri, data=None, retry=True):
         async with ClientSession(
             headers={"Authorization": "Bearer " + self.token}, connector=self.conn, connector_owner=False
         ) as session:
@@ -62,9 +63,17 @@ class Matrix:
                         raise self._matrix_error(data)
 
                     return data
+                except ClientResponseError:
+                    # fail fast if no retry allowed if dealing with HTTP error
+                    if not retry:
+                        raise
+
                 except (ClientError, asyncio.TimeoutError):
-                    logging.warning(f"Request to HS failed, assuming it is down, retry {i+1}/60...")
-                    await asyncio.sleep(30)
+                    # catch and fall-through to sleep
+                    pass
+
+                logging.warning(f"Request to HS failed, assuming it is down, retry {i+1}/60...")
+                await asyncio.sleep(30)
 
     async def get_user_whoami(self):
         return await self.call("GET", "/_matrix/client/r0/account/whoami")
@@ -185,7 +194,7 @@ class Matrix:
         )
 
     async def get_synapse_admin_users_admin(self, user_id):
-        return await self.call("GET", f"/_synapse/admin/v1/users/{user_id}/admin")
+        return await self.call("GET", f"/_synapse/admin/v1/users/{user_id}/admin", retry=False)
 
     async def post_synapse_admin_room_join(self, room_id, user_id):
         return await self.call("POST", f"/_synapse/admin/v1/join/{room_id}", {"user_id": user_id})

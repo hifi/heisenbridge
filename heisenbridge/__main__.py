@@ -284,6 +284,7 @@ class BridgeAppService(AppService):
 
         app = aiohttp.web.Application()
         app.router.add_put("/transactions/{id}", self._transaction)
+        app.router.add_put("/_matrix/app/v1/transactions/{id}", self._transaction)
 
         if (
             "namespaces" not in self.registration

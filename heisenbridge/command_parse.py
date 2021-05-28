@@ -31,6 +31,26 @@ class CommandParser(argparse.ArgumentParser):
         pass
 
 
+def split(text):
+    commands = []
+
+    sh_split = shlex.shlex(text, posix=True, punctuation_chars=";")
+    sh_split.wordchars += "+|&"
+
+    args = []
+    for v in list(sh_split):
+        if v == ";":
+            commands.append(args)
+            args = []
+        else:
+            args.append(v)
+
+    if len(args) > 0:
+        commands.append(args)
+
+    return commands
+
+
 class CommandManager:
     _commands: dict
 
@@ -44,22 +64,25 @@ class CommandManager:
             for alias in aliases:
                 self._commands[alias] = (cmd, func)
 
-    async def trigger(self, text):
-        args = shlex.split(text)
-        command = args.pop(0).upper()
+    async def trigger(self, text, allowed=None):
+        for args in split(text):
+            command = args.pop(0).upper()
 
-        if command in self._commands:
-            (cmd, func) = self._commands[command]
-            return await func(cmd.parse_args(args))
-        elif command == "HELP":
-            out = ["Following commands are supported:", ""]
-            for name, (cmd, func) in self._commands.items():
-                if cmd.prog == name:
-                    out.append("\t{} - {}".format(cmd.prog, cmd.short_description))
+            if allowed is not None and command not in allowed:
+                raise CommandParserError(f"Illegal command supplied: '{command}'")
 
-            out.append("")
-            out.append("To get more help, add -h to any command without arguments.")
+            if command in self._commands:
+                (cmd, func) = self._commands[command]
+                await func(cmd.parse_args(args))
+            elif command == "HELP":
+                out = ["Following commands are supported:", ""]
+                for name, (cmd, func) in self._commands.items():
+                    if cmd.prog == name:
+                        out.append("\t{} - {}".format(cmd.prog, cmd.short_description))
 
-            raise CommandParserError("\n".join(out))
-        else:
-            raise CommandParserError('Unknown command "{}", type HELP for list'.format(command))
+                out.append("")
+                out.append("To get more help, add -h to any command without arguments.")
+
+                raise CommandParserError("\n".join(out))
+            else:
+                raise CommandParserError('Unknown command "{}", type HELP for list'.format(command))

@@ -79,7 +79,7 @@ class BridgeAppService(AppService):
         return False
 
     def is_local(self, mxid: str):
-        return mxid.endswith(":" + self.server.name)
+        return mxid.endswith(":" + self.server_name)
 
     def strip_nick(self, nick: str) -> Tuple[str, str]:
         m = re.match(r"^([~&@%\+]?)(.+)$", nick)

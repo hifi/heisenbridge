@@ -292,14 +292,19 @@ class ChannelRoom(PrivateRoom):
         if modes[0].startswith("-") and modes[0].find("k") > -1:
             if self.key is not None:
                 self.key = None
-                asyncio.ensure_future(self.save())
+                if self.id is not None:
+                    asyncio.ensure_future(self.save())
         elif modes[0].startswith("+"):
             key_pos = modes[0].find("k")
             if key_pos > -1:
+                # FIXME: we need to calculate the position correctly from known modes
+                if key_pos > len(modes) - 1:
+                    key_pos = len(modes) - 1
                 key = modes[key_pos]
                 if self.key != key:
                     self.key = key
-                    asyncio.ensure_future(self.save())
+                    if self.id is not None:
+                        asyncio.ensure_future(self.save())
 
     def on_badchannelkey(self, conn, event) -> None:
         self.send_notice(event.arguments[1] if len(event.arguments) > 1 else "Incorrect channel key, join failed.")

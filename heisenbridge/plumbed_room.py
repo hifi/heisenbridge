@@ -1,8 +1,7 @@
 import logging
-import re
+from typing import Optional
 
 from heisenbridge.channel_room import ChannelRoom
-from heisenbridge.command_parse import CommandParserError
 from heisenbridge.matrix import MatrixError
 from heisenbridge.private_room import split_long
 
@@ -62,6 +61,26 @@ class PlumbedRoom(ChannelRoom):
 
         await super()._on_mx_room_member(event)
 
+    def send_notice(
+        self,
+        text: str,
+        user_id: Optional[str] = None,
+        formatted=None,
+        fallback_html: Optional[str] = None,
+        forward=True,
+    ):
+        if user_id is not None or forward is False:
+            super().send_notice(text=text, user_id=user_id, formatted=formatted, fallback_html=fallback_html)
+            return
+
+        self.network.send_notice(
+            text=f"{self.name}: {text}", user_id=user_id, formatted=formatted, fallback_html=fallback_html
+        )
+
+    # don't try to set room topic when we're plumbed, just show it
+    def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:
+        self.send_notice(f"New topic is: '{topic}'")
+
     async def on_mx_message(self, event) -> None:
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
             return
@@ -93,19 +112,6 @@ class PlumbedRoom(ChannelRoom):
             if "m.new_content" in event["content"]:
                 return
 
-            # allow commanding the appservice in rooms using id
-            match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", body)
-            if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:
-                if event["user_id"] != self.user_id:
-                    self.send_notice("I only obey {self.user_id}.")
-                    return
-                try:
-                    await self.commands.trigger(match.group(2))
-                except CommandParserError as e:
-                    self.send_notice(str(e))
-                finally:
-                    return
-
             messages = []
 
             for line in body.split("\n"):
@@ -122,7 +128,7 @@ class PlumbedRoom(ChannelRoom):
 
             for i, message in enumerate(messages):
                 if i == 4:
-                    self.send_notice("Message was truncated to four lines for IRC.")
+                    self.send_notice("Message was truncated to four lines for IRC.", forward=False)
                     self.network.conn.privmsg(self.name, "... (message truncated)")
                     return
                 self.network.conn.privmsg(self.name, message)

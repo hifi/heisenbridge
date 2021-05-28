@@ -78,6 +78,9 @@ class BridgeAppService(AppService):
 
         return False
 
+    def is_local(self, mxid: str):
+        return mxid.endswith(":" + self.server.name)
+
     def strip_nick(self, nick: str) -> Tuple[str, str]:
         m = re.match(r"^([~&@%\+]?)(.+)$", nick)
         if m:
@@ -158,6 +161,10 @@ class BridgeAppService(AppService):
             and event["user_id"] != self.user_id
             and event["content"]["membership"] == "invite"
         ):
+            if "is_direct" not in event["content"] or event["content"]["is_direct"] is not True:
+                logging.debug("Got an invite to non-direct room, ignoring")
+                return
+
             logging.info(f"Got an invite from {event['user_id']}")
 
             # only respond to an invite

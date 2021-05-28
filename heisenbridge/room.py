@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import re
 from abc import ABC
@@ -8,6 +9,7 @@ from typing import Optional
 
 from heisenbridge.appservice import AppService
 from heisenbridge.event_queue import EventQueue
+from heisenbridge.matrix import MatrixForbidden
 
 
 class RoomInvalidError(Exception):
@@ -39,6 +41,7 @@ class Room(ABC):
 
         # we track room members
         self.mx_register("m.room.member", self._on_mx_room_member)
+        self.mx_register("m.room.join_rules", self._on_mx_room_join_rules)
 
         self.init()
 
@@ -81,6 +84,11 @@ class Room(ABC):
     async def _on_mx_unhandled_event(self, event: dict) -> None:
         pass
 
+    async def _on_mx_room_join_rules(self, event: dict) -> None:
+        self.need_invite = event["content"]["join_rule"] != "public"
+        logging.debug("Room invite rule updated to " + str(self.need_invite))
+        await self.save()
+
     async def _on_mx_room_member(self, event: dict) -> None:
         if event["content"]["membership"] == "leave" and event["state_key"] in self.members:
             self.members.remove(event["state_key"])
@@ -98,10 +106,18 @@ class Room(ABC):
             try:
                 if event["type"] == "_join":
                     if event["user_id"] not in self.members:
-                        if not self.serv.synapse_admin:
+                        if not self.serv.synapse_admin or not self.serv.is_local(self.id):
+
                             if self.need_invite:
                                 await self.serv.api.post_room_invite(self.id, event["user_id"])
-                            await self.serv.api.post_room_join(self.id, event["user_id"])
+
+                            for i in range(0, 10):
+                                try:
+                                    await self.serv.api.post_room_join(self.id, event["user_id"])
+                                    break
+                                except MatrixForbidden:
+                                    logging.warning("Puppet joining a room was forbidden, retrying")
+                                    await asyncio.sleep(i)
                         else:
                             await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
 
@@ -140,10 +156,18 @@ class Room(ABC):
 
                         # new puppet in
                         if new_irc_user_id not in self.members:
-                            if not self.serv.synapse_admin:
+                            if not self.serv.synapse_admin or not self.serv.is_local(self.id):
+
                                 if self.need_invite:
                                     await self.serv.api.post_room_invite(self.id, new_irc_user_id)
-                                await self.serv.api.post_room_join(self.id, new_irc_user_id)
+
+                                for i in range(0, 10):
+                                    try:
+                                        await self.serv.api.post_room_join(self.id, new_irc_user_id)
+                                        break
+                                    except MatrixForbidden:
+                                        logging.warning("Puppet joining a room was forbidden, retrying")
+                                        await asyncio.sleep(i)
                             else:
                                 await self.serv.api.post_synapse_admin_room_join(self.id, new_irc_user_id)
 

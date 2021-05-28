@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import logging
 import re
+import shlex
 import ssl
 from argparse import Namespace
 from base64 import b32encode
@@ -168,17 +169,16 @@ class NetworkRoom(Room):
 
         cmd = CommandParser(
             prog="AUTOCMD",
-            description="send raw IRC command on connect (to identify)",
+            description="run commands on connect",
             epilog=(
                 "If the network you are connecting to does not support server password to identify you automatically"
                 " can set this to send a command before joining channels.\n"
                 "\n"
-                "Example: AUTOCMD msg Q@CServe.quakenet.org :auth foo bar\n"
-                "\n"
-                "Note: The syntax of this command might change in the future.\n"
+                "Example (QuakeNet): AUTOCMD UMODE +x; MSG Q@CServe.quakenet.org auth foo bar\n"
+                "Example (OFTC): AUTOCMD NICKSERV identify foo bar\n"
             ),
         )
-        cmd.add_argument("command", nargs="*", help="raw IRC command")
+        cmd.add_argument("command", nargs="*", help="commands separated with ';'")
         cmd.add_argument("--remove", action="store_true", help="remove stored command")
         self.commands.register(cmd, self.cmd_autocmd)
 
@@ -244,6 +244,22 @@ class NetworkRoom(Room):
         self.commands.register(cmd, self.cmd_msg)
 
         cmd = CommandParser(
+            prog="NICKSERV",
+            description="send a message to NickServ (if supported by network)",
+            epilog="Alias: NS",
+        )
+        cmd.add_argument("message", nargs="+", help="message")
+        self.commands.register(cmd, self.cmd_nickserv, ["NS"])
+
+        cmd = CommandParser(
+            prog="CHANSERV",
+            description="send a message to ChanServ (if supported by network)",
+            epilog="Alias: CS",
+        )
+        cmd.add_argument("message", nargs="+", help="message")
+        self.commands.register(cmd, self.cmd_chanserv, ["CS"])
+
+        cmd = CommandParser(
             prog="JOIN",
             description="join a channel",
             epilog=(
@@ -268,6 +284,18 @@ class NetworkRoom(Room):
         cmd.add_argument("channel", help="target channel")
         cmd.add_argument("key", nargs="?", help="channel key")
         self.commands.register(cmd, self.cmd_plumb)
+
+        cmd = CommandParser(prog="UMODE", description="set user modes")
+        cmd.add_argument("flags", help="user mode flags")
+        self.commands.register(cmd, self.cmd_umode)
+
+        cmd = CommandParser(
+            prog="WAIT",
+            description="wait specified amount of time",
+            epilog=("Use with AUTOCMD to add delays between commands."),
+        )
+        cmd.add_argument("seconds", help="how many seconds to wait")
+        self.commands.register(cmd, self.cmd_wait)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -406,6 +434,20 @@ class NetworkRoom(Room):
         self.send_notice(f"{self.conn.real_nickname} -> {target}: {message}")
 
     @connected
+    async def cmd_nickserv(self, args) -> None:
+        message = " ".join(args.message)
+
+        self.send_notice(f"{self.conn.real_nickname} -> NickServ: {message}")
+        self.conn.send_raw("NICKSERV " + message)
+
+    @connected
+    async def cmd_chanserv(self, args) -> None:
+        message = " ".join(args.message)
+
+        self.send_notice(f"{self.conn.real_nickname} -> ChanServ: {message}")
+        self.conn.send_raw("CHANSERV " + message)
+
+    @connected
     async def cmd_join(self, args) -> None:
         channel = args.channel
 
@@ -427,6 +469,20 @@ class NetworkRoom(Room):
 
         room = await PlumbedRoom.create(id=args.room, network=self, channel=channel, key=args.key)
         self.conn.join(room.name, room.key)
+
+    @connected
+    async def cmd_umode(self, args) -> None:
+        self.conn.mode(self.conn.real_nickname, args.flags)
+
+    async def cmd_wait(self, args) -> None:
+        try:
+            seconds = float(args.seconds)
+            if seconds > 0 and seconds < 30:
+                await asyncio.sleep(seconds)
+            else:
+                self.send_notice(f"Unreasonable wait time: {args.seconds}")
+        except ValueError:
+            self.send_notice(f"Invalid wait time: {args.seconds}")
 
     def get_nick(self):
         if self.nick:
@@ -819,8 +875,19 @@ class NetworkRoom(Room):
             await asyncio.sleep(2)
 
             if self.autocmd is not None:
-                self.send_notice("Sending autocmd and waiting a bit before joining channels...")
-                self.conn.send_raw(self.autocmd)
+                self.send_notice("Executing autocmd and waiting a bit before joining channels...")
+
+                for command in self.autocmd.split(";"):
+                    args = shlex.split(command)
+
+                    if len(args) == 0:
+                        continue
+
+                    if args[0].upper() in ["RAW", "MSG", "NICKSERV", "NS", "CHANSERV", "CS", "UMODE", "WAIT"]:
+                        await self.commands.trigger(command)
+                    else:
+                        self.send_notice(f"Warning: Ignoring unsupported autocmd command: '{command}'")
+
                 await asyncio.sleep(4)
 
             channels = []

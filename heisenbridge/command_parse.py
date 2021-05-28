@@ -37,8 +37,12 @@ class CommandManager:
     def __init__(self):
         self._commands = {}
 
-    def register(self, cmd: CommandParser, func):
+    def register(self, cmd: CommandParser, func, aliases=None):
         self._commands[cmd.prog] = (cmd, func)
+
+        if aliases is not None:
+            for alias in aliases:
+                self._commands[alias] = (cmd, func)
 
     async def trigger(self, text):
         args = shlex.split(text)
@@ -49,8 +53,9 @@ class CommandManager:
             return await func(cmd.parse_args(args))
         elif command == "HELP":
             out = ["Following commands are supported:", ""]
-            for (cmd, func) in self._commands.values():
-                out.append("\t{} - {}".format(cmd.prog, cmd.short_description))
+            for name, (cmd, func) in self._commands.items():
+                if cmd.prog == name:
+                    out.append("\t{} - {}".format(cmd.prog, cmd.short_description))
 
             out.append("")
             out.append("To get more help, add -h to any command without arguments.")

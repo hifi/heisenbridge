@@ -212,6 +212,11 @@ class PrivateRoom(Room):
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
         (plain, formatted) = parse_irc_formatting(event.arguments[0])
+
+        if event.source.nick == self.network.conn.real_nickname:
+            self.send_message(f"You said: {plain}", formatted=(f"You said: {formatted}" if formatted else None))
+            return
+
         self.send_message(
             plain,
             irc_user_id,
@@ -228,6 +233,10 @@ class PrivateRoom(Room):
             return
 
         (plain, formatted) = parse_irc_formatting(event.arguments[0])
+
+        if event.source.nick == self.network.conn.real_nickname:
+            self.send_notice(f"You noticed: {plain}", formatted=(f"You noticed: {formatted}" if formatted else None))
+            return
 
         # if the local user has left this room notify in network
         if self.user_id not in self.members:
@@ -253,6 +262,11 @@ class PrivateRoom(Room):
 
         if command == "ACTION" and len(event.arguments) > 1:
             (plain, formatted) = parse_irc_formatting(event.arguments[1])
+
+            if event.source.nick == self.network.conn.real_nickname:
+                self.send_emote(f"(you) {plain}")
+                return
+
             self.send_emote(plain, irc_user_id, fallback_html=f"<b>Emote from {str(event.source)}</b>: {plain}")
         else:
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {command}</b (ignored)")

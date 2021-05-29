@@ -442,116 +442,121 @@ class BridgeAppService(AppService):
         await asyncio.Event().wait()
 
 
-parser = argparse.ArgumentParser(
-    prog=os.path.basename(sys.executable) + " -m " + __package__,
-    description="a Matrix IRC bridge",
-    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-)
-parser.add_argument(
-    "-v", "--verbose", help="logging verbosity level: once is info, twice is debug", action="count", default=0
-)
-parser.add_argument(
-    "-c",
-    "--config",
-    help="registration YAML file path, must be writable if generating",
-    required=True,
-)
-parser.add_argument("-l", "--listen-address", help="bridge listen address", default="127.0.0.1")
-parser.add_argument("-p", "--listen-port", help="bridge listen port", type=int, default="9898")
-parser.add_argument("-u", "--uid", help="user id to run as", default=None)
-parser.add_argument("-g", "--gid", help="group id to run as", default=None)
-parser.add_argument(
-    "-i",
-    "--identd",
-    action="store_true",
-    help="enable identd on TCP port 113, requires root",
-)
-parser.add_argument(
-    "--generate",
-    action="store_true",
-    help="generate registration YAML for Matrix homeserver",
-    default=argparse.SUPPRESS,
-)
-parser.add_argument(
-    "--reset",
-    action="store_true",
-    help="reset ALL bridge configuration from homeserver and exit",
-    default=argparse.SUPPRESS,
-)
-parser.add_argument(
-    "-o",
-    "--owner",
-    help="set owner MXID (eg: @user:homeserver) or first talking local user will claim the bridge",
-    default=None,
-)
-parser.add_argument(
-    "homeserver",
-    nargs="?",
-    help="URL of Matrix homeserver",
-    default="http://localhost:8008",
-)
+def main():
+    parser = argparse.ArgumentParser(
+        prog=os.path.basename(sys.executable) + " -m " + __package__,
+        description="a Matrix IRC bridge",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    parser.add_argument(
+        "-v", "--verbose", help="logging verbosity level: once is info, twice is debug", action="count", default=0
+    )
+    parser.add_argument(
+        "-c",
+        "--config",
+        help="registration YAML file path, must be writable if generating",
+        required=True,
+    )
+    parser.add_argument("-l", "--listen-address", help="bridge listen address", default="127.0.0.1")
+    parser.add_argument("-p", "--listen-port", help="bridge listen port", type=int, default="9898")
+    parser.add_argument("-u", "--uid", help="user id to run as", default=None)
+    parser.add_argument("-g", "--gid", help="group id to run as", default=None)
+    parser.add_argument(
+        "-i",
+        "--identd",
+        action="store_true",
+        help="enable identd on TCP port 113, requires root",
+    )
+    parser.add_argument(
+        "--generate",
+        action="store_true",
+        help="generate registration YAML for Matrix homeserver",
+        default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--reset",
+        action="store_true",
+        help="reset ALL bridge configuration from homeserver and exit",
+        default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "-o",
+        "--owner",
+        help="set owner MXID (eg: @user:homeserver) or first talking local user will claim the bridge",
+        default=None,
+    )
+    parser.add_argument(
+        "homeserver",
+        nargs="?",
+        help="URL of Matrix homeserver",
+        default="http://localhost:8008",
+    )
 
-args = parser.parse_args()
+    args = parser.parse_args()
 
-logging_level = logging.WARNING
-if args.verbose > 0:
-    logging_level = logging.INFO
-    if args.verbose > 1:
-        logging_level = logging.DEBUG
+    logging_level = logging.WARNING
+    if args.verbose > 0:
+        logging_level = logging.INFO
+        if args.verbose > 1:
+            logging_level = logging.DEBUG
 
-logging.basicConfig(stream=sys.stdout, level=logging_level)
+    logging.basicConfig(stream=sys.stdout, level=logging_level)
 
-if "generate" in args:
-    letters = string.ascii_letters + string.digits
+    if "generate" in args:
+        letters = string.ascii_letters + string.digits
 
-    registration = {
-        "id": "heisenbridge",
-        "url": "http://{}:{}".format(args.listen_address, args.listen_port),
-        "as_token": "".join(random.choice(letters) for i in range(64)),
-        "hs_token": "".join(random.choice(letters) for i in range(64)),
-        "rate_limited": False,
-        "sender_localpart": "heisenbridge",
-        "namespaces": {
-            "users": [{"regex": "@irc_.*", "exclusive": True}],
-            "aliases": [],
-            "rooms": [],
-        },
-    }
+        registration = {
+            "id": "heisenbridge",
+            "url": "http://{}:{}".format(args.listen_address, args.listen_port),
+            "as_token": "".join(random.choice(letters) for i in range(64)),
+            "hs_token": "".join(random.choice(letters) for i in range(64)),
+            "rate_limited": False,
+            "sender_localpart": "heisenbridge",
+            "namespaces": {
+                "users": [{"regex": "@irc_.*", "exclusive": True}],
+                "aliases": [],
+                "rooms": [],
+            },
+        }
 
-    with open(args.config, "w") as f:
-        yaml.dump(registration, f, sort_keys=False)
+        with open(args.config, "w") as f:
+            yaml.dump(registration, f, sort_keys=False)
 
-    print(f"Registration file generated and saved to {args.config}")
-elif "reset" in args:
-    service = BridgeAppService()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(service.reset(args.config, args.homeserver))
-    loop.close()
-else:
-    loop = asyncio.get_event_loop()
-    service = BridgeAppService()
-    identd = None
+        print(f"Registration file generated and saved to {args.config}")
+    elif "reset" in args:
+        service = BridgeAppService()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(service.reset(args.config, args.homeserver))
+        loop.close()
+    else:
+        loop = asyncio.get_event_loop()
+        service = BridgeAppService()
+        identd = None
 
-    service.load_reg(args.config)
+        service.load_reg(args.config)
 
-    if args.identd:
-        identd = Identd()
-        loop.run_until_complete(identd.start_listening(service))
+        if args.identd:
+            identd = Identd()
+            loop.run_until_complete(identd.start_listening(service))
 
-    if os.getuid() == 0:
-        if args.gid:
-            gid = grp.getgrnam(args.gid).gr_gid
-            os.setgid(gid)
-            os.setgroups([])
+        if os.getuid() == 0:
+            if args.gid:
+                gid = grp.getgrnam(args.gid).gr_gid
+                os.setgid(gid)
+                os.setgroups([])
 
-        if args.uid:
-            uid = pwd.getpwnam(args.uid).pw_uid
-            os.setuid(uid)
+            if args.uid:
+                uid = pwd.getpwnam(args.uid).pw_uid
+                os.setuid(uid)
 
-    os.umask(0o077)
+        os.umask(0o077)
 
-    if identd:
-        loop.create_task(identd.run())
+        if identd:
+            loop.create_task(identd.run())
 
-    loop.run_until_complete(service.run(args.listen_address, args.listen_port, args.homeserver, args.owner))
-    loop.close()
+        loop.run_until_complete(service.run(args.listen_address, args.listen_port, args.homeserver, args.owner))
+        loop.close()
+
+
+if __name__ == "__main__":
+    main()

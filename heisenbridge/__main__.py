@@ -134,8 +134,8 @@ class BridgeAppService(AppService):
 
     async def _on_mx_event(self, event):
         # keep user cache up-to-date
-        if "user_id" in event:
-            await self.cache_user(event["user_id"], None)
+        if "sender" in event:
+            await self.cache_user(event["sender"], None)
 
         if "room_id" in event and event["room_id"] in self._rooms:
             try:
@@ -158,14 +158,14 @@ class BridgeAppService(AppService):
                 logging.exception("Ignoring exception from room handler. This should be fixed.")
         elif (
             event["type"] == "m.room.member"
-            and event["user_id"] != self.user_id
+            and event["sender"] != self.user_id
             and event["content"]["membership"] == "invite"
         ):
             if "is_direct" not in event["content"] or event["content"]["is_direct"] is not True:
                 logging.debug("Got an invite to non-direct room, ignoring")
                 return
 
-            logging.info(f"Got an invite from {event['user_id']}")
+            logging.info(f"Got an invite from {event['sender']}")
 
             # only respond to an invite
             if event["room_id"] in self._rooms:
@@ -173,20 +173,20 @@ class BridgeAppService(AppService):
                 return
 
             # set owner if we have none and the user is from the same HS
-            if self.config.get("owner", None) is None and event["user_id"].endswith(":" + self.server_name):
-                logging.info(f"We have an owner now, let us rejoice, {event['user_id']}!")
-                self.config["owner"] = event["user_id"]
+            if self.config.get("owner", None) is None and event["sender"].endswith(":" + self.server_name):
+                logging.info(f"We have an owner now, let us rejoice, {event['sender']}!")
+                self.config["owner"] = event["sender"]
                 await self.save()
 
-            if not self.is_user(event["user_id"]):
-                logging.info(f"Non-whitelisted user {event['user_id']} tried to invite us, ignoring.")
+            if not self.is_user(event["sender"]):
+                logging.info(f"Non-whitelisted user {event['sender']} tried to invite us, ignoring.")
                 return
 
-            logging.info(f"Whitelisted user {event['user_id']} invited us, going to accept.")
+            logging.info(f"Whitelisted user {event['sender']} invited us, going to accept.")
 
             # accept invite sequence
             try:
-                room = ControlRoom(id=event["room_id"], user_id=event["user_id"], serv=self, members=[event["user_id"]])
+                room = ControlRoom(id=event["room_id"], user_id=event["sender"], serv=self, members=[event["sender"]])
                 await room.save()
                 self.register_room(room)
 

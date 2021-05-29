@@ -272,7 +272,7 @@ class PrivateRoom(Room):
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {command}</b (ignored)")
 
     async def on_mx_message(self, event) -> None:
-        if event["user_id"] != self.user_id:
+        if event["sender"] != self.user_id:
             return
 
         if self.network is None or self.network.conn is None or not self.network.conn.connected:

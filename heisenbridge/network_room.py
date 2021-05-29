@@ -102,6 +102,7 @@ class NetworkRoom(Room):
         self.connlock = asyncio.Lock()
         self.disconnect = True
         self.real_host = "?" * 63  # worst case default
+        self.keys = {}  # temp dict of join channel keys
 
         cmd = CommandParser(
             prog="NICK",
@@ -453,6 +454,9 @@ class NetworkRoom(Room):
 
         if re.match(r"^[A-Za-z0-9]", channel):
             channel = "#" + channel
+
+        # cache key so we can store later if join succeeds
+        self.keys[channel.lower()] = args.key
 
         self.conn.join(channel, args.key)
 

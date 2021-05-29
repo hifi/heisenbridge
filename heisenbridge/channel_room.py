@@ -101,6 +101,12 @@ class ChannelRoom(PrivateRoom):
         room.name = name.lower()
         room.network = network
         room.network_name = network.name
+
+        # fetch stored channel key if used for join command
+        if room.name in network.keys:
+            room.key = network.keys[room.name]
+            del network.keys[room.name]
+
         asyncio.ensure_future(room._create_mx())
         return room
 
@@ -368,7 +374,6 @@ class ChannelRoom(PrivateRoom):
         modes.pop(0)
 
         self.send_notice(f"Current channel modes: {' '.join(modes)}")
-        self.update_key(modes)
 
     def on_channelcreate(self, conn, event) -> None:
         created = unix_to_local(event.arguments[1])

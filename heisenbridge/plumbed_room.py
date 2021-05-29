@@ -87,7 +87,7 @@ class PlumbedRoom(ChannelRoom):
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
             return
 
-        (name, server) = event["user_id"].split(":")
+        (name, server) = event["sender"].split(":")
 
         # prevent re-sending federated messages back
         if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:

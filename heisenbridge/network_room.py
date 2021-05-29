@@ -371,7 +371,7 @@ class NetworkRoom(Room):
             return self.send_notice(str(e))
 
     async def on_mx_message(self, event) -> None:
-        if event["content"]["msgtype"] != "m.text" or event["user_id"] == self.serv.user_id:
+        if event["content"]["msgtype"] != "m.text" or event["sender"] == self.serv.user_id:
             return True
 
         try:

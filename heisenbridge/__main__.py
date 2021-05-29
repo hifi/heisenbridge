@@ -90,9 +90,19 @@ class BridgeAppService(AppService):
 
     def irc_user_id(self, network, nick, at=True, server=True):
         nick, mode = self.strip_nick(nick)
-        ret = f"{'@' if at else ''}{self.puppet_prefix}{network}_{nick}".lower()
+
+        ret = re.sub(
+            r"[^0-9a-z\-\.=\_/]",
+            lambda m: "=" + m.group(0).encode("utf-8").hex(),
+            f"{self.puppet_prefix}{network}_{nick}".lower(),
+        )
+
+        if at:
+            ret = "@" + ret
+
         if server:
             ret += ":" + self.server_name
+
         return ret
 
     async def cache_user(self, user_id, displayname):

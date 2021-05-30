@@ -10,7 +10,7 @@ from heisenbridge.network_room import NetworkRoom
 class Identd:
     async def handle(self, reader, writer):
         try:
-            data = await reader.read(128)
+            data = await asyncio.wait_for(reader.readuntil(b"\r\n"), 10)
             query = data.decode()
 
             m = re.match(r"^(\d+)\s*,\s*(\d+)", query)
@@ -60,9 +60,9 @@ class Identd:
         if socket.has_ipv6:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             sock.bind(("::", port))
-            self.server = await asyncio.start_server(self.handle, sock=sock, loop=asyncio.get_event_loop())
+            self.server = await asyncio.start_server(self.handle, sock=sock, loop=asyncio.get_event_loop(), limit=128)
         else:
-            self.server = await asyncio.start_server(self.handle, "0.0.0.0", port)
+            self.server = await asyncio.start_server(self.handle, "0.0.0.0", port, limit=128)
 
     async def run(self):
         async with self.server:

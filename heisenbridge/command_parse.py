@@ -35,7 +35,7 @@ def split(text):
     commands = []
 
     sh_split = shlex.shlex(text, posix=True, punctuation_chars=";")
-    sh_split.wordchars += "+|&"
+    sh_split.wordchars += "!#$%&()*+,-./:<=>?@[\\]^_`{|}~"
 
     args = []
     for v in list(sh_split):

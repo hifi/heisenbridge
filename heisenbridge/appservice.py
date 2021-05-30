@@ -25,14 +25,14 @@ class AppService(ABC):
     async def save(self):
         await self.api.put_user_account_data(self.user_id, "irc", self.config)
 
-    async def create_room(self, name: str, topic: str, invite: List[str]) -> str:
+    async def create_room(self, name: str, topic: str, invite: List[str], is_direct: bool) -> str:
         resp = await self.api.post_room_create(
             {
                 "visibility": "private",
                 "name": name,
                 "topic": topic,
                 "invite": invite,
-                "is_direct": False,
+                "is_direct": is_direct,
                 "power_level_content_override": {
                     "users_default": 0,
                     "invite": 100,

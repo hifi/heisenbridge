@@ -163,7 +163,7 @@ class PrivateRoom(Room):
             network.serv,
             [network.user_id, irc_user_id, network.serv.user_id],
         )
-        room.name = name.lower()
+        room.name = name
         room.network = network
         room.network_name = network.name
         asyncio.ensure_future(room._create_mx())

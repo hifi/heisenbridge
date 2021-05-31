@@ -472,12 +472,8 @@ def main():
     parser.add_argument("-p", "--listen-port", help="bridge listen port", type=int, default="9898")
     parser.add_argument("-u", "--uid", help="user id to run as", default=None)
     parser.add_argument("-g", "--gid", help="group id to run as", default=None)
-    parser.add_argument(
-        "-i",
-        "--identd",
-        action="store_true",
-        help="enable identd on TCP port 113, requires root",
-    )
+    parser.add_argument("-i", "--identd", action="store_true", help="enable identd service")
+    parser.add_argument("--identd-port", type=int, default="113", help="identd listen port")
     parser.add_argument(
         "--generate",
         action="store_true",
@@ -548,7 +544,7 @@ def main():
 
         if args.identd:
             identd = Identd()
-            loop.run_until_complete(identd.start_listening(service))
+            loop.run_until_complete(identd.start_listening(service, args.identd_port))
 
         if os.getuid() == 0:
             if args.gid:

@@ -53,16 +53,16 @@ class Identd:
         finally:
             writer.close()
 
-    async def start_listening(self, serv):
+    async def start_listening(self, serv, port):
         self.serv = serv
 
         # XXX: this only works if dual stack is enabled which usually is
         if socket.has_ipv6:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-            sock.bind(("::", 113))
+            sock.bind(("::", port))
             self.server = await asyncio.start_server(self.handle, sock=sock, loop=asyncio.get_event_loop())
         else:
-            self.server = await asyncio.start_server(self.handle, "0.0.0.0", 113)
+            self.server = await asyncio.start_server(self.handle, "0.0.0.0", port)
 
     async def run(self):
         async with self.server:

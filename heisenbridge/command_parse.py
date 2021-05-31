@@ -35,6 +35,7 @@ def split(text):
     commands = []
 
     sh_split = shlex.shlex(text, posix=True, punctuation_chars=";")
+    sh_split.commenters = ""
     sh_split.wordchars += "!#$%&()*+,-./:<=>?@[\\]^_`{|}~"
 
     args = []

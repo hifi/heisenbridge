@@ -558,9 +558,6 @@ def main():
 
         os.umask(0o077)
 
-        if identd:
-            loop.create_task(identd.run())
-
         loop.run_until_complete(service.run(args.listen_address, args.listen_port, args.homeserver, args.owner))
         loop.close()
 

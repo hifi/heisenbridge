@@ -63,7 +63,3 @@ class Identd:
             self.server = await asyncio.start_server(self.handle, sock=sock, loop=asyncio.get_event_loop(), limit=128)
         else:
             self.server = await asyncio.start_server(self.handle, "0.0.0.0", port, limit=128)
-
-    async def run(self):
-        async with self.server:
-            await self.server.serve_forever()

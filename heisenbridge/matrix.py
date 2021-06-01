@@ -50,13 +50,18 @@ class Matrix:
         self.seq += 1
         return self.session + "-" + str(self.seq)
 
-    async def call(self, method, uri, data=None, retry=True):
+    async def call(self, method, uri, data=None, content_type="application/json", retry=True):
         async with ClientSession(
             headers={"Authorization": "Bearer " + self.token}, connector=self.conn, connector_owner=False
         ) as session:
             for i in range(0, 60):
                 try:
-                    resp = await session.request(method, self.url + uri, json=data)
+                    if content_type == "application/json":
+                        resp = await session.request(method, self.url + uri, json=data)
+                    else:
+                        resp = await session.request(
+                            method, self.url + uri, data=data, headers={"Content-type": content_type}
+                        )
                     data = await resp.json()
 
                     if resp.status > 299:
@@ -191,6 +196,14 @@ class Matrix:
             "PUT",
             "/_matrix/client/r0/profile/{}/avatar_url?user_id={}".format(user_id, user_id),
             {"avatar_url": url},
+        )
+
+    async def post_media_upload(self, data, content_type, filename=None):
+        return await self.call(
+            "POST",
+            "/_matrix/media/r0/upload" + ("?filename=" + urllib.parse.quote(filename) if filename else ""),
+            data,
+            content_type=content_type,
         )
 
     async def get_synapse_admin_users_admin(self, user_id):

@@ -297,6 +297,21 @@ class Room(ABC):
 
         self._queue.enqueue(event)
 
+    def react(self, event_id: str, text: str) -> None:
+        event = {
+            "type": "m.reaction",
+            "content": {
+                "m.relates_to": {
+                    "event_id": event_id,
+                    "key": text,
+                    "rel_type": "m.annotation",
+                }
+            },
+            "user_id": None,
+        }
+
+        self._queue.enqueue(event)
+
     def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:
         event = {
             "type": "m.room.topic",

@@ -1,4 +1,5 @@
 import logging
+import re
 from typing import Optional
 
 from heisenbridge.channel_room import ChannelRoom
@@ -114,10 +115,28 @@ class PlumbedRoom(ChannelRoom):
             if "m.new_content" in event["content"]:
                 return
 
+            lines = body.split("\n")
+
+            # remove reply text but preserve mention
+            if "m.relates_to" in event["content"] and "m.in_reply_to" in event["content"]["m.relates_to"]:
+                # pull the mention out, it's already converted to IRC nick but the regex still matches
+                m = re.match(r"> <([^>]+)>", lines.pop(0))
+                reply_to = m.group(1) if m else None
+
+                # skip all quoted lines, it will skip the next empty line as well (it better be empty)
+                while len(lines) > 0 and lines.pop(0).startswith(">"):
+                    pass
+
+                # convert mention to IRC convention
+                if reply_to:
+                    first_line = reply_to + ": " + lines.pop(0)
+                    lines.insert(0, first_line)
+
             messages = []
 
-            for line in body.split("\n"):
-                if line == "":
+            for line in lines:
+                # drop all whitespace-only lines
+                if re.match(r"^\s*$", line):
                     continue
 
                 messages += split_long(
@@ -130,7 +149,17 @@ class PlumbedRoom(ChannelRoom):
 
             for i, message in enumerate(messages):
                 if i == 4:
-                    self.send_notice("Message was truncated to four lines for IRC.", forward=False)
-                    self.network.conn.privmsg(self.name, "... (message truncated)")
+                    self.react(event["event_id"], "\u2702")  # scissors
+
+                    resp = await self.serv.api.post_media_upload(
+                        body.encode("utf-8"), content_type="text/plain; charset=UTF-8"
+                    )
+                    self.network.conn.privmsg(
+                        self.name,
+                        f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
+                    )
+                    self.react(event["event_id"], "\U0001f4dd")  # memo
+
                     return
+
                 self.network.conn.privmsg(self.name, message)

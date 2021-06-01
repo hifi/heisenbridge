@@ -82,6 +82,7 @@ class EventQueue:
                 prev["type"] == event["type"]
                 and prev["type"][0] != "_"
                 and prev["user_id"] == event["user_id"]
+                and "msgtype" in prev["content"]
                 and prev["content"]["msgtype"] == event["content"]["msgtype"]
                 and prev_formatted == cur_formatted
                 and prev_len < 64_000  # a single IRC event can't overflow with this

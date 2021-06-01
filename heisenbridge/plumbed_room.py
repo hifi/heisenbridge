@@ -27,7 +27,7 @@ class PlumbedRoom(ChannelRoom):
 
         try:
             resp = await network.serv.api.post_room_join_alias(id)
-            join_rules = await network.serv.api.get_room_state_event(id, "m.room.join_rules")
+            join_rules = await network.serv.api.get_room_state_event(resp["room_id"], "m.room.join_rules")
         except MatrixError as e:
             network.send_notice(f"Failed to join room: {str(e)}")
             return

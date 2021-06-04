@@ -53,7 +53,7 @@ class PlumbedRoom(ChannelRoom):
             # stop event queue immediately
             self._queue.stop()
 
-            for member in self.members:
+            for member in list(self.members):
                 (name, server) = member.split(":")
 
                 if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:

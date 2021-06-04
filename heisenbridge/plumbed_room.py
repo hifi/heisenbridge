@@ -46,24 +46,6 @@ class PlumbedRoom(ChannelRoom):
         network.send_notice(f"Plumbed {resp['room_id']} to {channel}, to unplumb just kick me out.")
         return room
 
-    async def _on_mx_room_member(self, event: dict) -> None:
-        # if we are leaving the room, make all puppets leave
-        if event["content"]["membership"] == "leave" and event["state_key"] == self.serv.user_id:
-
-            # stop event queue immediately
-            self._queue.stop()
-
-            for member in list(self.members):
-                (name, server) = member.split(":")
-
-                if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:
-                    try:
-                        await self.serv.api.post_room_leave(self.id, member)
-                    except Exception:
-                        logging.exception("Removing puppet on relaybot leave failed")
-
-        await super()._on_mx_room_member(event)
-
     def send_notice(
         self,
         text: str,

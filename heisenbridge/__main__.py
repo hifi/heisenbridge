@@ -156,14 +156,7 @@ class BridgeAppService(AppService):
                 self.unregister_room(room.id)
                 room.cleanup()
 
-                try:
-                    await self.api.post_room_leave(room.id)
-                except MatrixError:
-                    pass
-                try:
-                    await self.api.post_room_forget(room.id)
-                except MatrixError:
-                    pass
+                await self.leave_room(room.id, room.members)
             except Exception:
                 logging.exception("Ignoring exception from room handler. This should be fixed.")
         elif (
@@ -271,14 +264,7 @@ class BridgeAppService(AppService):
 
         for room_id in resp["joined_rooms"]:
             print(f"Leaving from {room_id}...")
-            await self.api.post_room_leave(room_id)
-
-            try:
-                await self.api.post_room_forget(room_id)
-                print("  ...and it's gone")
-            except MatrixError:
-                print("  ...but couldn't forget, that's fine")
-                pass
+            await self.leave_room(room_id, None)
 
         print("Resetting configuration...")
         self.config = {}
@@ -289,6 +275,27 @@ class BridgeAppService(AppService):
     def load_reg(self, config_file):
         with open(config_file) as f:
             self.registration = yaml.safe_load(f)
+
+    async def leave_room(self, room_id, members):
+        members = members if members else []
+
+        for member in members:
+            (name, server) = member.split(":")
+
+            if name.startswith("@" + self.puppet_prefix) and server == self.server_name:
+                try:
+                    await self.api.post_room_leave(room_id, member)
+                except Exception:
+                    logging.exception("Removing puppet on leave failed")
+
+        try:
+            await self.api.post_room_leave(room_id)
+        except MatrixError:
+            pass
+        try:
+            await self.api.post_room_forget(room_id)
+        except MatrixError:
+            pass
 
     async def run(self, listen_address, listen_port, homeserver_url, owner):
 
@@ -391,6 +398,8 @@ class BridgeAppService(AppService):
 
         # import all rooms
         for room_id in resp["joined_rooms"]:
+            members = None
+
             try:
                 config = await self.api.get_room_account_data(self.user_id, room_id, "irc")
 
@@ -420,15 +429,7 @@ class BridgeAppService(AppService):
                 logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")
 
                 self.unregister_room(room_id)
-
-                try:
-                    await self.api.post_room_leave(room_id)
-                except MatrixError:
-                    pass
-                try:
-                    await self.api.post_room_forget(room_id)
-                except MatrixError:
-                    pass
+                await self.leave_room(room_id, members)
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()

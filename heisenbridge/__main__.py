@@ -456,7 +456,7 @@ class BridgeAppService(AppService):
 def main():
     parser = argparse.ArgumentParser(
         prog=os.path.basename(sys.executable) + " -m " + __package__,
-        description="a Matrix IRC bridge",
+        description="a bouncer-style Matrix IRC bridge",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(

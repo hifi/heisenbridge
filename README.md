@@ -1,6 +1,8 @@
 Heisenbridge
 ============
 
+<img align="right" width="220" height="250" src="logo/heisenbridge-light-transparent.png">
+
 a bouncer-style Matrix IRC bridge.
 
 Heisenbridge brings IRC to Matrix by creating an environment where every user connects to each network individually like they would with a traditional IRC bouncer.
@@ -47,10 +49,11 @@ Usage
 ```
 usage: python -m heisenbridge [-h] [-v] -c CONFIG [-l LISTEN_ADDRESS]
                               [-p LISTEN_PORT] [-u UID] [-g GID] [-i]
-                              [--generate] [--reset] [-o OWNER]
+                              [--identd-port IDENTD_PORT] [--generate]
+                              [--reset] [-o OWNER]
                               [homeserver]
 
-a Matrix IRC bridge
+a bouncer-style Matrix IRC bridge
 
 positional arguments:
   homeserver            URL of Matrix homeserver (default:
@@ -69,8 +72,9 @@ optional arguments:
                         bridge listen port (default: 9898)
   -u UID, --uid UID     user id to run as (default: None)
   -g GID, --gid GID     group id to run as (default: None)
-  -i, --identd          enable identd on TCP port 113, requires root (default:
-                        False)
+  -i, --identd          enable identd service (default: False)
+  --identd-port IDENTD_PORT
+                        identd listen port (default: 113)
   --generate            generate registration YAML for Matrix homeserver
   --reset               reset ALL bridge configuration from homeserver and
                         exit

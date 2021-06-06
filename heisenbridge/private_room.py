@@ -228,6 +228,10 @@ class PrivateRoom(Room):
         if self.user_id not in self.members:
             asyncio.ensure_future(self.serv.api.post_room_invite(self.id, self.user_id))
 
+        # lazy update displayname if we detect a change
+        if not self.serv.is_user_cached(irc_user_id, event.source.nick):
+            asyncio.ensure_future(self.serv.cache_user(irc_user_id, event.source.nick))
+
     def on_privnotice(self, conn, event) -> None:
         if self.network is None:
             return

@@ -119,8 +119,8 @@ class BridgeAppService(AppService):
 
             self._users[user_id] = displayname
 
-    def is_user_cached(self, user_id):
-        return user_id in self._users
+    def is_user_cached(self, user_id, displayname=None):
+        return user_id in self._users and (displayname is None or self._users[user_id] == displayname)
 
     async def ensure_irc_user_id(self, network, nick):
         user_id = self.irc_user_id(network, nick)

@@ -111,6 +111,8 @@ class HeisenConnection(AioConnection):
         self.username = username or nickname
         self.ircname = ircname or nickname
         self.password = password
+        self.sasl_username = sasl_username
+        self.sasl_password = sasl_password
         self.connect_factory = connect_factory
 
         protocol_instance = self.protocol_class(self, self.reactor.loop)
@@ -122,9 +124,11 @@ class HeisenConnection(AioConnection):
 
         self.connected = True
         self.reactor._on_connect(self.protocol, self.transport)
+        return self
 
+    async def register(self):
         # SASL stuff
-        if sasl_username is not None and sasl_password is not None:
+        if self.sasl_username is not None and self.sasl_password is not None:
             self.cap("REQ", "sasl")
 
             try:
@@ -138,7 +142,7 @@ class HeisenConnection(AioConnection):
                 if not self._authenticate_cont:
                     raise ServerConnectionError("AUTHENTICATE was rejected.")
 
-                sasl = f"{sasl_username}\0{sasl_username}\0{sasl_password}"
+                sasl = f"{self.sasl_username}\0{self.sasl_username}\0{self.sasl_password}"
                 self.send_raw("AUTHENTICATE " + base64.b64encode(sasl.encode("utf8")).decode("utf8"))
                 await asyncio.wait_for(self._authreply_event.wait(), 30)
 
@@ -154,7 +158,6 @@ class HeisenConnection(AioConnection):
             self.pass_(self.password)
         self.nick(self.nickname)
         self.user(self.username, self.ircname)
-        return self
 
     def close(self):
         logging.debug("Canceling IRC event queue")

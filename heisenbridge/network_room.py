@@ -777,6 +777,9 @@ class NetworkRoom(Room):
 
                     self.disconnect = False
 
+                    # run connection registration (SASL, user, nick)
+                    await self.conn.register()
+
                     return
                 except TimeoutError:
                     self.send_notice("Connection timed out.")

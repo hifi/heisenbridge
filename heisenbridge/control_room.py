@@ -143,12 +143,16 @@ class ControlRoom(Room):
 
     async def on_mx_message(self, event) -> bool:
         if event["content"]["msgtype"] != "m.text" or event["sender"] == self.serv.user_id:
-            return True
+            return
+
+        # ignore edits
+        if "m.new_content" in event["content"]:
+            return
 
         try:
-            return await self.commands.trigger(event["content"]["body"])
+            await self.commands.trigger(event["content"]["body"])
         except CommandParserError as e:
-            return self.send_notice(str(e))
+            self.send_notice(str(e))
 
     def networks(self):
         networks = {}

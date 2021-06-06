@@ -196,6 +196,7 @@ class ChannelRoom(PrivateRoom):
         names = list(self.names_buffer)
         self.names_buffer = []
         modes: Dict[str, List[str]] = {}
+        others = []
 
         # build to_remove list from our own puppets
         for member in self.members:
@@ -211,7 +212,15 @@ class ChannelRoom(PrivateRoom):
                 if mode not in modes:
                     modes[mode] = []
 
-                modes[mode].append(nick)
+                if nick == conn.real_nickname:
+                    modes[mode].append(nick + " (you)")
+                else:
+                    modes[mode].append(nick)
+            else:
+                if nick == conn.real_nickname:
+                    others.append(nick + " (you)")
+                else:
+                    others.append(nick)
 
             # ignore us
             if nick == conn.real_nickname:
@@ -264,6 +273,10 @@ class ChannelRoom(PrivateRoom):
         for mode, nicks in modes.items():
             self.send_notice(f"Users with '{mode}': {', '.join(nicks)}")
 
+        # show everyone else
+        if len(others) > 0:
+            self.send_notice(f"Users: {', '.join(others)}")
+
         # FIXME: this floods the event queue if there's a lot of people
         for (irc_user_id, nick) in to_add:
             self._add_puppet(nick)
@@ -274,7 +287,7 @@ class ChannelRoom(PrivateRoom):
     def on_join(self, conn, event) -> None:
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
-            self.send_notice(f"Joined {event.target}")
+            self.send_notice(f"Joined {event.target} as {event.source.nick} ({event.source.userhost})")
             # sync channel modes/key on join
             self.network.conn.mode(self.name, "")
             return

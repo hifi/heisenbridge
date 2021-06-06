@@ -28,6 +28,15 @@ class Identd:
 
                 logging.debug(f"Remote {req_addr} wants to know who is {src_port} connected to {dst_port}")
 
+                """
+                This is a hack to workaround the issue where asyncio create_connection has not returned before
+                identd is already requested.
+
+                Proper fix would be to use our own sock that has been pre-bound but that's quite a bit of work
+                for very little gain.
+                """
+                await asyncio.sleep(0.1)
+
                 for room in self.serv.find_rooms(NetworkRoom):
                     if not room.conn or not room.conn.connected:
                         continue
@@ -49,7 +58,7 @@ class Identd:
                 writer.write(response.encode())
                 await writer.drain()
         except Exception:
-            logging.exception("Identd request failed.")
+            logging.debug("Identd request threw exception, ignored")
         finally:
             writer.close()
 

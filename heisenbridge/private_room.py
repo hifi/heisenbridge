@@ -166,15 +166,15 @@ class PrivateRoom(Room):
         room.name = name.lower()
         room.network = network
         room.network_name = network.name
-        asyncio.ensure_future(room._create_mx())
+        asyncio.ensure_future(room._create_mx(name))
         return room
 
-    async def _create_mx(self) -> None:
+    async def _create_mx(self, displayname) -> None:
         if self.id is None:
-            irc_user_id = await self.network.serv.ensure_irc_user_id(self.network.name, self.name)
+            irc_user_id = await self.network.serv.ensure_irc_user_id(self.network.name, displayname)
             self.id = await self.network.serv.create_room(
-                "{} ({})".format(self.name, self.network.name),
-                "Private chat with {} on {}".format(self.name, self.network.name),
+                "{} ({})".format(displayname, self.network.name),
+                "Private chat with {} on {}".format(displayname, self.network.name),
                 [self.network.user_id, irc_user_id],
             )
             self.serv.register_room(self)

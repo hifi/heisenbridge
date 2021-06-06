@@ -107,12 +107,12 @@ class ChannelRoom(PrivateRoom):
             room.key = network.keys[room.name]
             del network.keys[room.name]
 
-        asyncio.ensure_future(room._create_mx())
+        asyncio.ensure_future(room._create_mx(name))
         return room
 
-    async def _create_mx(self):
+    async def _create_mx(self, name):
         # handle !room names properly
-        visible_name = self.name
+        visible_name = name
         if visible_name.startswith("!"):
             visible_name = "!" + visible_name[6:]
 

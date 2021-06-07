@@ -353,9 +353,7 @@ class BridgeAppService(AppService):
             is_admin = await self.api.get_synapse_admin_users_admin(self.user_id)
             self.synapse_admin = is_admin["admin"]
         except MatrixForbidden:
-            logging.warning(
-                f"We ({self.user_id}) are not a server admin, inviting puppets manually is required which is slightly slower."
-            )
+            logging.info(f"We ({self.user_id}) are not a server admin, inviting puppets is required.")
         except Exception:
             logging.info("Seems we are not connected to Synapse, inviting puppets is required.")
 

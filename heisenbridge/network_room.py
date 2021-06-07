@@ -516,22 +516,22 @@ class NetworkRoom(Room):
     def get_username(self):
         # allow admins to spoof
         if self.serv.is_admin(self.user_id) and self.username:
-            return self.username
+            return self.username[:8]
 
         parts = self.user_id.split(":")
 
         # return mxid digest if federated
         if parts[1] != self.serv.server_name:
             return (
-                "mx-"
+                "m-"
                 + b32encode(hashlib.sha1(self.user_id.encode("utf-8")).digest())
                 .decode("utf-8")
-                .replace("=", "")[:13]
+                .replace("=", "")[:6]
                 .lower()
             )
 
         # return local part of mx id for local users
-        return parts[0][1:]
+        return parts[0][1:9]
 
     async def cmd_username(self, args) -> None:
         if args.remove:

@@ -125,6 +125,10 @@ class PlumbedRoom(ChannelRoom):
                 if re.match(r"^\s*$", line):
                     continue
 
+                # drop all code block lines
+                if re.match(r"^\s*```\s*$", line):
+                    continue
+
                 messages += split_long(
                     self.network.conn.real_nickname,
                     self.network.conn.user,
@@ -134,7 +138,7 @@ class PlumbedRoom(ChannelRoom):
                 )
 
             for i, message in enumerate(messages):
-                if i == 4:
+                if i == 4 and len(messages) > 5:
                     self.react(event["event_id"], "\u2702")  # scissors
 
                     resp = await self.serv.api.post_media_upload(

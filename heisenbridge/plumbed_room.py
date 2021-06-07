@@ -70,11 +70,15 @@ class PlumbedRoom(ChannelRoom):
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
             return
 
-        (name, server) = event["sender"].split(":")
+        sender = event["sender"]
+        (name, server) = sender.split(":")
 
         # prevent re-sending federated messages back
         if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:
             return
+
+        # add ZWSP to sender to avoid pinging on IRC
+        sender = sender[:2] + "\u200B" + sender[2:]
 
         body = None
         if "body" in event["content"]:
@@ -88,10 +92,10 @@ class PlumbedRoom(ChannelRoom):
                 body = body.replace(user_id, displayname)
 
         if event["content"]["msgtype"] == "m.emote":
-            self.network.conn.action(self.name, "{} {}".format(event["user_id"], body))
+            self.network.conn.action(self.name, f"{sender} {body}")
         elif event["content"]["msgtype"] == "m.image":
             self.network.conn.privmsg(
-                self.name, "<{}> {}".format(event["user_id"], self.serv.mxc_to_url(event["content"]["url"]))
+                self.name, "<{}> {}".format(sender, self.serv.mxc_to_url(event["content"]["url"]))
             )
         elif event["content"]["msgtype"] == "m.text":
             if "m.new_content" in event["content"]:
@@ -126,7 +130,7 @@ class PlumbedRoom(ChannelRoom):
                     self.network.conn.user,
                     self.network.real_host,
                     self.name,
-                    f"<{event['user_id']}> {line}",
+                    f"<{sender}> {line}",
                 )
 
             for i, message in enumerate(messages):

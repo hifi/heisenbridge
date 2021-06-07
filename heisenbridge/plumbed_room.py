@@ -78,7 +78,7 @@ class PlumbedRoom(ChannelRoom):
             return
 
         # add ZWSP to sender to avoid pinging on IRC
-        sender = sender[:2] + "\u200B" + sender[2:]
+        sender = f"{name[:2]}\u200B{name[2:]}:{server[:1]}\u200B{server[1:]}"
 
         body = None
         if "body" in event["content"]:

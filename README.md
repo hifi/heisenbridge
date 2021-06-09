@@ -79,6 +79,7 @@ The master branch is automatically published to [Docker Hub](https://hub.docker.
 docker pull hif1/heisenbridge
 docker run --rm hif1/heisenbridge -h
 ```
+Additionally, if you use [`matrix-docker-ansible-deploy`](https://github.com/spantaleev/matrix-docker-ansible-deploy) to deploy your Synapse server, you can use it to integrate Heisenbridge as well - just follow the [relevant docs](https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/master/docs/configuring-playbook-bridge-heisenbridge.md)
 
 Usage
 -----

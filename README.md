@@ -1,21 +1,17 @@
 Heisenbridge
 ============
 
-<img align="right" width="220" height="250" src="logo/heisenbridge-light-transparent.png">
-
 a bouncer-style Matrix IRC bridge.
 
+<img align="right" width="220" height="250" src="logo/heisenbridge-light-transparent.png">
+
 Heisenbridge brings IRC to Matrix by creating an environment where every user connects to each network individually like they would with a traditional IRC bouncer.
-Simplicity is achieved by exposing IRC in the most straightforward way as possible where it makes sense so it feels familiar for long time IRC users and prevents hiding protocol level events to help diagnose integration issues.
+Simplicity is achieved by exposing IRC in the most straightforward way as possible where it makes sense so it feels familiar for long time IRC users.
 
-These compromises also mean that some IRC or Matrix features are managed with text commands rather than using the Matrix UI directly and some Matrix features that may seem to match IRC are not available anyway.
-Users on IRC should not know you are using Matrix unless you send media that is linked from your homeserver.
+Please file an issue when you find something is missing or isn't working that you'd like to see fixed. Pull requests are more than welcome!
 
-Please file an issue when you find something is missing or isn't working that you'd like to see fixed. Also bear in mind this project is still in very early stages of development so many things are missing or outright broken. Pull requests are more than welcome!
-
-Support and development discussion in [#heisenbridge:vi.fi](https://matrix.to/#/#heisenbridge:vi.fi)
-
-Use [matrix-appservice-irc](https://github.com/matrix-org/matrix-appservice-irc) instead if you need to plumb rooms between Matrix and IRC seamlessly or need to connect large amounts of users.
+Support and development discussion in [#heisenbridge:vi.fi](https://matrix.to/#/#heisenbridge:vi.fi) on Matrix or by joining [#heisenbridge](https://web.libera.chat/?channels=#heisenbridge) on [Libera.Chat](https://libera.chat) IRC network.
+The IRC channel is plumbed with Heisenbridge to Matrix using the relaybot mode.
 
 Features
 --------
@@ -27,7 +23,7 @@ Features
 * access control for local and federated users
 * fully puppeted users from IRC, they come and go as they would on Matrix
 * tested with up to 2000 users in a single channel
-* optional public room plumbing with single puppeting Matrix <-> relay bot on IRC
+* optional room plumbing with single puppeting on Matrix <-> relaybot on IRC
 * IRCnet !channels _are_ supported, you're welcome
 * any number of IRC networks and users technically possible
 * channel customization by setting the name and avatar
@@ -35,6 +31,46 @@ Features
 * customizable ident support
 * long message splitting directly to IRC
 * automatic identify/auth with server password or command on connect
+
+Comparison
+----------
+
+To help understand where Heisenbridge is a good fit here's a feature matrix of some of the key differences between other popular solutions:
+
+|                         | Matrix |  IRC | Appservice | Ratelimit | Self-host | Permissions  |
+|-------------------------|:------:|:----:|:----------:|:---------:|:---------:|--------------|
+| Heisenbridge (bouncer)  | one    | one  | yes        | no        | yes       | IRC only     |
+| Heisenbridge (relaybot) | many   | one  | yes        | IRC       | yes       | separate     |
+| matrix-appservice-irc   | many   | many | yes        | no        | no        | synchronized |
+| matterbridge            | one    | one  | no         | both      | only      | separate     |
+
+**Matrix** = actual users on Matrix  
+**IRC** = connected users to IRC from Matrix  
+**Appservice** = runs as an appservice (requires a homeserver)  
+**Ratelimit** = perceived ratelimiting in default setup (Matrix/IRC)  
+**Self-host** = is it recommended to run your own instance  
+**Permissions** = how room/channel permissions are managed (Matrix/IRC)  
+
+Heisenbridge in bouncer mode has one direct Matrix user per IRC connection and IRC users are puppeted on Matrix.
+The Matrix users identity is directly mapped to IRC and they are in full control.
+There are no Matrix side permission management in this mode as all channels and private messages are between the Matrix user and the bridge.
+Multiple authorized Matrix users can use the bridge separately to create their own IRC connections.
+
+Heisenbridge in relaybot mode is part of a larger Matrix room and puppets everyone from IRC separately but still has only one IRC connection for relaying messages from Matrix.
+Matrix users' identities are only relayed through the messages they send.
+Permissions in this mode are separate meaning the bridge needs to be given explicit permission to join a Matrix room if it's not public.
+The bridge only requires enough power levels to invite puppets (if the room is invite-only) and for them to be able to talk with the default power level they get.
+Single authorized Matrix user manages the relaybot with Heisenbridge.
+
+[matrix-appservice-irc](https://github.com/matrix-org/matrix-appservice-irc) runs in full single puppeting mode where both IRC and Matrix users are puppeted both ways.
+The Matrix users identity is directly mapped to IRC and they are in full control.
+This method of bridging creates multiple IRC connections which makes is mostly transparent for both sides of the bridge.
+As the room and channel permissions are synchronized between IRC and Matrix (where applicable) means a Matrix user joining a Matrix room needs to be able to connect and join the IRC channel through the bridge as well.
+Any Matrix user joining plumbed or portal IRC rooms are automatically connected to the IRC network.
+
+[matterbridge](https://github.com/42wim/matterbridge) is a bot which connects to each network as a single user and is fairly easy and quick to setup by anyone.
+Both IRC and Matrix users' identities are only relayed through the messages they send.
+The bot operator manages everything and does not require any user interaction on either side.
 
 Docker
 ------

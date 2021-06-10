@@ -55,35 +55,26 @@ class HeisenConnection(AioConnection):
         self._queue = asyncio.Queue()
         self._task = asyncio.ensure_future(self._run())
 
-        self._cap_event = asyncio.Event()
-        self._cap_sasl = False
-        self._authenticate_event = asyncio.Event()
-        self._authenticate_cont = False
-        self._authreply_event = asyncio.Event()
-        self._authreply_error = None
+    async def expect(self, events, timeout=30):
+        events = events if not isinstance(events, str) and not isinstance(events, int) else [events]
+        waitable = asyncio.Event()
+        result = None
 
-        self.add_global_handler("cap", self._on_cap)
-        self.add_global_handler("authenticate", self._on_authenticate)
-        self.add_global_handler("903", self._on_auth_ok)
-        self.add_global_handler("904", self._on_auth_fail)
-        self.add_global_handler("908", self._on_auth_fail)
+        def expected(connection, event):
+            nonlocal result, waitable
+            result = (connection, event)
+            waitable.set()
+            return "NO MORE"
 
-    def _on_cap(self, connection, event):
-        if event.arguments and event.arguments[0] == "ACK":
-            self._cap_sasl = True
+        for event in events:
+            self.add_global_handler(event, expected, -100)
 
-        self._cap_event.set()
-
-    def _on_authenticate(self, connection, event):
-        self._authenticate_cont = event.target == "+"
-        self._authenticate_event.set()
-
-    def _on_auth_ok(self, connection, event):
-        self._authreply_event.set()
-
-    def _on_auth_fail(self, connection, event):
-        self._authreply_error = event.arguments[0]
-        self._authreply_event.set()
+        try:
+            await asyncio.wait_for(waitable.wait(), timeout)
+            return result
+        finally:
+            for event in events:
+                self.remove_global_handler(event, expected)
 
     async def connect(
         self,
@@ -132,22 +123,22 @@ class HeisenConnection(AioConnection):
             self.cap("REQ", "sasl")
 
             try:
-                await asyncio.wait_for(self._cap_event.wait(), 30)
-
-                if not self._cap_sasl:
-                    raise ServerConnectionError("SASL requested but not supported.")
+                (connection, event) = await self.expect("cap")
+                if not event.arguments or event.arguments[0] != "ACK":
+                    raise ServerConnectionError("SASL requested but not supported by server.")
 
                 self.send_raw("AUTHENTICATE PLAIN")
-                await asyncio.wait_for(self._authenticate_event.wait(), 30)
-                if not self._authenticate_cont:
-                    raise ServerConnectionError("AUTHENTICATE was rejected.")
+
+                (connection, event) = await self.expect("authenticate")
+                if event.target != "+":
+                    raise ServerConnectionError("SASL AUTHENTICATE was rejected.")
 
                 sasl = f"{self.sasl_username}\0{self.sasl_username}\0{self.sasl_password}"
                 self.send_raw("AUTHENTICATE " + base64.b64encode(sasl.encode("utf8")).decode("utf8"))
-                await asyncio.wait_for(self._authreply_event.wait(), 30)
+                (connection, event) = await self.expect(["903", "904", "908"])
+                if event.type != "903":
+                    raise ServerConnectionError(event.arguments[0])
 
-                if self._authreply_error is not None:
-                    raise ServerConnectionError(self._authreply_error)
             except asyncio.TimeoutError:
                 raise ServerConnectionError("SASL authentication timed out.")
 

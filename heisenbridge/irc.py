@@ -55,7 +55,6 @@ class HeisenConnection(AioConnection):
     def __init__(self, reactor):
         super().__init__(reactor)
         self._queue = asyncio.Queue()
-        self._task = asyncio.ensure_future(self._run())
 
     async def expect(self, events, timeout=30):
         events = events if not isinstance(events, str) and not isinstance(events, int) else [events]
@@ -116,6 +115,7 @@ class HeisenConnection(AioConnection):
         self.protocol = protocol
 
         self.connected = True
+        self._task = asyncio.ensure_future(self._run())
         self.reactor._on_connect(self.protocol, self.transport)
         return self
 

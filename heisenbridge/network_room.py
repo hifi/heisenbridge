@@ -785,11 +785,10 @@ class NetworkRoom(Room):
                     self.send_notice("Connection timed out.")
                 except irc.client.ServerConnectionError as e:
                     self.send_notice(str(e))
-                    logging.exception("Failed to connect")
+                    self.send_notice(f"Failed to connect: {str(e)}")
                     self.disconnect = True
                 except Exception as e:
                     self.send_notice(f"Failed to connect: {str(e)}")
-                    logging.exception("Failed to connect")
 
             if not self.disconnect:
                 self.send_notice(f"Tried all servers, waiting {backoff} seconds before trying again.")

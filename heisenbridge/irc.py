@@ -12,34 +12,36 @@ from irc.connection import AioFactory
 class HeisenProtocol(IrcProtocol):
     ping_timeout = 300
 
-    def connection_made(self, transport):
-        super().connection_made(transport)
+    def connection_made(self, *args, **kwargs):
+        super().connection_made(*args, **kwargs)
 
         # start aliveness check
-        self.loop.call_later(60, self._are_we_still_alive)
-        self.last_data = self.loop.time()
+        self._timer = self.loop.call_later(60, self._are_we_still_alive)
+        self._last_data = self.loop.time()
 
-    def data_received(self, data):
-        super().data_received(data)
-        self.last_data = self.loop.time()
+    def connection_lost(self, exc):
+        super().connection_lost(exc)
+        self._timer.cancel()
+
+    def data_received(self, *args, **kwargs):
+        super().data_received(*args, **kwargs)
+        self._last_data = self.loop.time()
 
     def _are_we_still_alive(self):
-        # cancel if we don't have a connection
         if not self.connection or not hasattr(self.connection, "connected") or not self.connection.connected:
-            logging.debug("Aliveness check has no connection, aborting.")
             return
 
         # no
-        if self.loop.time() - self.last_data >= self.ping_timeout:
+        if self.loop.time() - self._last_data >= self.ping_timeout:
             logging.debug("Disconnecting due to no data received from server.")
             self.connection.disconnect("No data received.")
             return
 
         # re-schedule aliveness check
-        self.loop.call_later(self.ping_timeout / 3, self._are_we_still_alive)
+        self._timer = self.loop.call_later(self.ping_timeout / 3, self._are_we_still_alive)
 
         # yes
-        if self.loop.time() - self.last_data < self.ping_timeout / 3:
+        if self.loop.time() - self._last_data < self.ping_timeout / 3:
             return
 
         # perhaps, ask the server

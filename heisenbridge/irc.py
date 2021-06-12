@@ -46,7 +46,7 @@ class HeisenProtocol(IrcProtocol):
 
         # perhaps, ask the server
         logging.debug("Aliveness check failed, sending PING")
-        self.connection.send_raw("PING " + self.connection.real_server_name)
+        self.connection.send_items("PING", self.connection.real_server_name)
 
 
 class HeisenConnection(AioConnection):
@@ -54,7 +54,7 @@ class HeisenConnection(AioConnection):
 
     def __init__(self, reactor):
         super().__init__(reactor)
-        self._queue = asyncio.Queue()
+        self._queue = asyncio.PriorityQueue()
 
     async def expect(self, events, timeout=30):
         events = events if not isinstance(events, str) and not isinstance(events, int) else [events]
@@ -129,14 +129,14 @@ class HeisenConnection(AioConnection):
                 if not event.arguments or event.arguments[0] != "ACK":
                     raise ServerConnectionError("SASL requested but not supported by server.")
 
-                self.send_raw("AUTHENTICATE PLAIN")
+                self.send_items("AUTHENTICATE PLAIN")
 
                 (connection, event) = await self.expect("authenticate")
                 if event.target != "+":
                     raise ServerConnectionError("SASL AUTHENTICATE was rejected.")
 
                 sasl = f"{self.sasl_username}\0{self.sasl_username}\0{self.sasl_password}"
-                self.send_raw("AUTHENTICATE " + base64.b64encode(sasl.encode("utf8")).decode("utf8"))
+                self.send_items("AUTHENTICATE", base64.b64encode(sasl.encode("utf8")).decode("utf8"))
                 (connection, event) = await self.expect(["903", "904", "908"])
                 if event.type != "903":
                     raise ServerConnectionError(event.arguments[0])
@@ -164,7 +164,7 @@ class HeisenConnection(AioConnection):
 
         while True:
             try:
-                string = await self._queue.get()
+                (priority, string) = await self._queue.get()
 
                 diff = int(loop.time() - last)
 
@@ -195,8 +195,17 @@ class HeisenConnection(AioConnection):
 
         logging.debug("IRC event queue ended")
 
-    def send_raw(self, string):
-        self._queue.put_nowait(string)
+    def send_raw(self, string, priority=0):
+        self._queue.put_nowait((priority, string))
+
+    def send_items(self, *items):
+        priority = 0
+        if items[0] == "PRIVMSG" or items[0] == "NOTICE":
+            priority = 1
+        elif items[0] == "PONG":
+            priority = -1
+
+        self.send_raw(" ".join(filter(None, items)), priority)
 
 
 class HeisenReactor(AioReactor):

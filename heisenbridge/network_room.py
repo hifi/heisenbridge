@@ -891,16 +891,23 @@ class NetworkRoom(Room):
                 await asyncio.sleep(4)
 
             channels = []
-            keys = []
+            keyed_channels = []
 
             for room in self.rooms.values():
                 if type(room) is ChannelRoom or type(room) is PlumbedRoom:
-                    channels.append(room.name)
-                    keys.append(room.key if room.key else "")
+                    if room.key:
+                        keyed_channels.append((room.name, room.key))
+                    else:
+                        channels.append(room.name)
 
             if len(channels) > 0:
                 self.send_notice(f"Joining channels {', '.join(channels)}")
-                self.conn.join(",".join(channels), ",".join(keys))
+                self.conn.join(",".join(channels))
+
+            if len(keyed_channels) > 0:
+                for channel, key in keyed_channels:
+                    self.send_notice(f"Joining {channel} with a key")
+                    self.conn.join(channel, key)
 
         asyncio.ensure_future(later())
 

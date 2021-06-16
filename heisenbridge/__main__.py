@@ -114,10 +114,9 @@ class BridgeAppService(AppService):
         if displayname and self._users[user_id] != displayname:
             try:
                 await self.api.put_user_displayname(user_id, displayname)
+                self._users[user_id] = displayname
             except MatrixError as e:
                 logging.warning(f"Failed to set displayname '{displayname}' for user_id '{user_id}', got '{e}'")
-
-            self._users[user_id] = displayname
 
     def is_user_cached(self, user_id, displayname=None):
         return user_id in self._users and (displayname is None or self._users[user_id] == displayname)

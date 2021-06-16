@@ -890,6 +890,10 @@ class NetworkRoom(Room):
                 )
                 await asyncio.sleep(4)
 
+            # detect disconnect before we get to join
+            if not self.conn or not self.conn.connected:
+                return
+
             channels = []
             keyed_channels = []
 

@@ -407,13 +407,13 @@ class BridgeAppService(AppService):
                 if not cls:
                     raise Exception("Unknown room type")
 
-                members = list((await self.api.get_room_joined_members(room_id))["joined"].keys())
+                joined_members = (await self.api.get_room_joined_members(room_id))["joined"]
 
-                # add to cache immediately but without known displayname
-                for user_id in members:
-                    await self.cache_user(user_id, None)
+                # add to cache immediately with last known displayname
+                for user_id, data in joined_members.items():
+                    self._users[user_id] = data["display_name"]
 
-                room = cls(id=room_id, user_id=config["user_id"], serv=self, members=members)
+                room = cls(id=room_id, user_id=config["user_id"], serv=self, members=list(joined_members.keys()))
                 room.from_config(config)
 
                 # only add valid rooms to event handler

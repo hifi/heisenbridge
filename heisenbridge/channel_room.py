@@ -184,11 +184,11 @@ class ChannelRoom(PrivateRoom):
         self.ensure_irc_user_id(self.network.name, nick)
         self.join(irc_user_id)
 
-    def _remove_puppet(self, user_id):
+    def _remove_puppet(self, user_id, reason=None):
         if user_id == self.serv.user_id or user_id == self.user_id:
             return
 
-        self.leave(user_id)
+        self.leave(user_id, reason)
 
     def on_endofnames(self, conn, event) -> None:
         to_remove = []
@@ -294,9 +294,6 @@ class ChannelRoom(PrivateRoom):
 
         # ensure, append, invite and join
         self._add_puppet(event.source.nick)
-
-    def on_quit(self, conn, event) -> None:
-        self.on_part(conn, event)
 
     def on_part(self, conn, event) -> None:
         # we don't need to sync ourself

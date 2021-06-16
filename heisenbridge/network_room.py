@@ -958,7 +958,7 @@ class NetworkRoom(Room):
         # leave channels
         for room in self.rooms.values():
             if type(room) is ChannelRoom or type(room) is PlumbedRoom:
-                room._remove_puppet(irc_user_id)
+                room._remove_puppet(irc_user_id, f"Quit: {event.arguments[0]}")
 
     def on_nick(self, conn, event) -> None:
         old_irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)

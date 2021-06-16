@@ -124,7 +124,12 @@ class Room(ABC):
                         self.members.append(event["user_id"])
                 elif event["type"] == "_leave":
                     if event["user_id"] in self.members:
-                        await self.serv.api.post_room_leave(self.id, event["user_id"])
+                        if event["reason"] is not None:
+                            await self.serv.api.post_room_kick(
+                                self.id, event["user_id"], user_id=event["user_id"], reason=event["reason"]
+                            )
+                        else:
+                            await self.serv.api.post_room_leave(self.id, event["user_id"])
                         self.members.remove(event["user_id"])
                 elif event["type"] == "_rename":
                     old_irc_user_id = self.serv.irc_user_id(self.network.name, event["old_nick"])
@@ -140,18 +145,13 @@ class Room(ABC):
                         # ensure we have the new puppet
                         await self.serv.ensure_irc_user_id(self.network.name, event["new_nick"])
 
-                        # and we need to announce in the room immediately
-                        await self.serv.api.put_room_send_event(
-                            self.id,
-                            "m.room.message",
-                            {
-                                "msgtype": "m.notice",
-                                "body": f"{event['old_nick']} is changing nick to {event['new_nick']}",
-                            },
-                        )
-
                         # old puppet away
-                        await self.serv.api.post_room_leave(self.id, old_irc_user_id)
+                        await self.serv.api.post_room_kick(
+                            self.id,
+                            old_irc_user_id,
+                            user_id=old_irc_user_id,
+                            reason=f"Changing nick to {event['new_nick']}",
+                        )
                         self.members.remove(old_irc_user_id)
 
                         # new puppet in
@@ -333,10 +333,11 @@ class Room(ABC):
 
         self._queue.enqueue(event)
 
-    def leave(self, user_id: str) -> None:
+    def leave(self, user_id: str, reason: Optional[str] = None) -> None:
         event = {
             "type": "_leave",
             "content": {},
+            "reason": reason,
             "user_id": user_id,
         }
 

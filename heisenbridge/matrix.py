@@ -10,10 +10,22 @@ from aiohttp import TCPConnector
 
 
 class MatrixError(Exception):
-    def __init__(self, errcode=None, error=None):
-        self.errcode = errcode
-        self.error = error
-        super().__init__(self.error)
+    def __init__(self, data):
+        if "errcode" in data:
+            self.errcode = data["errcode"]
+        else:
+            self.errcode = 0
+
+        if "error" in data:
+            self.error = data["error"]
+        else:
+            self.error = "Unspecified error"
+
+        super().__init__(self.errcode)
+
+
+class MatrixErrorUnknown(MatrixError):
+    pass
 
 
 class MatrixNotFound(MatrixError):
@@ -28,6 +40,16 @@ class MatrixUserInUse(MatrixError):
     pass
 
 
+class MatrixLimitExceeded(MatrixError):
+    def __init__(self, data):
+        super().__init__(data)
+
+        if "retry_after_ms" in data:
+            self.retry_after_s = data["retry_after_ms"] / 1000
+        else:
+            self.retry_after_s = 5
+
+
 class Matrix:
     def __init__(self, url, token):
         self.url = url
@@ -38,13 +60,15 @@ class Matrix:
 
     def _matrix_error(self, data):
         errors = {
+            "M_UNKNOWN": MatrixErrorUnknown,
             "M_NOT_FOUND": MatrixNotFound,
             "M_FORBIDDEN": MatrixForbidden,
             "M_USER_IN_USE": MatrixUserInUse,
+            "M_LIMIT_EXCEEDED": MatrixLimitExceeded,
         }
 
         ex = errors.get(data["errcode"], MatrixError)
-        return ex(data["errcode"], data["error"])
+        return ex(data)
 
     def _txn(self):
         self.seq += 1
@@ -62,12 +86,20 @@ class Matrix:
                         resp = await session.request(
                             method, self.url + uri, data=data, headers={"Content-type": content_type}
                         )
-                    data = await resp.json()
+                    ret = await resp.json()
 
                     if resp.status > 299:
-                        raise self._matrix_error(data)
+                        raise self._matrix_error(ret)
 
-                    return data
+                    return ret
+                except MatrixErrorUnknown:
+                    logging.warning(
+                        f"Request to HS failed with unknown error, HTTP code {resp.status}, falling through to retry."
+                    )
+                except MatrixLimitExceeded as e:
+                    logging.warning(f"Request to HS was rate limited, retrying in {e.retry_after_s} seconds...")
+                    await asyncio.sleep(e.retry_after_s)
+                    continue
                 except ClientResponseError:
                     # fail fast if no retry allowed if dealing with HTTP error
                     if not retry:

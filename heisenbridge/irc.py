@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import collections
 import logging
 
 from irc.client import ServerConnectionError
@@ -7,6 +8,45 @@ from irc.client_aio import AioConnection
 from irc.client_aio import AioReactor
 from irc.client_aio import IrcProtocol
 from irc.connection import AioFactory
+
+
+class MultiQueue:
+    def __init__(self):
+        self._prios = []
+        self._ques = {}
+
+    def __len__(self):
+        return sum([len(q) for q in self._ques.values()])
+
+    def append(self, item):
+        prio, value = item
+
+        if prio not in self._prios:
+            self._prios.append(prio)
+            self._prios.sort()
+            self._ques[prio] = collections.deque()
+
+        self._ques[prio].append(item)
+
+    def get(self):
+        for prio in self._prios:
+            que = self._ques[prio]
+            if len(que) > 0:
+                return que.popleft()
+
+        raise IndexError("Get called when all queues empty")
+
+
+# asyncio.PriorityQueue does not preserve order within priority level
+class OrderedPriorityQueue(asyncio.Queue):
+    def _init(self, maxsize):
+        self._queue = MultiQueue()
+
+    def _get(self):
+        return self._queue.get()
+
+    def _put(self, item):
+        self._queue.append(item)
 
 
 class HeisenProtocol(IrcProtocol):
@@ -54,7 +94,7 @@ class HeisenConnection(AioConnection):
 
     def __init__(self, reactor):
         super().__init__(reactor)
-        self._queue = asyncio.PriorityQueue()
+        self._queue = OrderedPriorityQueue()
 
     async def expect(self, events, timeout=30):
         events = events if not isinstance(events, str) and not isinstance(events, int) else [events]

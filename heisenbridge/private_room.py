@@ -4,7 +4,6 @@ import re
 from datetime import datetime
 from datetime import timezone
 from html import escape
-from typing import Dict
 from typing import Optional
 from typing import Tuple
 
@@ -128,7 +127,6 @@ class PrivateRoom(Room):
     network_name: str
 
     commands: CommandManager
-    displaynames: Dict[str, str]
 
     def init(self) -> None:
         self.name = None
@@ -136,7 +134,6 @@ class PrivateRoom(Room):
         self.network_name = None
 
         self.commands = CommandManager()
-        self.displaynames = {}
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -286,9 +283,6 @@ class PrivateRoom(Room):
         body = None
         if "body" in event["content"]:
             body = event["content"]["body"]
-
-            # replace mentioning us with our name
-            body = body.replace(self.serv.user_id, "Heisenbridge")
 
             # try to replace puppet matrix id mentions with displaynames
             for user_id, displayname in self.displaynames.items():

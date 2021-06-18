@@ -178,11 +178,8 @@ class ChannelRoom(PrivateRoom):
     def _add_puppet(self, nick):
         irc_user_id = self.serv.irc_user_id(self.network.name, nick)
 
-        # keep displayname map fresh
-        self.displaynames[irc_user_id] = nick
-
         self.ensure_irc_user_id(self.network.name, nick)
-        self.join(irc_user_id)
+        self.join(irc_user_id, nick)
 
     def _remove_puppet(self, user_id, reason=None):
         if user_id == self.serv.user_id or user_id == self.user_id:
@@ -228,9 +225,6 @@ class ChannelRoom(PrivateRoom):
 
             # convert to mx id, check if we already have them
             irc_user_id = self.serv.irc_user_id(self.network.name, nick)
-
-            # only used for mention mapping
-            self.displaynames[irc_user_id] = nick
 
             # make sure this user is not removed from room
             if irc_user_id in to_remove:

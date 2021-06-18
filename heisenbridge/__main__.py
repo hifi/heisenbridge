@@ -142,10 +142,6 @@ class BridgeAppService(AppService):
         return user_id
 
     async def _on_mx_event(self, event):
-        # keep user cache up-to-date
-        if "sender" in event:
-            await self.cache_user(event["sender"], None)
-
         if "room_id" in event and event["room_id"] in self._rooms:
             try:
                 room = self._rooms[event["room_id"]]
@@ -409,12 +405,16 @@ class BridgeAppService(AppService):
 
                 joined_members = (await self.api.get_room_joined_members(room_id))["joined"]
 
-                # add to cache immediately with last known displayname
-                for user_id, data in joined_members.items():
-                    self._users[user_id] = data["display_name"]
-
                 room = cls(id=room_id, user_id=config["user_id"], serv=self, members=list(joined_members.keys()))
                 room.from_config(config)
+
+                # add to room displayname
+                for user_id, data in joined_members.items():
+                    room.displaynames[user_id] = data["display_name"]
+
+                    # add to global puppet cache if it's a puppet
+                    if user_id.startswith("@" + self.puppet_prefix) and self.is_local(user_id):
+                        self._users[user_id] = data["display_name"]
 
                 # only add valid rooms to event handler
                 if room.is_valid():

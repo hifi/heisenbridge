@@ -297,6 +297,31 @@ class NetworkRoom(Room):
         cmd.add_argument("seconds", help="how many seconds to wait")
         self.commands.register(cmd, self.cmd_wait)
 
+        cmd = CommandParser(
+            prog="PLUMBCFG",
+            description="set configurable settings for plumbed rooms",
+            epilog=("Use the 'no' version of a boolean setting to disable it."),
+        )
+        cmd.add_argument("channel", help="plumbed channel")
+        cmd.add_argument(
+            "--max-lines", type=int, help="Number of lines to pass through from a message before truncating"
+        )
+        cmd.add_argument("--pastebin", dest="pastebin", action="store_true", help="Enable pastebin of long messages")
+        cmd.add_argument(
+            "--no-pastebin", dest="pastebin", action="store_false", help="Disable pastebin of long messages"
+        )
+        cmd.add_argument(
+            "--displaynames", dest="displaynames", action="store_true", help="Enable displaynames for relaybot mode"
+        )
+        cmd.add_argument(
+            "--no-displaynames",
+            dest="displaynames",
+            action="store_false",
+            help="Disable displaynames for relaybot mode",
+        )
+        cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None)
+        self.commands.register(cmd, self.cmd_plumbcfg)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -490,6 +515,37 @@ class NetworkRoom(Room):
                 self.send_notice(f"Unreasonable wait time: {args.seconds}")
         except ValueError:
             self.send_notice(f"Invalid wait time: {args.seconds}")
+
+    async def cmd_plumbcfg(self, args) -> None:
+        if args.channel not in self.rooms:
+            self.send_notice(f"Not in {args.channel}")
+            return
+
+        room = self.rooms[args.channel]
+        if type(room) is not PlumbedRoom:
+            self.send_notice(f"{args.channel} is not a plumbed room")
+            return
+
+        save = False
+
+        if args.max_lines is not None:
+            room.max_lines = args.max_lines
+            self.send_notice(f"Max lines set to {args.max_lines}.")
+            save = True
+
+        if args.pastebin is not None:
+            room.use_pastebin = args.pastebin
+            self.send_notice(f"Pastebin set to {args.pastebin}.")
+            save = True
+
+        if args.displaynames is not None:
+            room.use_displaynames = args.displaynames
+            self.send_notice(f"Displaynames set to {args.displaynames}.")
+            save = True
+
+        if save:
+            await room.save()
+            self.send_notice("Settings saved.")
 
     def get_nick(self):
         if self.nick:

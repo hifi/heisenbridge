@@ -21,6 +21,7 @@ class Room(ABC):
     user_id: str
     serv: AppService
     members: List[str]
+    displaynames: Dict[str, str]
     need_invite: bool = True
 
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
@@ -31,6 +32,7 @@ class Room(ABC):
         self.user_id = user_id
         self.serv = serv
         self.members = members
+        self.displaynames = {}
 
         self._mx_handlers = {}
         self._queue = EventQueue(self._flush_events)
@@ -92,14 +94,20 @@ class Room(ABC):
     async def _on_mx_room_member(self, event: dict) -> None:
         if event["content"]["membership"] == "leave" and event["state_key"] in self.members:
             self.members.remove(event["state_key"])
+            if event["state_key"] in self.displaynames:
+                del self.displaynames[event["state_key"]]
 
             if not self.is_valid():
                 raise RoomInvalidError(
                     f"Room {self.id} ended up invalid after membership change, returning false from event handler."
                 )
 
-        if event["content"]["membership"] == "join" and event["state_key"] not in self.members:
-            self.members.append(event["state_key"])
+        if event["content"]["membership"] == "join":
+            if event["state_key"] not in self.members:
+                self.members.append(event["state_key"])
+
+            if "displayname" in event["content"]:
+                self.displaynames[event["state_key"]] = event["content"]["displayname"]
 
     async def _flush_events(self, events):
         for event in events:
@@ -122,6 +130,7 @@ class Room(ABC):
                             await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
 
                         self.members.append(event["user_id"])
+                        self.displaynames[event["user_id"]] = event["nick"]
                 elif event["type"] == "_leave":
                     if event["user_id"] in self.members:
                         if event["reason"] is not None:
@@ -131,6 +140,8 @@ class Room(ABC):
                         else:
                             await self.serv.api.post_room_leave(self.id, event["user_id"])
                         self.members.remove(event["user_id"])
+                        if event["user_id"] in self.displaynames:
+                            del self.displaynames[event["user_id"]]
                 elif event["type"] == "_rename":
                     old_irc_user_id = self.serv.irc_user_id(self.network.name, event["old_nick"])
 
@@ -153,6 +164,8 @@ class Room(ABC):
                             reason=f"Changing nick to {event['new_nick']}",
                         )
                         self.members.remove(old_irc_user_id)
+                        if old_irc_user_id in self.displaynames:
+                            del self.displaynames[old_irc_user_id]
 
                         # new puppet in
                         if new_irc_user_id not in self.members:
@@ -172,14 +185,14 @@ class Room(ABC):
                                 await self.serv.api.post_synapse_admin_room_join(self.id, new_irc_user_id)
 
                             self.members.append(new_irc_user_id)
-                    else:
-                        # update displayname in room even if only cases change
-                        self.displaynames[new_irc_user_id] = event["new_nick"]
+                            self.displaynames[new_irc_user_id] = event["new_nick"]
 
                 elif event["type"] == "_kick":
                     if event["user_id"] in self.members:
                         await self.serv.api.post_room_kick(self.id, event["user_id"], event["reason"])
                         self.members.remove(event["user_id"])
+                        if event["user_id"] in self.displaynames:
+                            del self.displaynames[event["user_id"]]
                 elif event["type"] == "_ensure_irc_user_id":
                     await self.serv.ensure_irc_user_id(event["network"], event["nick"])
                 elif "state_key" in event:
@@ -324,11 +337,12 @@ class Room(ABC):
 
         self._queue.enqueue(event)
 
-    def join(self, user_id: str) -> None:
+    def join(self, user_id: str, nick=None) -> None:
         event = {
             "type": "_join",
             "content": {},
             "user_id": user_id,
+            "nick": nick,
         }
 
         self._queue.enqueue(event)

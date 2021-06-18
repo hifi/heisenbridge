@@ -28,6 +28,7 @@ class PlumbedRoom(ChannelRoom):
         try:
             resp = await network.serv.api.post_room_join_alias(id)
             join_rules = await network.serv.api.get_room_state_event(resp["room_id"], "m.room.join_rules")
+            joined_members = (await network.serv.api.get_room_joined_members(resp["room_id"]))["joined"]
         except MatrixError as e:
             network.send_notice(f"Failed to join room: {str(e)}")
             return
@@ -38,6 +39,11 @@ class PlumbedRoom(ChannelRoom):
         room.network = network
         room.network_name = network.name
         room.need_invite = join_rules["join_rule"] != "public"
+
+        for user_id, data in joined_members.items():
+            if user_id not in room.members:
+                room.members.append(user_id)
+            room.displaynames[user_id] = data["display_name"]
 
         network.serv.register_room(room)
         network.rooms[room.name] = room
@@ -84,10 +90,6 @@ class PlumbedRoom(ChannelRoom):
         if "body" in event["content"]:
             body = event["content"]["body"]
 
-            # replace mentioning us with our name
-            body = body.replace(self.serv.user_id, "Heisenbridge")
-
-            # try to replace puppet matrix id mentions with displaynames
             for user_id, displayname in self.displaynames.items():
                 body = body.replace(user_id, displayname)
 

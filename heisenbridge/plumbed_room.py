@@ -13,6 +13,9 @@ class NetworkRoom:
 
 class PlumbedRoom(ChannelRoom):
     need_invite = False
+    max_lines = 5
+    use_pastebin = True
+    use_displaynames = False
 
     def is_valid(self) -> bool:
         # we are valid as long as the appservice is in the room
@@ -52,6 +55,26 @@ class PlumbedRoom(ChannelRoom):
         network.send_notice(f"Plumbed {resp['room_id']} to {channel}, to unplumb just kick me out.")
         return room
 
+    def from_config(self, config: dict) -> None:
+        super().from_config(config)
+
+        if "max_lines" in config:
+            self.max_lines = config["max_lines"]
+
+        if "use_pastebin" in config:
+            self.use_pastebin = config["use_pastebin"]
+
+        if "use_displaynames" in config:
+            self.use_displaynames = config["use_displaynames"]
+
+    def to_config(self) -> dict:
+        return {
+            **(super().to_config()),
+            "max_lines": self.max_lines,
+            "use_pastebin": self.use_pastebin,
+            "use_displaynames": self.use_displaynames,
+        }
+
     def send_notice(
         self,
         text: str,
@@ -85,6 +108,21 @@ class PlumbedRoom(ChannelRoom):
 
         # add ZWSP to sender to avoid pinging on IRC
         sender = f"{name[:2]}\u200B{name[2:]}:{server[:1]}\u200B{server[1:]}"
+
+        if self.use_displaynames and event["sender"] in self.displaynames:
+            sender_displayname = self.displaynames[event["sender"]]
+
+            # ensure displayname is unique
+            for user_id, displayname in self.displaynames.items():
+                if user_id != event["sender"] and displayname == sender_displayname:
+                    sender_displayname += f" ({sender})"
+                    break
+
+            # add ZWSP if displayname matches something on IRC
+            if len(sender_displayname) > 1:
+                sender_displayname = f"{sender_displayname[:1]}\u200B{sender_displayname[1:]}"
+
+            sender = sender_displayname
 
         body = None
         if "body" in event["content"]:
@@ -140,17 +178,21 @@ class PlumbedRoom(ChannelRoom):
                 )
 
             for i, message in enumerate(messages):
-                if i == 4 and len(messages) > 5:
+                if i == self.max_lines - 1 and len(messages) > self.max_lines:
                     self.react(event["event_id"], "\u2702")  # scissors
 
                     resp = await self.serv.api.post_media_upload(
                         body.encode("utf-8"), content_type="text/plain; charset=UTF-8"
                     )
-                    self.network.conn.privmsg(
-                        self.name,
-                        f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
-                    )
-                    self.react(event["event_id"], "\U0001f4dd")  # memo
+
+                    if self.use_pastebin:
+                        self.network.conn.privmsg(
+                            self.name,
+                            f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
+                        )
+                        self.react(event["event_id"], "\U0001f4dd")  # memo
+                    else:
+                        self.network.conn.privmsg(self.name, "... long message truncated")
 
                     return
 

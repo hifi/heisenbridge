@@ -26,7 +26,7 @@ def unix_to_local(timestamp: Optional[str]):
 
 
 # this is very naive and will break html tag close/open order right now
-def parse_irc_formatting(input: str) -> Tuple[str, Optional[str]]:
+def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
     plain = []
     formatted = []
 
@@ -85,7 +85,29 @@ def parse_irc_formatting(input: str) -> Tuple[str, Optional[str]]:
 
         if text:
             plain.append(text)
-            formatted.append(escape(text))
+
+            # escape any existing html in the text
+            text = escape(text)
+
+            # create pills
+            if pills:
+                for nick, mxid, displayname in pills:
+                    pill = f'<a href="https://matrix.to/#/{escape(mxid)}">{escape(displayname)}</a>'
+                    oldtext = None
+                    while oldtext != text:
+                        oldtext = text
+                        text = re.sub(
+                            r"(^|\s)" + re.escape(nick) + r"(\s|[^A-Za-z0-9\-_\[\]{}\\`\|]|$)",
+                            r"\1" + pill + r"\2",
+                            text,
+                            flags=re.IGNORECASE,
+                        )
+
+            # if the formatted version has a link, we took some pills
+            if "<a href" in text:
+                have_formatting = True
+
+            formatted.append(text)
 
     if bold:
         formatted.append("</b>")
@@ -202,13 +224,30 @@ class PrivateRoom(Room):
 
         super().cleanup()
 
+    def pills(self):
+        ret = []
+
+        # push our own name first
+        if self.user_id in self.displaynames:
+            ret.append((self.network.conn.real_nickname, self.user_id, self.displaynames[self.user_id]))
+
+        # assuming displayname of a puppet matches nick
+        for member in self.members:
+            if not member.startswith("@" + self.serv.puppet_prefix) or not member.endswith(":" + self.serv.server_name):
+                continue
+
+            if member in self.displaynames:
+                ret.append((self.displaynames[member], member, self.displaynames[member]))
+
+        return ret
+
     def on_privmsg(self, conn, event) -> None:
         if self.network is None:
             return
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 
-        (plain, formatted) = parse_irc_formatting(event.arguments[0])
+        (plain, formatted) = parse_irc_formatting(event.arguments[0], self.pills())
 
         if event.source.nick == self.network.conn.real_nickname:
             self.send_message(f"You said: {plain}", formatted=(f"You said: {formatted}" if formatted else None))

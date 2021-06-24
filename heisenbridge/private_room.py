@@ -228,8 +228,8 @@ class PrivateRoom(Room):
         ret = []
 
         # push our own name first
-        if self.user_id in self.displaynames:
-            ret.append((self.network.conn.real_nickname, self.user_id, self.displaynames[self.user_id]))
+        if self.serv.user_id in self.displaynames:
+            ret.append((self.network.conn.real_nickname, self.serv.user_id, self.displaynames[self.serv.user_id]))
 
         # assuming displayname of a puppet matches nick
         for member in self.members:

@@ -106,7 +106,7 @@ class Room(ABC):
             if event["state_key"] not in self.members:
                 self.members.append(event["state_key"])
 
-            if "displayname" in event["content"]:
+            if "displayname" in event["content"] and event["content"]["displayname"] is not None:
                 self.displaynames[event["state_key"]] = event["content"]["displayname"]
 
     async def _flush_events(self, events):

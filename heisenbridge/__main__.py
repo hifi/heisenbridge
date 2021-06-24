@@ -410,7 +410,8 @@ class BridgeAppService(AppService):
 
                 # add to room displayname
                 for user_id, data in joined_members.items():
-                    room.displaynames[user_id] = data["display_name"]
+                    if data["display_name"] is not None:
+                        room.displaynames[user_id] = data["display_name"]
 
                     # add to global puppet cache if it's a puppet
                     if user_id.startswith("@" + self.puppet_prefix) and self.is_local(user_id):

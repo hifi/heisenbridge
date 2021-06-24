@@ -5,6 +5,7 @@ from typing import List
 from typing import Optional
 
 from heisenbridge.command_parse import CommandParser
+from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.private_room import unix_to_local
 
@@ -337,7 +338,8 @@ class ChannelRoom(PrivateRoom):
 
     def on_currenttopic(self, conn, event) -> None:
         self.send_notice(f"Topic is '{event.arguments[1]}'")
-        self.set_topic(event.arguments[1])
+        (plain, formatted) = parse_irc_formatting(event.arguments[1])
+        self.set_topic(plain)
 
     def on_topicinfo(self, conn, event) -> None:
         settime = unix_to_local(event.arguments[2]) if len(event.arguments) > 2 else "?"
@@ -345,7 +347,8 @@ class ChannelRoom(PrivateRoom):
 
     def on_topic(self, conn, event) -> None:
         self.send_notice("{} changed the topic".format(event.source.nick))
-        self.set_topic(event.arguments[0])
+        (plain, formatted) = parse_irc_formatting(event.arguments[0])
+        self.set_topic(plain)
 
     def on_kick(self, conn, event) -> None:
         target_user_id = self.serv.irc_user_id(self.network.name, event.arguments[0])

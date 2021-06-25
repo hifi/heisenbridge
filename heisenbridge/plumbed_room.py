@@ -198,3 +198,12 @@ class PlumbedRoom(ChannelRoom):
                     return
 
                 self.network.conn.privmsg(self.name, message)
+
+    def pills(self):
+        ret = super().pills()
+
+        # remove the bot from pills as it may cause confusion
+        if self.user_id in ret:
+            del ret[self.user_id]
+
+        return ret

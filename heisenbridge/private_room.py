@@ -91,7 +91,7 @@ def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
 
             # create pills
             if pills:
-                for nick, mxid, displayname in pills:
+                for mxid, (nick, displayname) in pills.items():
                     pill = f'<a href="https://matrix.to/#/{escape(mxid)}">{escape(displayname)}</a>'
                     oldtext = None
                     while oldtext != text:
@@ -225,11 +225,11 @@ class PrivateRoom(Room):
         super().cleanup()
 
     def pills(self):
-        ret = []
+        ret = {}
 
         # push our own name first
-        if self.serv.user_id in self.displaynames:
-            ret.append((self.network.conn.real_nickname, self.serv.user_id, self.displaynames[self.serv.user_id]))
+        if self.user_id in self.displaynames:
+            ret[self.user_id] = (self.network.conn.real_nickname, self.displaynames[self.user_id])
 
         # assuming displayname of a puppet matches nick
         for member in self.members:
@@ -237,7 +237,7 @@ class PrivateRoom(Room):
                 continue
 
             if member in self.displaynames:
-                ret.append((self.displaynames[member], member, self.displaynames[member]))
+                ret[member] = (self.displaynames[member], self.displaynames[member])
 
         return ret
 

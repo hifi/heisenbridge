@@ -19,6 +19,7 @@ from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.irc import HeisenReactor
 from heisenbridge.plumbed_room import PlumbedRoom
+from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 
@@ -812,6 +813,7 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("pubnotice", self.on_pass)
                     self.conn.add_global_handler("quit", self.on_quit)
                     self.conn.add_global_handler("invite", self.on_invite)
+                    self.conn.add_global_handler("wallops", self.on_wallops)
                     # FIXME: action
                     self.conn.add_global_handler("topic", self.on_pass)
                     self.conn.add_global_handler("nick", self.on_nick)
@@ -1040,6 +1042,10 @@ class NetworkRoom(Room):
 
     def on_invite(self, conn, event) -> None:
         self.send_notice_html("<b>{}</b> has invited you to <b>{}</b>".format(event.source.nick, event.arguments[0]))
+
+    def on_wallops(self, conn, event) -> None:
+        plain, formatted = parse_irc_formatting(event.target)
+        self.send_notice_html(f"<b>WALLOPS {event.source.nick}</b>: {plain}")
 
     @ircroom_event()
     def on_kill(self, conn, event) -> None:

@@ -240,9 +240,15 @@ class BridgeAppService(AppService):
             logging.warning("Using internal URL for homeserver, media links are likely broken!")
             return self.api.url
 
-    def mxc_to_url(self, mxc):
+    def mxc_to_url(self, mxc, filename=None):
         mxc = urllib.parse.urlparse(mxc)
-        return "{}/_matrix/media/r0/download/{}{}".format(self.endpoint, mxc.netloc, mxc.path)
+
+        if filename is None:
+            filename = ""
+        else:
+            filename = "/" + urllib.parse.quote(filename)
+
+        return "{}/_matrix/media/r0/download/{}{}{}".format(self.endpoint, mxc.netloc, mxc.path, filename)
 
     async def reset(self, config_file, homeserver_url):
         with open(config_file) as f:

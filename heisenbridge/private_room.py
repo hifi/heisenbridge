@@ -329,8 +329,10 @@ class PrivateRoom(Room):
 
         if event["content"]["msgtype"] == "m.emote":
             self.network.conn.action(self.name, body)
-        elif event["content"]["msgtype"] == "m.image":
-            self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event["content"]["url"]))
+        elif event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
+            self.network.conn.privmsg(
+                self.name, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])
+            )
         elif event["content"]["msgtype"] == "m.text":
             if "m.new_content" in event["content"]:
                 self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")

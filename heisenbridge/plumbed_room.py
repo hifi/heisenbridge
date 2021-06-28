@@ -134,7 +134,7 @@ class PlumbedRoom(ChannelRoom):
 
         if event["content"]["msgtype"] == "m.emote":
             self.network.conn.action(self.name, f"{sender} {body}")
-        elif event["content"]["msgtype"] == "m.image":
+        elif event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
             self.network.conn.privmsg(
                 self.name, "<{}> {}".format(sender, self.serv.mxc_to_url(event["content"]["url"]))
             )

@@ -337,8 +337,8 @@ class ChannelRoom(PrivateRoom):
         self.set_topic("")
 
     def on_currenttopic(self, conn, event) -> None:
-        self.send_notice(f"Topic is '{event.arguments[1]}'")
         (plain, formatted) = parse_irc_formatting(event.arguments[1])
+        self.send_notice(f"Topic is '{plain}'")
         self.set_topic(plain)
 
     def on_topicinfo(self, conn, event) -> None:

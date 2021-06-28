@@ -333,6 +333,7 @@ class PrivateRoom(Room):
             self.network.conn.privmsg(
                 self.name, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])
             )
+            self.react(event["event_id"], "\U0001F517")  # link
         elif event["content"]["msgtype"] == "m.text":
             if "m.new_content" in event["content"]:
                 self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")
@@ -348,6 +349,7 @@ class PrivateRoom(Room):
                 finally:
                     return
 
+            lines = 0
             for line in body.split("\n"):
                 if line == "":
                     continue
@@ -360,5 +362,10 @@ class PrivateRoom(Room):
                     line,
                 )
 
+                lines += len(messages)
+
                 for message in messages:
                     self.network.conn.privmsg(self.name, message)
+
+            if lines > 1:
+                self.react(event["event_id"], f"\u2702 {lines} lines")

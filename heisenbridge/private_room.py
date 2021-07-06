@@ -93,15 +93,12 @@ def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
             if pills:
                 for mxid, (nick, displayname) in pills.items():
                     pill = f'<a href="https://matrix.to/#/{escape(mxid)}">{escape(displayname)}</a>'
-                    oldtext = None
-                    while oldtext != text:
-                        oldtext = text
-                        text = re.sub(
-                            r"(^|\s)" + re.escape(nick) + r"(\s|[^A-Za-z0-9\-_\[\]{}\\`\|]|$)",
-                            r"\1" + pill.replace("\\", "\\\\") + r"\2",
-                            text,
-                            flags=re.IGNORECASE,
-                        )
+                    text = re.sub(
+                        r"(^|\s)" + re.escape(nick) + r"(\s|[^A-Za-z0-9\-_\[\]{}\\`\|]|$)",
+                        r"\1" + pill.replace("\\", "\\\\") + r"\2",
+                        text,
+                        flags=re.IGNORECASE,
+                    )
 
             # if the formatted version has a link, we took some pills
             if "<a href" in text:

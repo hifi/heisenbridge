@@ -101,7 +101,8 @@ def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
 
                     return m.group(0)
 
-                text = re.sub(r"([A-Za-z0-9\-_\[\]{}\\`\|]+)", replace_pill, text)
+                # this will also match some non-nick characters so pillify fails on purpose
+                text = re.sub(r"\.?[A-Za-z0-9\-_\[\]{}\\`\|/=&#%]+(\.[A-Za-z0-9])?", replace_pill, text)
 
             # if the formatted version has a link, we took some pills
             if "<a href" in text:

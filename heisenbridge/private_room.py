@@ -98,7 +98,7 @@ def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
                         oldtext = text
                         text = re.sub(
                             r"(^|\s)" + re.escape(nick) + r"(\s|[^A-Za-z0-9\-_\[\]{}\\`\|]|$)",
-                            r"\1" + pill + r"\2",
+                            r"\1" + pill.replace("\\", "\\\\") + r"\2",
                             text,
                             flags=re.IGNORECASE,
                         )

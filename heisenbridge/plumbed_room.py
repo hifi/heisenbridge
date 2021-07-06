@@ -204,7 +204,8 @@ class PlumbedRoom(ChannelRoom):
         ret = super().pills()
 
         # remove the bot from pills as it may cause confusion
-        if self.user_id in ret:
-            del ret[self.user_id]
+        nick = self.network.conn.real_nickname.lower()
+        if nick in ret:
+            del ret[nick]
 
         return ret

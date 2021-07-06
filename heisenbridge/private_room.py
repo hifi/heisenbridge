@@ -91,14 +91,17 @@ def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
 
             # create pills
             if pills:
-                for mxid, (nick, displayname) in pills.items():
-                    pill = f'<a href="https://matrix.to/#/{escape(mxid)}">{escape(displayname)}</a>'
-                    text = re.sub(
-                        r"(^|\s)" + re.escape(nick) + r"(\s|[^A-Za-z0-9\-_\[\]{}\\`\|]|$)",
-                        r"\1" + pill.replace("\\", "\\\\") + r"\2",
-                        text,
-                        flags=re.IGNORECASE,
-                    )
+
+                def replace_pill(m):
+                    word = m.group(0).lower()
+
+                    if word in pills:
+                        mxid, displayname = pills[word]
+                        return f'<a href="https://matrix.to/#/{escape(mxid)}">{escape(displayname)}</a>'
+
+                    return m.group(0)
+
+                text = re.sub(r"([A-Za-z0-9\-_\[\]{}\\`\|]+)", replace_pill, text)
 
             # if the formatted version has a link, we took some pills
             if "<a href" in text:
@@ -226,7 +229,7 @@ class PrivateRoom(Room):
 
         # push our own name first
         if self.user_id in self.displaynames:
-            ret[self.user_id] = (self.network.conn.real_nickname, self.displaynames[self.user_id])
+            ret[self.network.conn.real_nickname.lower()] = (self.user_id, self.displaynames[self.user_id])
 
         # assuming displayname of a puppet matches nick
         for member in self.members:
@@ -234,7 +237,7 @@ class PrivateRoom(Room):
                 continue
 
             if member in self.displaynames:
-                ret[member] = (self.displaynames[member], self.displaynames[member])
+                ret[self.displaynames[member].lower()] = (member, self.displaynames[member])
 
         return ret
 

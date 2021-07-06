@@ -77,6 +77,8 @@ class NetworkRoom(Room):
     sasl_username: str
     sasl_password: str
     autocmd: str
+    pills_length: int
+    pills_ignore: list
 
     # state
     commands: CommandManager
@@ -95,6 +97,8 @@ class NetworkRoom(Room):
         self.sasl_username = None
         self.sasl_password = None
         self.autocmd = None
+        self.pills_length = 2
+        self.pills_ignore = []
 
         self.commands = CommandManager()
         self.conn = None
@@ -323,6 +327,16 @@ class NetworkRoom(Room):
         cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None)
         self.commands.register(cmd, self.cmd_plumbcfg)
 
+        cmd = CommandParser(
+            prog="PILLS",
+            description="configure automatic pills",
+        )
+        cmd.add_argument(
+            "--length", help="minimum length of nick to generate a pill, setting to 0 disables this feature", type=int
+        )
+        cmd.add_argument("--ignore", help="comma separated list of nicks to ignore for pills")
+        self.commands.register(cmd, self.cmd_pills)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -365,6 +379,12 @@ class NetworkRoom(Room):
         if "autocmd" in config:
             self.autocmd = config["autocmd"]
 
+        if "pills_length" in config:
+            self.pills_length = config["pills_length"]
+
+        if "pills_ignore" in config:
+            self.pills_ignore = config["pills_ignore"]
+
     def to_config(self) -> dict:
         return {
             "name": self.name,
@@ -376,6 +396,8 @@ class NetworkRoom(Room):
             "sasl_username": self.sasl_username,
             "sasl_password": self.sasl_password,
             "autocmd": self.autocmd,
+            "pills_length": self.pills_length,
+            "pills_ignore": self.pills_ignore,
         }
 
     def is_valid(self) -> bool:
@@ -673,6 +695,29 @@ class NetworkRoom(Room):
         self.autocmd = autocmd
         await self.save()
         self.send_notice(f"Autocmd set to {self.autocmd}")
+
+    async def cmd_pills(self, args) -> None:
+        save = False
+
+        if args.length is not None:
+            self.pills_length = args.length
+            self.send_notice(f"Pills minimum length set to {self.pills_length}")
+            save = True
+        else:
+            self.send_notice(f"Pills minimum length is {self.pills_length}")
+
+        if args.ignore is not None:
+            self.pills_ignore = list(map(lambda x: x.strip(), args.ignore.split(",")))
+            self.send_notice(f"Pills ignore list set to {', '.join(self.pills_ignore)}")
+            save = True
+        else:
+            if len(self.pills_ignore) == 0:
+                self.send_notice("Pills ignore list is empty.")
+            else:
+                self.send_notice(f"Pills ignore list: {', '.join(self.pills_ignore)}")
+
+        if save:
+            await self.save()
 
     async def connect(self) -> None:
         if self.connlock.locked():

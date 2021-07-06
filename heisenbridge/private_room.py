@@ -225,11 +225,17 @@ class PrivateRoom(Room):
         super().cleanup()
 
     def pills(self):
+        # if pills are disabled, don't generate any
+        if self.network.pills_length < 1:
+            return None
+
         ret = {}
+        ignore = list(map(lambda x: x.lower(), self.network.pills_ignore))
 
         # push our own name first
-        if self.user_id in self.displaynames:
-            ret[self.network.conn.real_nickname.lower()] = (self.user_id, self.displaynames[self.user_id])
+        lnick = self.network.conn.real_nickname.lower()
+        if self.user_id in self.displaynames and len(lnick) >= self.network.pills_length and lnick not in ignore:
+            ret[lnick] = (self.user_id, self.displaynames[self.user_id])
 
         # assuming displayname of a puppet matches nick
         for member in self.members:
@@ -237,7 +243,10 @@ class PrivateRoom(Room):
                 continue
 
             if member in self.displaynames:
-                ret[self.displaynames[member].lower()] = (member, self.displaynames[member])
+                nick = self.displaynames[member]
+                lnick = nick.lower()
+                if len(nick) >= self.network.pills_length and lnick not in ignore:
+                    ret[lnick] = (member, nick)
 
         return ret
 

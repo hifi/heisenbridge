@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - 'master'
+    tags:
+      - 'v*'
 
 jobs:
   docker:
@@ -19,6 +21,7 @@ jobs:
           images: hif1/heisenbridge
           tags: |
             type=sha,prefix=master-
+            type=semver,pattern={{version}}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1

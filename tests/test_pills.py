@@ -9,6 +9,9 @@ def test_pills():
     def fmt(input):
         pills = {
             "foo": ("foo", "foo"),
+            "^foo^": ("^foo^", "^foo^"),
+            "[foo]": ("[foo]", "[foo]"),
+            "{foo}": ("{foo}", "{foo}"),
         }
 
         plain, formatted = parse_irc_formatting(input, pills)
@@ -27,6 +30,9 @@ def test_pills():
     assert fmt("bar foo.") == "bar " + pill("foo") + "."
     assert fmt("foo. bar") == pill("foo") + ". bar"
     assert fmt("foo?bar") == pill("foo") + "?bar"
+    assert fmt("^foo^:") == pill("^foo^") + ":"
+    assert fmt("[foo],") == pill("[foo]") + ","
+    assert fmt("{foo}?") == pill("{foo}") + "?"
 
     # anything resembling a working URL should be exempt
     assert fmt("foo.bar") == "foo.bar"

@@ -16,9 +16,7 @@ elif os.path.exists(root_dir + ".git") and shutil.which("git"):
             "LC_ALL": "C",
         }
         git_bits = (
-            subprocess.check_output(
-                ["git", "describe", "--tags", "--dirty"], stderr=subprocess.DEVNULL, cwd=root_dir, env=git_env
-            )
+            subprocess.check_output(["git", "describe", "--tags"], stderr=subprocess.DEVNULL, cwd=root_dir, env=git_env)
             .strip()
             .decode("ascii")
             .split("-")
@@ -31,9 +29,6 @@ elif os.path.exists(root_dir + ".git") and shutil.which("git"):
 
         if len(git_bits) > 2:
             __version__ += f"+{git_bits[2]}"
-
-        if len(git_bits) > 3:
-            __version__ += f".{git_bits[3]}"
 
     except (subprocess.SubprocessError, OSError):
         __version__ = "0.0.0+unknown"

@@ -1,4 +1,1 @@
-"""Heisenbridge
-
-An alternative to https://github.com/matrix-org/matrix-appservice-irc/issues
-"""
+from heisenbridge.version import __version__  # noqa: F401

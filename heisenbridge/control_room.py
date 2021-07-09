@@ -1,6 +1,7 @@
 import asyncio
 from argparse import Namespace
 
+from heisenbridge import __version__
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
@@ -119,6 +120,9 @@ class ControlRoom(Room):
             cmd = CommandParser(prog="AVATAR", description="change bridge avatar")
             cmd.add_argument("url", help="new avatar URL (mxc:// format)")
             self.commands.register(cmd, self.cmd_avatar)
+
+            cmd = CommandParser(prog="VERSION", description="show bridge version")
+            self.commands.register(cmd, self.cmd_version)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -424,3 +428,6 @@ class ControlRoom(Room):
         self.send_notice("Goodbye!")
         await asyncio.sleep(1)
         raise RoomInvalidError("Leaving")
+
+    async def cmd_version(self, args):
+        self.send_notice(f"heisenbridge v{__version__}")

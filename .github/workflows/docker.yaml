@@ -32,7 +32,6 @@ jobs:
         with:
           images: hif1/heisenbridge
           tags: |
-            type=sha,prefix=master-
             type=semver,pattern={{version}}
 
       - name: Set up Docker Buildx

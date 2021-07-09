@@ -19,6 +19,7 @@ import yaml
 from aiohttp import ClientSession
 from aiohttp import web
 
+from heisenbridge import __version__
 from heisenbridge.appservice import AppService
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.control_room import ControlRoom
@@ -324,6 +325,8 @@ class BridgeAppService(AppService):
 
         self.puppet_prefix = m.group(1)
 
+        print(f"Heisenbridge v{__version__}", flush=True)
+
         self.api = Matrix(homeserver_url, self.registration["as_token"])
 
         try:
@@ -360,7 +363,7 @@ class BridgeAppService(AppService):
 
         # figure out where we are publicly for MXC conversions
         self.endpoint = await self.detect_public_endpoint()
-        print("Homeserver is publicly available at " + self.endpoint)
+        print("Homeserver is publicly available at " + self.endpoint, flush=True)
 
         # load config from HS
         await self.load()
@@ -461,17 +464,23 @@ class BridgeAppService(AppService):
 def main():
     parser = argparse.ArgumentParser(
         prog=os.path.basename(sys.executable) + " -m " + __package__,
-        description="a bouncer-style Matrix IRC bridge",
+        description=f"a bouncer-style Matrix IRC bridge (v{__version__})",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
         "-v", "--verbose", help="logging verbosity level: once is info, twice is debug", action="count", default=0
     )
-    parser.add_argument(
+    req = parser.add_mutually_exclusive_group(required=True)
+    req.add_argument(
         "-c",
         "--config",
         help="registration YAML file path, must be writable if generating",
-        required=True,
+    )
+    req.add_argument(
+        "--version",
+        action="store_true",
+        help="show bridge version",
+        default=argparse.SUPPRESS,
     )
     parser.add_argument("-l", "--listen-address", help="bridge listen address", default="127.0.0.1")
     parser.add_argument("-p", "--listen-port", help="bridge listen port", type=int, default="9898")
@@ -540,6 +549,8 @@ def main():
         loop = asyncio.get_event_loop()
         loop.run_until_complete(service.reset(args.config, args.homeserver))
         loop.close()
+    elif "version" in args:
+        print(__version__)
     else:
         loop = asyncio.get_event_loop()
         service = BridgeAppService()

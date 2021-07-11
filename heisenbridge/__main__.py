@@ -299,6 +299,16 @@ class BridgeAppService(AppService):
         except MatrixError:
             pass
 
+    def _keepalive(self):
+        async def put_presence():
+            try:
+                await self.api.put_user_presence(self.user_id)
+            except:
+                pass
+
+        asyncio.ensure_future(put_presence())
+        asyncio.get_event_loop().call_later(60, self._keepalive)
+
     async def run(self, listen_address, listen_port, homeserver_url, owner):
 
         app = aiohttp.web.Application()
@@ -364,6 +374,9 @@ class BridgeAppService(AppService):
         # figure out where we are publicly for MXC conversions
         self.endpoint = await self.detect_public_endpoint()
         print("Homeserver is publicly available at " + self.endpoint, flush=True)
+
+        logging.info("Starting presence loop")
+        self._keepalive()
 
         # load config from HS
         await self.load()

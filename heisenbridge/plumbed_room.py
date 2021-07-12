@@ -136,7 +136,8 @@ class PlumbedRoom(ChannelRoom):
             self.network.conn.action(self.name, f"{sender} {body}")
         elif event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
             self.network.conn.privmsg(
-                self.name, "<{}> {}".format(sender, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"]))
+                self.name,
+                "<{}> {}".format(sender, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])),
             )
             self.react(event["event_id"], "\U0001F517")  # link
         elif event["content"]["msgtype"] == "m.text":

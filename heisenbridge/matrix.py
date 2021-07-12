@@ -199,7 +199,9 @@ class Matrix:
         )
 
     async def put_user_presence(self, user_id, presence="online", status_msg=""):
-        return await self.call("PUT", f"/_matrix/client/r0/presence/{user_id}/status", {"presence": presence, "status_msg": status_msg})
+        return await self.call(
+            "PUT", f"/_matrix/client/r0/presence/{user_id}/status", {"presence": presence, "status_msg": status_msg}
+        )
 
     async def post_media_upload(self, data, content_type, filename=None):
         return await self.call(

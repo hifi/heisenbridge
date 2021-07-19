@@ -171,6 +171,22 @@ class BridgeAppService(AppService):
                 logging.debug("Control room already open, uhh")
                 return
 
+            # handle invites against puppets
+            if event["state_key"] != self.user_id:
+                logging.info(f"Whitelisted user {event['sender']} invited {event['state_key']}, going to reject.")
+
+                try:
+                    await self.api.post_room_kick(
+                        event["room_id"],
+                        event["state_key"],
+                        reason="Inviting puppets is not supported",
+                        user_id=event["state_key"],
+                    )
+                except Exception:
+                    logging.exception("Failed to reject invitation.")
+
+                return
+
             # set owner if we have none and the user is from the same HS
             if self.config.get("owner", None) is None and event["sender"].endswith(":" + self.server_name):
                 logging.info(f"We have an owner now, let us rejoice, {event['sender']}!")

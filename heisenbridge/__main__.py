@@ -303,7 +303,7 @@ class BridgeAppService(AppService):
         async def put_presence():
             try:
                 await self.api.put_user_presence(self.user_id)
-            except:
+            except Exception:
                 pass
 
         asyncio.ensure_future(put_presence())

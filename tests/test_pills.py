@@ -47,3 +47,6 @@ def test_pills():
     assert fmt("foo&bar") == "foo&bar"
     assert fmt("foo#bar") == "foo#bar"
     assert fmt("foo%bar") == "foo%bar"
+    assert fmt("äfoo") == "äfoo"
+    assert fmt("fooä") == "fooä"
+    assert fmt("äfooä") == "äfooä"

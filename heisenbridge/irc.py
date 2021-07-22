@@ -135,7 +135,7 @@ class HeisenConnection(AioConnection):
         self.buffer = self.buffer_class()
         self.handlers = {}
         self.real_server_name = ""
-        self.real_nickname = nickname
+        self.real_nickname = ""
         self.server = server
         self.port = port
         self.server_address = (server, port)

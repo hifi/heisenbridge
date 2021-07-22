@@ -107,6 +107,7 @@ class NetworkRoom(Room):
         self.disconnect = True
         self.real_host = "?" * 63  # worst case default
         self.keys = {}  # temp dict of join channel keys
+        self.keepnick_task = None  # async task
 
         cmd = CommandParser(
             prog="NICK",
@@ -590,6 +591,10 @@ class NetworkRoom(Room):
         self.send_notice("Nickname set to {}".format(self.nick))
 
         if self.conn and self.conn.connected:
+            if self.keepnick_task:
+                self.keepnick_task.cancel()
+                self.keepnick_task = None
+
             self.conn.nick(args.nick)
 
     def get_username(self):
@@ -830,6 +835,8 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("nosuchchannel", self.on_pass_if)
                     self.conn.add_global_handler("cannotsendtochan", self.on_pass_if)
                     self.conn.add_global_handler("nicknameinuse", self.on_nicknameinuse)
+                    self.conn.add_global_handler("erroneusnickname", self.on_erroneusnickname)
+                    self.conn.add_global_handler("unavailresource", self.on_unavailresource)
                     self.conn.add_global_handler("usernotinchannel", self.on_pass1)
                     self.conn.add_global_handler("notonchannel", self.on_pass0)
                     self.conn.add_global_handler("useronchannel", self.on_pass1)
@@ -1068,6 +1075,12 @@ class NetworkRoom(Room):
                 room._remove_puppet(irc_user_id, f"Quit: {event.arguments[0]}")
 
     def on_nick(self, conn, event) -> None:
+        # the IRC library changes real_nickname before running handlers
+        if event.target == self.conn.real_nickname:
+            logging.debug(f"Detected own nick change to {event.target}")
+            if event.target == self.get_nick():
+                self.send_notice(f"You're now known as {event.target}")
+
         old_irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
         new_irc_user_id = self.serv.irc_user_id(self.name, event.target)
 
@@ -1081,9 +1094,41 @@ class NetworkRoom(Room):
                 room.rename(event.source.nick, event.target)
 
     def on_nicknameinuse(self, conn, event) -> None:
-        newnick = event.arguments[0] + "_"
-        self.conn.nick(newnick)
-        self.send_notice(f"Nickname {event.arguments[0]} is in use, trying {newnick}")
+        self.send_notice(f"Nickname {event.arguments[0]} is in use")
+        if self.conn.real_nickname == "":
+            newnick = event.arguments[0] + "_"
+            self.conn.nick(newnick)
+        self.keepnick()
+
+    def on_erroneusnickname(self, conn, event) -> None:
+        self.send_notice(f"Nickname {event.arguments[0]} is erroneus and was rejected by the server")
+
+    @ircroom_event()
+    def on_unavailresource(self, conn, event) -> None:
+        if event.arguments[0][0] not in ["#", "!", "&"]:
+            self.send_notice(f"Nickname {event.arguments[0]} is currently unavailable")
+            if self.conn.real_nickname == "":
+                newnick = event.arguments[0] + "_"
+                self.conn.nick(newnick)
+            self.keepnick()
+        else:
+            self.send_notice(f"Channel {event.arguments[0]} is currently unavailable")
+
+    def keepnick(self):
+        if self.keepnick_task:
+            self.keepnick_task.cancel()
+
+        self.send_notice(f"Trying to set nickname to {self.get_nick()} again after five minutes.")
+
+        def try_keepnick():
+            self.keepnick_task = None
+
+            if not self.conn or not self.conn.connected:
+                return
+
+            self.conn.nick(self.get_nick())
+
+        self.keepnick_task = asyncio.get_event_loop().call_later(300, try_keepnick)
 
     def on_invite(self, conn, event) -> None:
         self.send_notice_html("<b>{}</b> has invited you to <b>{}</b>".format(event.source.nick, event.arguments[0]))

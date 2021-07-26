@@ -21,6 +21,7 @@ class Room(ABC):
     user_id: str
     serv: AppService
     members: List[str]
+    lazy_members: Dict[str, str]
     displaynames: Dict[str, str]
     need_invite: bool = True
 
@@ -32,6 +33,7 @@ class Room(ABC):
         self.user_id = user_id
         self.serv = serv
         self.members = members
+        self.lazy_members = {}
         self.displaynames = {}
 
         self._mx_handlers = {}
@@ -109,29 +111,39 @@ class Room(ABC):
             if "displayname" in event["content"] and event["content"]["displayname"] is not None:
                 self.displaynames[event["state_key"]] = event["content"]["displayname"]
 
+    async def _join(self, user_id, nick=None):
+        if not self.serv.synapse_admin or not self.serv.is_local(self.id):
+
+            if self.need_invite:
+                await self.serv.api.post_room_invite(self.id, user_id)
+
+            for i in range(0, 10):
+                try:
+                    await self.serv.api.post_room_join(self.id, user_id)
+                    break
+                except MatrixForbidden:
+                    logging.warning("Puppet joining a room was forbidden, retrying")
+                    await asyncio.sleep(i)
+        else:
+            await self.serv.api.post_synapse_admin_room_join(self.id, user_id)
+
+        self.members.append(user_id)
+        if nick is not None:
+            self.displaynames[user_id] = nick
+
+        if user_id in self.lazy_members:
+            del self.lazy_members[user_id]
+
     async def _flush_events(self, events):
         for event in events:
             try:
                 if event["type"] == "_join":
                     if event["user_id"] not in self.members:
-                        if not self.serv.synapse_admin or not self.serv.is_local(self.id):
-
-                            if self.need_invite:
-                                await self.serv.api.post_room_invite(self.id, event["user_id"])
-
-                            for i in range(0, 10):
-                                try:
-                                    await self.serv.api.post_room_join(self.id, event["user_id"])
-                                    break
-                                except MatrixForbidden:
-                                    logging.warning("Puppet joining a room was forbidden, retrying")
-                                    await asyncio.sleep(i)
-                        else:
-                            await self.serv.api.post_synapse_admin_room_join(self.id, event["user_id"])
-
-                        self.members.append(event["user_id"])
-                        self.displaynames[event["user_id"]] = event["nick"]
+                        await self._join(event["user_id"], event["nick"])
                 elif event["type"] == "_leave":
+                    if event["user_id"] in self.lazy_members:
+                        del self.lazy_members[event["user_id"]]
+
                     if event["user_id"] in self.members:
                         if event["reason"] is not None:
                             await self.serv.api.post_room_kick(
@@ -144,12 +156,17 @@ class Room(ABC):
                             del self.displaynames[event["user_id"]]
                 elif event["type"] == "_rename":
                     old_irc_user_id = self.serv.irc_user_id(self.network.name, event["old_nick"])
+                    new_irc_user_id = self.serv.irc_user_id(self.network.name, event["new_nick"])
+
+                    # if we are lazy loading and this user has never spoken, update that
+                    if old_irc_user_id in self.lazy_members:
+                        del self.lazy_members[old_irc_user_id]
+                        self.lazy_members[new_irc_user_id] = event["new_nick"]
+                        continue
 
                     # this event is created for all rooms, skip if irrelevant
                     if old_irc_user_id not in self.members:
                         continue
-
-                    new_irc_user_id = self.serv.irc_user_id(self.network.name, event["new_nick"])
 
                     # check if we can just update the displayname
                     if old_irc_user_id != new_irc_user_id:
@@ -169,23 +186,7 @@ class Room(ABC):
 
                         # new puppet in
                         if new_irc_user_id not in self.members:
-                            if not self.serv.synapse_admin or not self.serv.is_local(self.id):
-
-                                if self.need_invite:
-                                    await self.serv.api.post_room_invite(self.id, new_irc_user_id)
-
-                                for i in range(0, 10):
-                                    try:
-                                        await self.serv.api.post_room_join(self.id, new_irc_user_id)
-                                        break
-                                    except MatrixForbidden:
-                                        logging.warning("Puppet joining a room was forbidden, retrying")
-                                        await asyncio.sleep(i)
-                            else:
-                                await self.serv.api.post_synapse_admin_room_join(self.id, new_irc_user_id)
-
-                            self.members.append(new_irc_user_id)
-                            self.displaynames[new_irc_user_id] = event["new_nick"]
+                            await self._join(new_irc_user_id, event["new_nick"])
 
                 elif event["type"] == "_kick":
                     if event["user_id"] in self.members:
@@ -200,6 +201,10 @@ class Room(ABC):
                         self.id, event["type"], event["state_key"], event["content"], event["user_id"]
                     )
                 else:
+                    # invite puppet *now* if we are lazy loading and it should be here
+                    if event["user_id"] in self.lazy_members and event["user_id"] not in self.members:
+                        await self._join(event["user_id"], self.lazy_members[event["user_id"]])
+
                     # if we get an event from unknown user (outside room for some reason) we may have a fallback
                     if event["user_id"] is not None and event["user_id"] not in self.members:
                         if "fallback_html" in event and event["fallback_html"] is not None:

@@ -136,6 +136,19 @@ class ControlRoom(Room):
             cmd_remove.add_argument("mxid", help="mxid of the user")
             self.commands.register(cmd, self.cmd_ident)
 
+            cmd = CommandParser(
+                prog="SYNC",
+                description="set default IRC member sync mode",
+                epilog="Note: Users can override this per room.",
+            )
+            group = cmd.add_mutually_exclusive_group()
+            group.add_argument("--lazy", help="set lazy sync, members are added when they talk", action="store_true")
+            group.add_argument(
+                "--half", help="set half sync, members are added when they join or talk (default)", action="store_true"
+            )
+            group.add_argument("--full", help="set full sync, members are fully synchronized", action="store_true")
+            self.commands.register(cmd, self.cmd_sync)
+
             cmd = CommandParser(prog="VERSION", description="show bridge version")
             self.commands.register(cmd, self.cmd_version)
 
@@ -414,6 +427,19 @@ class ControlRoom(Room):
                 await self.serv.save()
             else:
                 self.send_notice(f"No custom ident for {args.mxid}")
+
+    async def cmd_sync(self, args):
+        if args.lazy:
+            self.serv.config["member_sync"] = "lazy"
+            await self.serv.save()
+        elif args.half:
+            self.serv.config["member_sync"] = "half"
+            await self.serv.save()
+        elif args.full:
+            self.serv.config["member_sync"] = "full"
+            await self.serv.save()
+
+        self.send_notice(f"Member sync is set to {self.serv.config['member_sync']}")
 
     async def cmd_open(self, args):
         networks = self.networks()

@@ -375,7 +375,7 @@ class BridgeAppService(AppService):
         self._users = {}
         self.user_id = whoami["user_id"]
         self.server_name = self.user_id.split(":")[1]
-        self.config = {"networks": {}, "owner": None, "allow": {}}
+        self.config = {"networks": {}, "owner": None, "allow": {}, "idents": {}}
         logging.debug(f"Default config: {self.config}")
         self.synapse_admin = False
 

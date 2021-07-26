@@ -16,6 +16,7 @@ class NetworkRoom:
 
 class ChannelRoom(PrivateRoom):
     key: Optional[str]
+    member_sync: str
     names_buffer: List[str]
     bans_buffer: List[str]
 
@@ -23,6 +24,27 @@ class ChannelRoom(PrivateRoom):
         super().init()
 
         self.key = None
+
+        # for migration the class default is full
+        self.member_sync = "full"
+
+        cmd = CommandParser(
+            prog="SYNC",
+            description="override IRC member sync type for this room",
+            epilog="Note: To force full sync after setting to full, use the NAMES command",
+        )
+        group = cmd.add_mutually_exclusive_group()
+        group.add_argument("--lazy", help="set lazy sync, members are added when they talk", action="store_true")
+        group.add_argument(
+            "--half", help="set half sync, members are added when they join or talk", action="store_true"
+        )
+        group.add_argument("--full", help="set full sync, members are fully synchronized", action="store_true")
+        group.add_argument(
+            "--off",
+            help="disable member sync completely, the bridge will relay all messages, may be useful during spam attacks",
+            action="store_true",
+        )
+        self.commands.register(cmd, self.cmd_sync)
 
         cmd = CommandParser(
             prog="MODE",
@@ -91,8 +113,11 @@ class ChannelRoom(PrivateRoom):
         if "key" in config:
             self.key = config["key"]
 
+        if "member_sync" in config:
+            self.member_sync = config["member_sync"]
+
     def to_config(self) -> dict:
-        return {"name": self.name, "network": self.network_name, "key": self.key}
+        return {"name": self.name, "network": self.network_name, "key": self.key, "member_sync": self.member_sync}
 
     @staticmethod
     def create(network: NetworkRoom, name: str) -> "ChannelRoom":
@@ -107,6 +132,9 @@ class ChannelRoom(PrivateRoom):
         if room.name in network.keys:
             room.key = network.keys[room.name]
             del network.keys[room.name]
+
+        # stamp global member sync setting at room creation time
+        room.member_sync = network.serv.config["member_sync"]
 
         asyncio.ensure_future(room._create_mx(name))
         return room
@@ -139,6 +167,24 @@ class ChannelRoom(PrivateRoom):
                 self.network.conn.part(self.name)
 
         super().cleanup()
+
+    async def cmd_sync(self, args):
+        if args.lazy:
+            self.member_sync = "lazy"
+            await self.serv.save()
+        elif args.half:
+            self.member_sync = "half"
+            await self.serv.save()
+        elif args.full:
+            self.member_sync = "full"
+            await self.serv.save()
+        elif args.off:
+            self.member_sync = "off"
+            # prevent anyone already in lazy list to be invited
+            self.lazy_members = {}
+            await self.save()
+
+        self.send_notice(f"Member sync is set to {self.member_sync}")
 
     async def cmd_mode(self, args) -> None:
         self.network.conn.mode(self.name, " ".join(args.args))
@@ -272,9 +318,17 @@ class ChannelRoom(PrivateRoom):
         if len(others) > 0:
             self.send_notice(f"Users: {', '.join(others)}")
 
-        # FIXME: this floods the event queue if there's a lot of people
-        for (irc_user_id, nick) in to_add:
-            self._add_puppet(nick)
+        # always reset lazy list because it can be toggled on-the-fly
+        self.lazy_members = {}
+
+        if self.member_sync == "full":
+            for (irc_user_id, nick) in to_add:
+                self._add_puppet(nick)
+        else:
+            self.send_notice(f"Member sync is set to {self.member_sync}, skipping invites.")
+            if self.member_sync != "off":
+                for (irc_user_id, nick) in to_add:
+                    self.lazy_members[irc_user_id] = nick
 
         for irc_user_id in to_remove:
             self._remove_puppet(irc_user_id)
@@ -288,7 +342,11 @@ class ChannelRoom(PrivateRoom):
             return
 
         # ensure, append, invite and join
-        self._add_puppet(event.source.nick)
+        if self.member_sync == "full" or self.member_sync == "half":
+            self._add_puppet(event.source.nick)
+        elif self.member_sync != "off":
+            irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)
+            self.lazy_members[irc_user_id] = event.source.nick
 
     def on_part(self, conn, event) -> None:
         # we don't need to sync ourself

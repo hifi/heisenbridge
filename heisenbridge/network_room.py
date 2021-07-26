@@ -323,6 +323,7 @@ class NetworkRoom(Room):
             action="store_false",
             help="Disable displaynames for relaybot mode",
         )
+        cmd.add_argument("--sync", choices=["off", "lazy", "half", "full"], help="Set member sync for room")
         cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None)
         self.commands.register(cmd, self.cmd_plumbcfg)
 
@@ -563,6 +564,11 @@ class NetworkRoom(Room):
         if args.displaynames is not None:
             room.use_displaynames = args.displaynames
             self.send_notice(f"Displaynames set to {args.displaynames}.")
+            save = True
+
+        if args.sync is not None:
+            room.member_sync = args.sync
+            self.send_notice(f"Member sync set to {args.sync}.")
             save = True
 
         if save:

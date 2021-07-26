@@ -375,7 +375,7 @@ class BridgeAppService(AppService):
         self._users = {}
         self.user_id = whoami["user_id"]
         self.server_name = self.user_id.split(":")[1]
-        self.config = {"networks": {}, "owner": None, "allow": {}, "idents": {}}
+        self.config = {"networks": {}, "owner": None, "allow": {}, "idents": {}, "member_sync": "half"}
         logging.debug(f"Default config: {self.config}")
         self.synapse_admin = False
 
@@ -448,7 +448,7 @@ class BridgeAppService(AppService):
 
                 # add to room displayname
                 for user_id, data in joined_members.items():
-                    if data["display_name"] is not None:
+                    if "display_name" in data and data["display_name"] is not None:
                         room.displaynames[user_id] = data["display_name"]
 
                     # add to global puppet cache if it's a puppet

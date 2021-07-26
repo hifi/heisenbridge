@@ -46,7 +46,7 @@ class PlumbedRoom(ChannelRoom):
         for user_id, data in joined_members.items():
             if user_id not in room.members:
                 room.members.append(user_id)
-            if data["display_name"] is not None:
+            if "display_name" in data and data["display_name"] is not None:
                 room.displaynames[user_id] = data["display_name"]
 
         network.serv.register_room(room)

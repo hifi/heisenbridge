@@ -49,9 +49,7 @@ class Identd:
                         remote_addr = ipaddress.ip_address("::ffff:" + _remote_addr)
 
                     if remote_addr == req_addr and remote_port == dst_port and local_port == src_port:
-                        username = room.get_username()
-                        if username is not None:
-                            response = f"{src_port}, {dst_port} : USERID : UNIX : {username}\r\n"
+                        response = f"{src_port}, {dst_port} : USERID : UNIX : {room.get_ident()}\r\n"
                         break
 
                 logging.debug(f"Responding with: {response}")

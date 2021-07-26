@@ -127,9 +127,7 @@ class NetworkRoom(Room):
             epilog=(
                 "Setting a new username requires reconnecting to the network.\n"
                 "\n"
-                "Note: If you are a local user it will be replaced by the local part of your Matrix ID.\n"
-                "Federated users are generated a shortened digest of their Matrix ID. Bridge admins have an"
-                " exception where username will be respected and sent as their ident.\n"
+                "Note: If identd is enabled this will be ignored and Matrix ID hash or admin set custom ident is used."
             ),
         )
         cmd.add_argument("username", nargs="?", help="new username")
@@ -597,25 +595,21 @@ class NetworkRoom(Room):
 
             self.conn.nick(args.nick)
 
-    def get_username(self):
-        # allow admins to spoof
-        if self.serv.is_admin(self.user_id) and self.username:
-            return self.username[:8]
+    def get_ident(self):
+        idents = self.serv.config["idents"]
 
-        parts = self.user_id.split(":")
+        # use admin set override if exists
+        if self.user_id in idents:
+            return idents[self.user_id][:8]
 
-        # return mxid digest if federated
-        if parts[1] != self.serv.server_name:
-            return (
-                "m-"
-                + b32encode(hashlib.sha1(self.user_id.encode("utf-8")).digest())
-                .decode("utf-8")
-                .replace("=", "")[:6]
-                .lower()
-            )
-
-        # return local part of mx id for local users
-        return parts[0][1:9]
+        # return mxid digest if no custom ident
+        return (
+            "m-"
+            + b32encode(hashlib.sha1(self.user_id.encode("utf-8")).digest())
+            .decode("utf-8")
+            .replace("=", "")[:6]
+            .lower()
+        )
 
     async def cmd_username(self, args) -> None:
         if args.remove:
@@ -809,7 +803,7 @@ class NetworkRoom(Room):
                         server["port"],
                         self.get_nick(),
                         self.password,
-                        username=self.username,
+                        username=self.get_ident() if self.username is None else self.username,
                         ircname=self.ircname,
                         connect_factory=factory,
                         sasl_username=self.sasl_username,

@@ -1,4 +1,5 @@
 import asyncio
+import re
 from argparse import Namespace
 
 from heisenbridge import __version__
@@ -120,6 +121,20 @@ class ControlRoom(Room):
             cmd = CommandParser(prog="AVATAR", description="change bridge avatar")
             cmd.add_argument("url", help="new avatar URL (mxc:// format)")
             self.commands.register(cmd, self.cmd_avatar)
+
+            cmd = CommandParser(
+                prog="IDENT",
+                description="configure ident replies",
+                epilog="Note: MXID here is case sensitive, see subcommand help with IDENTCFG SET -h",
+            )
+            subcmd = cmd.add_subparsers(help="commands", dest="cmd")
+            subcmd.add_parser("list", help="list custom idents (default)")
+            cmd_set = subcmd.add_parser("set", help="set custom ident")
+            cmd_set.add_argument("mxid", help="mxid of the user")
+            cmd_set.add_argument("ident", help="custom ident for the user")
+            cmd_remove = subcmd.add_parser("remove", help="remove custom ident")
+            cmd_remove.add_argument("mxid", help="mxid of the user")
+            self.commands.register(cmd, self.cmd_ident)
 
             cmd = CommandParser(prog="VERSION", description="show bridge version")
             self.commands.register(cmd, self.cmd_version)
@@ -314,7 +329,7 @@ class ControlRoom(Room):
                 privates = "not in any DMs"
 
                 if network.conn and network.conn.connected:
-                    connected = f"connected as {network.conn.real_nickname} ({network.get_username()})"
+                    connected = f"connected as {network.conn.real_nickname} ({network.get_ident()})"
 
                 nchannels = 0
                 nprivates = 0
@@ -376,6 +391,29 @@ class ControlRoom(Room):
             await self.serv.api.put_user_avatar_url(self.serv.user_id, args.url)
         except MatrixError as e:
             self.send_notice(f"Failed to set avatar: {str(e)}")
+
+    async def cmd_ident(self, args):
+        idents = self.serv.config["idents"]
+
+        if args.cmd == "list" or args.cmd is None:
+            self.send_notice("Configured custom idents:")
+            for mxid, ident in idents.items():
+                self.send_notice(f"\t{mxid} -> {ident}")
+        elif args.cmd == "set":
+            if not re.match(r"^[a-z][-a-z0-9]*$", args.ident):
+                self.send_notice(f"Invalid ident string: {args.ident}")
+                self.send_notice("Must be lowercase, start with a letter, can contain dashes, letters and numbers.")
+            else:
+                idents[args.mxid] = args.ident
+                self.send_notice(f"Set custom ident for {args.mxid} to {args.ident}")
+                await self.serv.save()
+        elif args.cmd == "remove":
+            if args.mxid in idents:
+                del idents[args.mxid]
+                self.send_notice(f"Removed custom ident for {args.mxid}")
+                await self.serv.save()
+            else:
+                self.send_notice(f"No custom ident for {args.mxid}")
 
     async def cmd_open(self, args):
         networks = self.networks()

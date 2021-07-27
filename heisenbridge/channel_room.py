@@ -171,13 +171,13 @@ class ChannelRoom(PrivateRoom):
     async def cmd_sync(self, args):
         if args.lazy:
             self.member_sync = "lazy"
-            await self.serv.save()
+            await self.save()
         elif args.half:
             self.member_sync = "half"
-            await self.serv.save()
+            await self.save()
         elif args.full:
             self.member_sync = "full"
-            await self.serv.save()
+            await self.save()
         elif args.off:
             self.member_sync = "off"
             # prevent anyone already in lazy list to be invited

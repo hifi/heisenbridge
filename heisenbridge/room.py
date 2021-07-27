@@ -203,6 +203,7 @@ class Room(ABC):
                 else:
                     # invite puppet *now* if we are lazy loading and it should be here
                     if event["user_id"] in self.lazy_members and event["user_id"] not in self.members:
+                        await self.serv.ensure_irc_user_id(self.network.name, self.lazy_members[event["user_id"]])
                         await self._join(event["user_id"], self.lazy_members[event["user_id"]])
 
                     # if we get an event from unknown user (outside room for some reason) we may have a fallback

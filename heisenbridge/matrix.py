@@ -119,18 +119,22 @@ class Matrix:
         return await self.call("GET", "/_matrix/client/r0/joined_rooms")
 
     async def get_user_account_data(self, user_id, key):
+        user_id = urllib.parse.quote(user_id, safe="")
         return await self.call("GET", "/_matrix/client/r0/user/" + user_id + "/account_data/" + key)
 
     async def put_user_account_data(self, user_id, key, data):
+        user_id = urllib.parse.quote(user_id, safe="")
         return await self.call("PUT", "/_matrix/client/r0/user/" + user_id + "/account_data/" + key, data)
 
     async def get_room_account_data(self, user_id, room_id, key):
+        user_id = urllib.parse.quote(user_id, safe="")
         return await self.call(
             "GET",
             "/_matrix/client/r0/user/" + user_id + "/rooms/" + room_id + "/account_data/" + key,
         )
 
     async def put_room_account_data(self, user_id, room_id, key, data):
+        user_id = urllib.parse.quote(user_id, safe="")
         return await self.call(
             "PUT",
             "/_matrix/client/r0/user/" + user_id + "/rooms/" + room_id + "/account_data/" + key,
@@ -138,12 +142,18 @@ class Matrix:
         )
 
     async def post_room_leave(self, room_id, user_id=None):
+        if user_id:
+            user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "POST",
             "/_matrix/client/r0/rooms/" + room_id + "/leave" + ("?user_id={}".format(user_id) if user_id else ""),
         )
 
     async def post_room_kick(self, room_id, target_user_id, reason="", user_id=None):
+        if user_id:
+            user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "POST",
             "/_matrix/client/r0/rooms/" + room_id + "/kick" + ("?user_id={}".format(user_id) if user_id else ""),
@@ -163,6 +173,9 @@ class Matrix:
         return await self.call("GET", "/_matrix/client/r0/rooms/" + room_id + "/state/" + event_type + "/" + state_key)
 
     async def post_room_join(self, room_id, user_id=None):
+        if user_id:
+            user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "POST",
             "/_matrix/client/r0/rooms/" + room_id + "/join" + ("?user_id={}".format(user_id) if user_id else ""),
@@ -170,7 +183,10 @@ class Matrix:
 
     async def post_room_join_alias(self, room_alias, user_id=None):
         server_name = room_alias.split(":")[1]
-        room_alias = urllib.parse.quote(room_alias)
+        room_alias = urllib.parse.quote(room_alias, safe="")
+        if user_id:
+            user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "POST",
             f"/_matrix/client/r0/join/{room_alias}?server_name={server_name}"
@@ -185,6 +201,9 @@ class Matrix:
         )
 
     async def put_room_send_event(self, room_id, type, content, user_id=None):
+        if user_id:
+            user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "PUT",
             "/_matrix/client/r0/rooms/"
@@ -198,6 +217,9 @@ class Matrix:
         )
 
     async def put_room_send_state(self, room_id, type, state_key, content, user_id=None):
+        if user_id:
+            user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "PUT",
             "/_matrix/client/r0/rooms/"
@@ -217,6 +239,8 @@ class Matrix:
         return await self.call("POST", "/_matrix/client/r0/register?kind=user", data)
 
     async def put_user_displayname(self, user_id, displayname):
+        user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "PUT",
             "/_matrix/client/r0/profile/{}/displayname?user_id={}".format(user_id, user_id),
@@ -224,6 +248,8 @@ class Matrix:
         )
 
     async def put_user_avatar_url(self, user_id, url):
+        user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "PUT",
             "/_matrix/client/r0/profile/{}/avatar_url?user_id={}".format(user_id, user_id),
@@ -231,6 +257,8 @@ class Matrix:
         )
 
     async def put_user_presence(self, user_id, presence="online", status_msg=""):
+        user_id = urllib.parse.quote(user_id, safe="")
+
         return await self.call(
             "PUT", f"/_matrix/client/r0/presence/{user_id}/status", {"presence": presence, "status_msg": status_msg}
         )
@@ -238,12 +266,13 @@ class Matrix:
     async def post_media_upload(self, data, content_type, filename=None):
         return await self.call(
             "POST",
-            "/_matrix/media/r0/upload" + ("?filename=" + urllib.parse.quote(filename) if filename else ""),
+            "/_matrix/media/r0/upload" + ("?filename=" + urllib.parse.quote(filename, safe="") if filename else ""),
             data,
             content_type=content_type,
         )
 
     async def get_synapse_admin_users_admin(self, user_id):
+        user_id = urllib.parse.quote(user_id, safe="")
         return await self.call("GET", f"/_synapse/admin/v1/users/{user_id}/admin", retry=False)
 
     async def post_synapse_admin_room_join(self, room_id, user_id):

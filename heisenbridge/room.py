@@ -139,7 +139,10 @@ class Room(ABC):
             try:
                 if event["type"] == "_join":
                     if event["user_id"] not in self.members:
-                        await self._join(event["user_id"], event["nick"])
+                        if event["lazy"]:
+                            self.lazy_members[event["user_id"]] = event["nick"]
+                        else:
+                            await self._join(event["user_id"], event["nick"])
                 elif event["type"] == "_leave":
                     if event["user_id"] in self.lazy_members:
                         del self.lazy_members[event["user_id"]]
@@ -343,12 +346,13 @@ class Room(ABC):
 
         self._queue.enqueue(event)
 
-    def join(self, user_id: str, nick=None) -> None:
+    def join(self, user_id: str, nick=None, lazy=False) -> None:
         event = {
             "type": "_join",
             "content": {},
             "user_id": user_id,
             "nick": nick,
+            "lazy": lazy,
         }
 
         self._queue.enqueue(event)

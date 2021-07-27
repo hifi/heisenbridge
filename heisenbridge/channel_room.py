@@ -346,7 +346,7 @@ class ChannelRoom(PrivateRoom):
             self._add_puppet(event.source.nick)
         elif self.member_sync != "off":
             irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)
-            self.lazy_members[irc_user_id] = event.source.nick
+            self.join(irc_user_id, event.source.nick, lazy=True)
 
     def on_part(self, conn, event) -> None:
         # we don't need to sync ourself

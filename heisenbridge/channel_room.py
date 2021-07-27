@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 from typing import Dict
 from typing import List
@@ -378,7 +379,7 @@ class ChannelRoom(PrivateRoom):
     def on_badchannelkey(self, conn, event) -> None:
         self.send_notice(event.arguments[1] if len(event.arguments) > 1 else "Incorrect channel key, join failed.")
         self.send_notice_html(
-            f"Use <b>JOIN {event.arguments[0]} &lt;key&gt;</b> in the network room to rejoin this channel."
+            f"Use <b>JOIN {html.escape(event.arguments[0])} &lt;key&gt;</b> in the network room to rejoin this channel."
         )
 
     def on_chanoprivsneeded(self, conn, event) -> None:

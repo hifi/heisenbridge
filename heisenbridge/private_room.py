@@ -1,4 +1,5 @@
 import asyncio
+import html
 import logging
 import re
 from datetime import datetime
@@ -267,7 +268,7 @@ class PrivateRoom(Room):
             plain,
             irc_user_id,
             formatted=formatted,
-            fallback_html="<b>Message from {}</b>: {}".format(str(event.source), plain),
+            fallback_html=f"<b>Message from {str(event.source)}</b>: {html.escape(plain)}",
         )
 
         # if the local user has left this room invite them back
@@ -295,7 +296,9 @@ class PrivateRoom(Room):
         # if the local user has left this room notify in network
         if self.user_id not in self.members:
             source = self.network.source_text(conn, event)
-            self.network.send_notice_html(f"Notice from <b>{source}:</b> {formatted if formatted else plain}")
+            self.network.send_notice_html(
+                f"Notice from <b>{source}:</b> {formatted if formatted else html.escape(plain)}"
+            )
             return
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
@@ -303,7 +306,7 @@ class PrivateRoom(Room):
             plain,
             irc_user_id,
             formatted=formatted,
-            fallback_html=f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else plain}",
+            fallback_html=f"<b>Notice from {str(event.source)}</b>: {formatted if formatted else html.escape(plain)}",
         )
 
     def on_ctcp(self, conn, event) -> None:
@@ -321,9 +324,11 @@ class PrivateRoom(Room):
                 self.send_emote(f"(you) {plain}")
                 return
 
-            self.send_emote(plain, irc_user_id, fallback_html=f"<b>Emote from {str(event.source)}</b>: {plain}")
+            self.send_emote(
+                plain, irc_user_id, fallback_html=f"<b>Emote from {str(event.source)}</b>: {html.escape(plain)}"
+            )
         else:
-            self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {command}</b (ignored)")
+            self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {html.escape(command)}</b> (ignored)")
 
     async def on_mx_message(self, event) -> None:
         if event["sender"] != self.user_id:

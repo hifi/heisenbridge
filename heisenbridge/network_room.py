@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import html
 import logging
 import re
 import ssl
@@ -411,7 +412,7 @@ class NetworkRoom(Room):
         return True
 
     async def show_help(self):
-        self.send_notice_html("Welcome to the network room for <b>{}</b>!".format(self.name))
+        self.send_notice_html(f"Welcome to the network room for <b>{html.escape(self.name)}</b>!")
 
         try:
             return await self.commands.trigger("HELP")
@@ -933,7 +934,7 @@ class NetworkRoom(Room):
         args = " ".join(event.arguments)
         source = self.source_text(conn, event)
         target = str(event.target)
-        self.send_notice_html(f"<b>{source} {event.type} {target}</b> {args}")
+        self.send_notice_html(f"<b>{source} {event.type} {target}</b> {html.escape(args)}")
 
     @ircroom_event()
     def on_pass_if(self, conn, event) -> None:
@@ -979,13 +980,13 @@ class NetworkRoom(Room):
     def on_privnotice(self, conn, event) -> None:
         # show unhandled notices in server room
         source = self.source_text(conn, event)
-        self.send_notice_html(f"Notice from <b>{source}:</b> {event.arguments[0]}")
+        self.send_notice_html(f"Notice from <b>{source}:</b> {html.escape(event.arguments[0])}")
 
     @ircroom_event()
     def on_ctcp(self, conn, event) -> None:
         # show unhandled ctcps in server room
         source = self.source_text(conn, event)
-        self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {event.arguments[0]}</b> (ignored)")
+        self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {html.escape(event.arguments[0])}</b> (ignored)")
 
     def on_welcome(self, conn, event) -> None:
         self.on_server_message(conn, event)
@@ -1131,20 +1132,20 @@ class NetworkRoom(Room):
         self.keepnick_task = asyncio.get_event_loop().call_later(300, try_keepnick)
 
     def on_invite(self, conn, event) -> None:
-        self.send_notice_html("<b>{}</b> has invited you to <b>{}</b>".format(event.source.nick, event.arguments[0]))
+        self.send_notice_html("<b>{event.source.nick}</b> has invited you to <b>{html.escape(event.arguments[0])}</b>")
 
     def on_wallops(self, conn, event) -> None:
         plain, formatted = parse_irc_formatting(event.target)
-        self.send_notice_html(f"<b>WALLOPS {event.source.nick}</b>: {plain}")
+        self.send_notice_html(f"<b>WALLOPS {event.source.nick}</b>: {formatted if formatted else html.escape(plain)}")
 
     @ircroom_event()
     def on_kill(self, conn, event) -> None:
         if event.target == conn.real_nickname:
             source = self.source_text(conn, event)
-            self.send_notice_html(f"Killed by <b>{source}</b>: {event.arguments[0]}")
+            self.send_notice_html(f"Killed by <b>{source}</b>: {html.escape(event.arguments[0])}")
 
             # do not reconnect after KILL
             self.connected = False
 
     def on_error(self, conn, event) -> None:
-        self.send_notice_html(f"<b>ERROR</b>: {event.target}")
+        self.send_notice_html(f"<b>ERROR</b>: {html.escape(event.target)}")

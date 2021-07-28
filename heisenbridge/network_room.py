@@ -871,6 +871,7 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("topic", self.on_pass)
                     self.conn.add_global_handler("nick", self.on_nick)
                     self.conn.add_global_handler("umode", self.on_umode)
+                    self.conn.add_global_handler("ctcpreply", self.on_ctcpreply)
 
                     self.conn.add_global_handler("kill", self.on_kill)
                     self.conn.add_global_handler("error", self.on_error)
@@ -987,6 +988,12 @@ class NetworkRoom(Room):
         # show unhandled ctcps in server room
         source = self.source_text(conn, event)
         self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {html.escape(event.arguments[0])}</b> (ignored)")
+
+    @ircroom_event()
+    def on_ctcpreply(self, conn, event) -> None:
+        # show unhandled ctcp replies in server room
+        source = self.source_text(conn, event)
+        self.send_notice_html(f"<b>{source}</b> replied <b>CTCP {html.escape(event.arguments[0])}</b>")
 
     def on_welcome(self, conn, event) -> None:
         self.on_server_message(conn, event)

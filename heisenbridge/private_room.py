@@ -330,6 +330,14 @@ class PrivateRoom(Room):
         else:
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {html.escape(command)}</b> (ignored)")
 
+    def on_ctcpreply(self, conn, event) -> None:
+        if self.network is None:
+            return
+
+        reply = " ".join(event.arguments)
+
+        self.send_notice_html(f"<b>{event.source.nick}</b> replied <b>CTCP {html.escape(reply)}</b>")
+
     async def on_mx_message(self, event) -> None:
         if event["sender"] != self.user_id:
             return

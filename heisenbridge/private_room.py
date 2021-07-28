@@ -5,8 +5,10 @@ import re
 from datetime import datetime
 from datetime import timezone
 from html import escape
+from typing import List
 from typing import Optional
 from typing import Tuple
+from urllib.parse import urlparse
 
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParserError
@@ -185,6 +187,7 @@ class PrivateRoom(Room):
     name: str
     network: Optional[NetworkRoom]
     network_name: str
+    media: List[List[str]]
 
     # for compatibility with plumbed rooms
     max_lines = 0
@@ -195,10 +198,12 @@ class PrivateRoom(Room):
         self.name = None
         self.network = None
         self.network_name = None
+        self.media = []
 
         self.commands = CommandManager()
 
         self.mx_register("m.room.message", self.on_mx_message)
+        self.mx_register("m.room.redaction", self.on_mx_redaction)
 
     def from_config(self, config: dict) -> None:
         if "name" not in config:
@@ -210,8 +215,11 @@ class PrivateRoom(Room):
         self.name = config["name"]
         self.network_name = config["network"]
 
+        if "media" in config:
+            self.media = config["media"]
+
     def to_config(self) -> dict:
-        return {"name": self.name, "network": self.network_name}
+        return {"name": self.name, "network": self.network_name, "media": self.media[:5]}
 
     @staticmethod
     def create(network: NetworkRoom, name: str) -> "PrivateRoom":
@@ -469,16 +477,19 @@ class PrivateRoom(Room):
             if self.max_lines > 0 and i == self.max_lines - 1 and len(messages) > self.max_lines:
                 self.react(event["event_id"], "\u2702")  # scissors
 
-                resp = await self.serv.api.post_media_upload(
-                    "\n".join(messages).encode("utf-8"), content_type="text/plain; charset=UTF-8"
-                )
-
                 if self.use_pastebin:
+                    resp = await self.serv.api.post_media_upload(
+                        "\n".join(messages).encode("utf-8"), content_type="text/plain; charset=UTF-8"
+                    )
+
                     func(
                         self.name,
                         f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
                     )
                     self.react(event["event_id"], "\U0001f4dd")  # memo
+
+                    self.media.append([event["event_id"], resp["content_url"]])
+                    await self.save()
                 else:
                     func(self.name, "... long message truncated")
 
@@ -505,6 +516,8 @@ class PrivateRoom(Room):
                 self.name, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])
             )
             self.react(event["event_id"], "\U0001F517")  # link
+            self.media.append([event["event_id"], event["content"]["url"]])
+            await self.save()
         elif event["content"]["msgtype"] == "m.text":
             # allow commanding the appservice in rooms
             match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", event["content"]["body"])
@@ -517,3 +530,26 @@ class PrivateRoom(Room):
                     return
 
             await self._send_message(event, self.network.conn.privmsg)
+
+    async def on_mx_redaction(self, event) -> None:
+        for media in self.media:
+            if media[0] == event["redacts"]:
+                url = urlparse(media[1])
+                if self.serv.synapse_admin:
+                    try:
+                        await self.serv.api.post_synapse_admin_media_quarantine(url.netloc, url.path[1:])
+                        self.network.send_notice(
+                            f"Associated media {media[1]} for redacted event {event['redacts']} "
+                            + "in room {self.name} was quarantined."
+                        )
+                    except Exception:
+                        self.network.send_notice(
+                            f"Failed to quarantine media! Associated media {media[1]} "
+                            + "for redacted event {event['redacts']} in room {self.name} is left available."
+                        )
+                else:
+                    self.network.send_notice(
+                        f"No permission to quarantine media! Associated media {media[1]} "
+                        + "for redacted event {event['redacts']} in room {self.name} is left available."
+                    )
+                return

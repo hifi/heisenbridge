@@ -156,6 +156,8 @@ class PlumbedRoom(ChannelRoom):
                 "<{}> {}".format(sender, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])),
             )
             self.react(event["event_id"], "\U0001F517")  # link
+            self.media.append([event["event_id"], event["content"]["url"]])
+            await self.save()
         elif event["content"]["msgtype"] == "m.emote":
             await self._send_message(event, self.network.conn.action, prefix=f"{sender} ")
         elif event["content"]["msgtype"] == "m.text":

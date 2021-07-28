@@ -282,3 +282,8 @@ class Matrix:
 
     async def post_synapse_admin_room_join(self, room_id, user_id):
         return await self.call("POST", f"/_synapse/admin/v1/join/{room_id}", {"user_id": user_id})
+
+    async def post_synapse_admin_media_quarantine(self, server_name, media_id):
+        server_name = urllib.parse.quote(server_name, safe="")
+        media_id = urllib.parse.quote(media_id, safe="")
+        return await self.call("POST", f"/_synapse/admin/v1/media/quarantine/{server_name}/{media_id}")

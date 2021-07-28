@@ -993,7 +993,7 @@ class NetworkRoom(Room):
     def on_ctcpreply(self, conn, event) -> None:
         # show unhandled ctcp replies in server room
         source = self.source_text(conn, event)
-        self.send_notice_html(f"<b>{source}</b> replied <b>CTCP {html.escape(event.arguments[0])}</b>")
+        self.send_notice_html(f"<b>{source}</b> replied <b>CTCP {html.escape(' '.join(event.arguments))}</b>")
 
     def on_welcome(self, conn, event) -> None:
         self.on_server_message(conn, event)

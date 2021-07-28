@@ -240,7 +240,13 @@ class HeisenConnection(AioConnection):
 
     def send_items(self, *items):
         priority = 0
-        if items[0] == "PRIVMSG" or items[0] == "NOTICE":
+        if items[0] == "NOTICE":
+            # queue CTCP replies even lower than notices
+            if len(items) > 2 and len(items[2]) > 1 and items[2][1] == "\001":
+                priority = 3
+            else:
+                priority = 2
+        if items[0] == "PRIVMSG":
             priority = 1
         elif items[0] == "PONG":
             priority = -1

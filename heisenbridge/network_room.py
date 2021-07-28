@@ -6,6 +6,7 @@ import re
 import ssl
 from argparse import Namespace
 from base64 import b32encode
+from time import time
 from typing import Any
 from typing import Dict
 
@@ -14,6 +15,7 @@ import irc.client_aio
 import irc.connection
 from jaraco.stream import buffer
 
+from heisenbridge import __version__
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
@@ -22,6 +24,7 @@ from heisenbridge.irc import HeisenReactor
 from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.private_room import PrivateRoom
+from heisenbridge.private_room import unix_to_local
 from heisenbridge.room import Room
 
 
@@ -102,6 +105,7 @@ class NetworkRoom(Room):
         self.pills_length = 2
         self.pills_ignore = []
         self.autoquery = True
+        self.allow_ctcp = False
 
         self.commands = CommandManager()
         self.conn = None
@@ -249,6 +253,24 @@ class NetworkRoom(Room):
         cmd.add_argument("nick", help="target nickname")
         cmd.add_argument("message", nargs="+", help="message")
         self.commands.register(cmd, self.cmd_msg)
+
+        cmd = CommandParser(
+            prog="CTCP",
+            description="send a CTCP command",
+            epilog="You probably know what you are doing.",
+        )
+        cmd.add_argument("nick", help="target nickname")
+        cmd.add_argument("command", nargs="+", help="command and arguments")
+        self.commands.register(cmd, self.cmd_ctcp)
+
+        cmd = CommandParser(
+            prog="CTCPCFG",
+            description="enable/disable automatic CTCP replies",
+        )
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable CTCP replies")
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable CTCP replies")
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_ctcpcfg)
 
         cmd = CommandParser(
             prog="NICKSERV",
@@ -422,6 +444,9 @@ class NetworkRoom(Room):
         if "autoquery" in config:
             self.autoquery = config["autoquery"]
 
+        if "allow_ctcp" in config:
+            self.allow_ctcp = config["allow_ctcp"]
+
     def to_config(self) -> dict:
         return {
             "name": self.name,
@@ -433,6 +458,7 @@ class NetworkRoom(Room):
             "sasl_username": self.sasl_username,
             "sasl_password": self.sasl_password,
             "autocmd": self.autocmd,
+            "allow_ctcp": self.allow_ctcp,
             "pills_length": self.pills_length,
             "pills_ignore": self.pills_ignore,
         }
@@ -515,12 +541,25 @@ class NetworkRoom(Room):
 
     @connected
     async def cmd_msg(self, args) -> None:
-        # TODO: validate nick doesn't look like a channel
-        target = args.nick.lower()
         message = " ".join(args.message)
+        self.conn.privmsg(args.nick, message)
+        self.send_notice(f"{self.conn.real_nickname} -> {args.nick}: {message}")
 
-        self.conn.privmsg(target, message)
-        self.send_notice(f"{self.conn.real_nickname} -> {target}: {message}")
+    @connected
+    async def cmd_ctcp(self, args) -> None:
+        command = args.command[0].upper()
+        command_args = " ".join(args.command[1:])
+        self.conn.ctcp(command, args.nick, command_args)
+        self.send_notice_html(
+            f"{self.conn.real_nickname} -> <b>{args.nick}</b> CTCP <b>{html.escape(command)}</b> {html.escape(command_args)}"
+        )
+
+    async def cmd_ctcpcfg(self, args) -> None:
+        if args.enabled is not None:
+            self.allow_ctcp = args.enabled
+            await self.save()
+
+        self.send_notice(f"CTCP replies are {'enabled' if self.allow_ctcp else 'disabled'}")
 
     @connected
     async def cmd_nickserv(self, args) -> None:
@@ -937,7 +976,7 @@ class NetworkRoom(Room):
 
                     # generated
                     self.conn.add_global_handler("ctcp", self.on_ctcp)
-                    self.conn.add_global_handler("ctcpreply", self.on_pass)
+                    self.conn.add_global_handler("ctcpreply", self.on_ctcpreply)
                     self.conn.add_global_handler("action", lambda conn, event: None)
 
                     # anything not handled above
@@ -1041,13 +1080,42 @@ class NetworkRoom(Room):
     def on_privnotice(self, conn, event) -> None:
         # show unhandled notices in server room
         source = self.source_text(conn, event)
-        self.send_notice_html(f"Notice from <b>{source}:</b> {html.escape(event.arguments[0])}")
+        plain, formatted = parse_irc_formatting(event.arguments[0])
+        self.send_notice_html(f"Notice from <b>{source}:</b> {formatted if formatted else html.escape(plain)}")
 
     @ircroom_event()
     def on_ctcp(self, conn, event) -> None:
-        # show unhandled ctcps in server room
         source = self.source_text(conn, event)
-        self.send_notice_html(f"<b>{source}</b> requested <b>CTCP {html.escape(event.arguments[0])}</b> (ignored)")
+
+        reply = None
+        if self.allow_ctcp:
+            if event.arguments[0] == "VERSION":
+                reply = f"VERSION Heisenbridge v{__version__}"
+            elif event.arguments[0] == "PING" and len(event.arguments) > 1:
+                reply = f"PING {event.arguments[1]}"
+            elif event.arguments[0] == "TIME":
+                reply = f"TIME {unix_to_local(time())}"
+            else:
+                self.send_notice_html(
+                    f"<b>{source}</b> requested unknown <b>CTCP {html.escape(' '.join(event.arguments))}</b>"
+                )
+
+        if reply is not None:
+            self.conn.ctcp_reply(event.source.nick, reply)
+            self.send_notice_html(
+                f"<b>{source}</b> requested CTCP <b>{html.escape(event.arguments[0])}</b> -> {html.escape(reply)}"
+            )
+        else:
+            self.send_notice_html(f"<b>{source}</b> requested CTCP <b>{html.escape(event.arguments[0])}</b> (ignored)")
+
+    @ircroom_event()
+    def on_ctcpreply(self, conn, event) -> None:
+        command = event.arguments[0].upper()
+        reply = event.arguments[1]
+
+        self.send_notice_html(
+            f"CTCP <b>{html.escape(command)}</b> reply from <b>{event.source.nick}</b>: {html.escape(reply)}"
+        )
 
     def on_welcome(self, conn, event) -> None:
         self.on_server_message(conn, event)

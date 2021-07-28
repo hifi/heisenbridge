@@ -102,14 +102,7 @@ class ChannelRoom(PrivateRoom):
         self.bans_buffer = []
 
     def from_config(self, config: dict) -> None:
-        if "name" not in config:
-            raise Exception("No name key in config for ChatRoom")
-
-        if "network" not in config:
-            raise Exception("No network key in config for ChatRoom")
-
-        self.name = config["name"]
-        self.network_name = config["network"]
+        super().from_config(config)
 
         if "key" in config:
             self.key = config["key"]
@@ -118,7 +111,7 @@ class ChannelRoom(PrivateRoom):
             self.member_sync = config["member_sync"]
 
     def to_config(self) -> dict:
-        return {"name": self.name, "network": self.network_name, "key": self.key, "member_sync": self.member_sync}
+        return {**(super().to_config()), "key": self.key, "member_sync": self.member_sync}
 
     @staticmethod
     def create(network: NetworkRoom, name: str) -> "ChannelRoom":

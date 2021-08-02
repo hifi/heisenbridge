@@ -325,7 +325,25 @@ class NetworkRoom(Room):
             help="Disable displaynames for relaybot mode",
         )
         cmd.add_argument("--sync", choices=["off", "lazy", "half", "full"], help="Set member sync for room")
-        cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None)
+        cmd.add_argument(
+            "--disambiguation",
+            dest="disambiguation",
+            action="store_true",
+            help="Enable disambiguation for relaybot mode",
+        )
+        cmd.add_argument(
+            "--no-disambiguation",
+            dest="disambiguation",
+            action="store_false",
+            help="Disable disambiguation for relaybot mode",
+        )
+        cmd.add_argument(
+            "--zwsp", dest="zwsp", action="store_true", help="Enable Zero-Width-Space anti-ping for relaybot mode"
+        )
+        cmd.add_argument(
+            "--no-zwsp", dest="zwsp", action="store_false", help="Disable Zero-Width-Space anti-ping for relaybot mode"
+        )
+        cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None, disambiguation=None, zwsp=None)
         self.commands.register(cmd, self.cmd_plumbcfg)
 
         cmd = CommandParser(
@@ -554,23 +572,35 @@ class NetworkRoom(Room):
 
         if args.max_lines is not None:
             room.max_lines = args.max_lines
-            self.send_notice(f"Max lines set to {args.max_lines}.")
             save = True
 
         if args.pastebin is not None:
             room.use_pastebin = args.pastebin
-            self.send_notice(f"Pastebin set to {args.pastebin}.")
             save = True
 
         if args.displaynames is not None:
             room.use_displaynames = args.displaynames
-            self.send_notice(f"Displaynames set to {args.displaynames}.")
             save = True
 
         if args.sync is not None:
             room.member_sync = args.sync
-            self.send_notice(f"Member sync set to {args.sync}.")
             save = True
+
+        if args.disambiguation is not None:
+            room.use_disambiguation = args.disambiguation
+            save = True
+
+        if args.zwsp is not None:
+            room.use_zwsp = args.zwsp
+            save = True
+
+        self.send_notice(f"{args.channel} settings:")
+        self.send_notice(f"\tMax lines is {room.max_lines}")
+        self.send_notice(f"\tPastebin is {'enabled' if room.use_pastebin else 'disabled'}")
+        self.send_notice(f"\tDisplaynames is {'enabled' if room.use_displaynames else 'disabled'}")
+        self.send_notice(f"\tDisambiguation is {'enabled' if room.use_disambiguation else 'disabled'}")
+        self.send_notice(f"\tZero-Width-Space is {'enabled' if room.use_zwsp else 'disabled'}")
+        self.send_notice(f"\tMember sync is {room.member_sync}")
 
         if save:
             await room.save()

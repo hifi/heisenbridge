@@ -16,6 +16,8 @@ class PlumbedRoom(ChannelRoom):
     max_lines = 5
     use_pastebin = True
     use_displaynames = False
+    use_disambiguation = True
+    use_zwsp = False
 
     def is_valid(self) -> bool:
         # we are valid as long as the appservice is in the room
@@ -68,12 +70,20 @@ class PlumbedRoom(ChannelRoom):
         if "use_displaynames" in config:
             self.use_displaynames = config["use_displaynames"]
 
+        if "use_disambiguation" in config:
+            self.use_disambiguation = config["use_disambiguation"]
+
+        if "use_zwsp" in config:
+            self.use_zwsp = config["use_zwsp"]
+
     def to_config(self) -> dict:
         return {
             **(super().to_config()),
             "max_lines": self.max_lines,
             "use_pastebin": self.use_pastebin,
             "use_displaynames": self.use_displaynames,
+            "use_disambiguation": self.use_disambiguation,
+            "use_zwsp": self.use_zwsp,
         }
 
     def send_notice(
@@ -108,19 +118,21 @@ class PlumbedRoom(ChannelRoom):
             return
 
         # add ZWSP to sender to avoid pinging on IRC
-        sender = f"{name[:2]}\u200B{name[2:]}:{server[:1]}\u200B{server[1:]}"
+        if self.use_zwsp:
+            sender = f"{name[:2]}\u200B{name[2:]}:{server[:1]}\u200B{server[1:]}"
 
         if self.use_displaynames and event["sender"] in self.displaynames:
             sender_displayname = self.displaynames[event["sender"]]
 
             # ensure displayname is unique
-            for user_id, displayname in self.displaynames.items():
-                if user_id != event["sender"] and displayname == sender_displayname:
-                    sender_displayname += f" ({sender})"
-                    break
+            if self.use_disambiguation:
+                for user_id, displayname in self.displaynames.items():
+                    if user_id != event["sender"] and displayname == sender_displayname:
+                        sender_displayname += f" ({sender})"
+                        break
 
             # add ZWSP if displayname matches something on IRC
-            if len(sender_displayname) > 1:
+            if self.use_zwsp and len(sender_displayname) > 1:
                 sender_displayname = f"{sender_displayname[:1]}\u200B{sender_displayname[1:]}"
 
             sender = sender_displayname

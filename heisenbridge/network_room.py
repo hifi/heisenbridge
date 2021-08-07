@@ -1026,9 +1026,12 @@ class NetworkRoom(Room):
 
             if self.autocmd is not None:
                 self.send_notice("Executing autocmd and waiting a bit before joining channels...")
-                await self.commands.trigger(
-                    self.autocmd, allowed=["RAW", "MSG", "NICKSERV", "NS", "CHANSERV", "CS", "UMODE", "WAIT"]
-                )
+                try:
+                    await self.commands.trigger(
+                        self.autocmd, allowed=["RAW", "MSG", "NICKSERV", "NS", "CHANSERV", "CS", "UMODE", "WAIT"]
+                    )
+                except Exception as e:
+                    self.send_notice(f"Autocmd failed: {str(e)}")
                 await asyncio.sleep(4)
 
             # detect disconnect before we get to join

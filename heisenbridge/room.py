@@ -110,6 +110,8 @@ class Room(ABC):
 
             if "displayname" in event["content"] and event["content"]["displayname"] is not None:
                 self.displaynames[event["state_key"]] = event["content"]["displayname"]
+            elif event["state_key"] in self.displaynames:
+                del self.displaynames[event["state_key"]]
 
     async def _join(self, user_id, nick=None):
         if not self.serv.synapse_admin or not self.serv.is_local(self.id):

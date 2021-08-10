@@ -217,6 +217,9 @@ class PrivateRoom(Room):
         if self.network_name is None:
             return False
 
+        if not self.in_room(self.user_id):
+            return False
+
         return True
 
     def cleanup(self) -> None:

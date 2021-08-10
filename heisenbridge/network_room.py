@@ -80,6 +80,7 @@ class NetworkRoom(Room):
     autocmd: str
     pills_length: int
     pills_ignore: list
+    autoquery: bool
 
     # state
     commands: CommandManager
@@ -100,6 +101,7 @@ class NetworkRoom(Room):
         self.autocmd = None
         self.pills_length = 2
         self.pills_ignore = []
+        self.autoquery = True
 
         self.commands = CommandManager()
         self.conn = None
@@ -356,6 +358,15 @@ class NetworkRoom(Room):
         cmd.add_argument("--ignore", help="comma separated list of nicks to ignore for pills")
         self.commands.register(cmd, self.cmd_pills)
 
+        cmd = CommandParser(
+            prog="AUTOQUERY",
+            description="enable or disable automatic room creation when getting a message",
+        )
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable autoquery")
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable autoquery")
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_autoquery)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -403,6 +414,9 @@ class NetworkRoom(Room):
 
         if "pills_ignore" in config:
             self.pills_ignore = config["pills_ignore"]
+
+        if "autoquery" in config:
+            self.autoquery = config["autoquery"]
 
     def to_config(self) -> dict:
         return {
@@ -755,6 +769,13 @@ class NetworkRoom(Room):
         if save:
             await self.save()
 
+    async def cmd_autoquery(self, args) -> None:
+        if args.enabled is not None:
+            self.autoquery = args.enabled
+            await self.save()
+
+        self.send_notice(f"Autoquery is {'enabled' if self.autoquery else 'disabled'}")
+
     async def connect(self) -> None:
         if self.connlock.locked():
             self.send_notice("Already connecting.")
@@ -1066,15 +1087,20 @@ class NetworkRoom(Room):
 
         if target not in self.rooms:
 
-            async def later():
-                # reuse query command to create a room
-                await self.cmd_query(Namespace(nick=event.source.nick, message=[]))
+            if self.autoquery:
 
-                # push the message
-                room = self.rooms[target]
-                room.on_privmsg(conn, event)
+                async def later():
+                    # reuse query command to create a room
+                    await self.cmd_query(Namespace(nick=event.source.nick, message=[]))
 
-            asyncio.ensure_future(later())
+                    # push the message
+                    room = self.rooms[target]
+                    room.on_privmsg(conn, event)
+
+                asyncio.ensure_future(later())
+            else:
+                source = self.source_text(conn, event)
+                self.send_notice_html(f"Message from <b>{source}:</b> {html.escape(event.arguments[0])}")
         else:
             room = self.rooms[target]
             if not room.in_room(self.user_id):

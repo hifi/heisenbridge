@@ -1165,7 +1165,7 @@ class NetworkRoom(Room):
         self.keepnick_task = asyncio.get_event_loop().call_later(300, try_keepnick)
 
     def on_invite(self, conn, event) -> None:
-        self.send_notice_html("<b>{event.source.nick}</b> has invited you to <b>{html.escape(event.arguments[0])}</b>")
+        self.send_notice_html(f"<b>{event.source.nick}</b> has invited you to <b>{html.escape(event.arguments[0])}</b>")
 
     def on_wallops(self, conn, event) -> None:
         plain, formatted = parse_irc_formatting(event.target)

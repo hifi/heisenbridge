@@ -342,9 +342,12 @@ class PrivateRoom(Room):
         if "body" in event["content"]:
             body = event["content"]["body"]
 
-            # try to replace puppet matrix id mentions with displaynames
+            # try to replace puppet matrix id and mentions with displaynames
             for user_id, displayname in self.displaynames.items():
                 body = body.replace(user_id, displayname)
+
+                # XXX: FluffyChat started doing this...
+                body = body.replace("@" + displayname, displayname)
 
         if event["content"]["msgtype"] == "m.emote":
             self.network.conn.action(self.name, body)
@@ -359,7 +362,7 @@ class PrivateRoom(Room):
                 return
 
             # allow commanding the appservice in rooms
-            match = re.match(r"^\s*([^:,\s]+)[\s:,]*(.+)$", body)
+            match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", body)
             if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:
                 try:
                     await self.commands.trigger(match.group(2))

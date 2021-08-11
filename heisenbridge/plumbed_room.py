@@ -16,6 +16,7 @@ class PlumbedRoom(ChannelRoom):
     use_displaynames = False
     use_disambiguation = True
     use_zwsp = False
+    allow_notice = False
 
     def is_valid(self) -> bool:
         # we are valid as long as the appservice is in the room
@@ -74,6 +75,9 @@ class PlumbedRoom(ChannelRoom):
         if "use_zwsp" in config:
             self.use_zwsp = config["use_zwsp"]
 
+        if "allow_notice" in config:
+            self.allow_notice = config["allow_notice"]
+
     def to_config(self) -> dict:
         return {
             **(super().to_config()),
@@ -82,6 +86,7 @@ class PlumbedRoom(ChannelRoom):
             "use_displaynames": self.use_displaynames,
             "use_disambiguation": self.use_disambiguation,
             "use_zwsp": self.use_zwsp,
+            "allow_notice": self.allow_notice,
         }
 
     def send_notice(
@@ -145,6 +150,8 @@ class PlumbedRoom(ChannelRoom):
             await self._send_message(event, self.network.conn.action, prefix=f"{sender} ")
         elif event["content"]["msgtype"] == "m.text":
             await self._send_message(event, self.network.conn.privmsg, prefix=f"<{sender}> ")
+        elif event["content"]["msgtype"] == "m.notice" and self.allow_notice:
+            await self._send_message(event, self.network.conn.notice, prefix=f"<{sender}> ")
 
     def pills(self):
         ret = super().pills()

@@ -1,10 +1,8 @@
 import logging
-import re
 from typing import Optional
 
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.matrix import MatrixError
-from heisenbridge.private_room import split_long
 
 
 class NetworkRoom:
@@ -137,81 +135,16 @@ class PlumbedRoom(ChannelRoom):
 
             sender = sender_displayname
 
-        body = None
-        if "body" in event["content"]:
-            body = event["content"]["body"]
-
-            for user_id, displayname in self.displaynames.items():
-                body = body.replace(user_id, displayname)
-
-        if event["content"]["msgtype"] == "m.emote":
-            self.network.conn.action(self.name, f"{sender} {body}")
-        elif event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
+        if event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
             self.network.conn.privmsg(
                 self.name,
                 "<{}> {}".format(sender, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])),
             )
             self.react(event["event_id"], "\U0001F517")  # link
+        elif event["content"]["msgtype"] == "m.emote":
+            await self._send_message(event, self.network.conn.action, prefix=f"{sender} ")
         elif event["content"]["msgtype"] == "m.text":
-            if "m.new_content" in event["content"]:
-                return
-
-            lines = body.split("\n")
-
-            # remove reply text but preserve mention
-            if "m.relates_to" in event["content"] and "m.in_reply_to" in event["content"]["m.relates_to"]:
-                # pull the mention out, it's already converted to IRC nick but the regex still matches
-                m = re.match(r"> <([^>]+)>", lines.pop(0))
-                reply_to = m.group(1) if m else None
-
-                # skip all quoted lines, it will skip the next empty line as well (it better be empty)
-                while len(lines) > 0 and lines.pop(0).startswith(">"):
-                    pass
-
-                # convert mention to IRC convention
-                if reply_to:
-                    first_line = reply_to + ": " + lines.pop(0)
-                    lines.insert(0, first_line)
-
-            messages = []
-
-            for line in lines:
-                # drop all whitespace-only lines
-                if re.match(r"^\s*$", line):
-                    continue
-
-                # drop all code block lines
-                if re.match(r"^\s*```\s*$", line):
-                    continue
-
-                messages += split_long(
-                    self.network.conn.real_nickname,
-                    self.network.conn.username,
-                    self.network.real_host,
-                    self.name,
-                    f"<{sender}> {line}",
-                )
-
-            for i, message in enumerate(messages):
-                if i == self.max_lines - 1 and len(messages) > self.max_lines:
-                    self.react(event["event_id"], "\u2702")  # scissors
-
-                    resp = await self.serv.api.post_media_upload(
-                        body.encode("utf-8"), content_type="text/plain; charset=UTF-8"
-                    )
-
-                    if self.use_pastebin:
-                        self.network.conn.privmsg(
-                            self.name,
-                            f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
-                        )
-                        self.react(event["event_id"], "\U0001f4dd")  # memo
-                    else:
-                        self.network.conn.privmsg(self.name, "... long message truncated")
-
-                    return
-
-                self.network.conn.privmsg(self.name, message)
+            await self._send_message(event, self.network.conn.privmsg, prefix=f"<{sender}> ")
 
     def pills(self):
         ret = super().pills()

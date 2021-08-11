@@ -150,6 +150,9 @@ class PrivateRoom(Room):
     network: Optional[NetworkRoom]
     network_name: str
 
+    # for compatibility with plumbed rooms
+    max_lines = 0
+
     commands: CommandManager
 
     def init(self) -> None:
@@ -333,6 +336,82 @@ class PrivateRoom(Room):
         else:
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {html.escape(command)}</b> (ignored)")
 
+    async def _send_message(self, event, func, prefix=""):
+        body = None
+        if "body" in event["content"]:
+            body = event["content"]["body"]
+
+            for user_id, displayname in self.displaynames.items():
+                body = body.replace(user_id, displayname)
+
+                # XXX: FluffyChat started doing this...
+                body = body.replace("@" + displayname, displayname)
+
+        # ignore edits for now
+        if "m.new_content" in event["content"]:
+            return
+
+        lines = body.split("\n")
+
+        # remove reply text but preserve mention
+        if "m.relates_to" in event["content"] and "m.in_reply_to" in event["content"]["m.relates_to"]:
+            # pull the mention out, it's already converted to IRC nick but the regex still matches
+            m = re.match(r"> <([^>]+)>", lines.pop(0))
+            reply_to = m.group(1) if m else None
+
+            # skip all quoted lines, it will skip the next empty line as well (it better be empty)
+            while len(lines) > 0 and lines.pop(0).startswith(">"):
+                pass
+
+            # convert mention to IRC convention
+            if reply_to:
+                first_line = reply_to + ": " + lines.pop(0)
+                lines.insert(0, first_line)
+
+        messages = []
+
+        for line in lines:
+            # drop all whitespace-only lines
+            if re.match(r"^\s*$", line):
+                continue
+
+            # drop all code block lines
+            if re.match(r"^\s*```\s*$", line):
+                continue
+
+            messages += split_long(
+                self.network.conn.real_nickname,
+                self.network.conn.username,
+                self.network.real_host,
+                self.name,
+                prefix + line,
+            )
+
+        for i, message in enumerate(messages):
+            if self.max_lines > 0 and i == self.max_lines - 1 and len(messages) > self.max_lines:
+                self.react(event["event_id"], "\u2702")  # scissors
+
+                resp = await self.serv.api.post_media_upload(
+                    body.encode("utf-8"), content_type="text/plain; charset=UTF-8"
+                )
+
+                if self.use_pastebin:
+                    func(
+                        self.name,
+                        f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
+                    )
+                    self.react(event["event_id"], "\U0001f4dd")  # memo
+                else:
+                    func(self.name, "... long message truncated")
+
+                return
+
+            func(self.name, message)
+
+        # show number of lines sent to IRC
+        if self.max_lines == 0 and len(messages) > 1:
+            self.react(event["event_id"], f"\u2702 {lines} lines")
+
     async def on_mx_message(self, event) -> None:
         if event["sender"] != self.user_id:
             return
@@ -341,19 +420,8 @@ class PrivateRoom(Room):
             self.send_notice("Not connected to network.")
             return
 
-        body = None
-        if "body" in event["content"]:
-            body = event["content"]["body"]
-
-            # try to replace puppet matrix id and mentions with displaynames
-            for user_id, displayname in self.displaynames.items():
-                body = body.replace(user_id, displayname)
-
-                # XXX: FluffyChat started doing this...
-                body = body.replace("@" + displayname, displayname)
-
         if event["content"]["msgtype"] == "m.emote":
-            self.network.conn.action(self.name, body)
+            await self._send_message(event, self.network.conn.action, "emote")
         elif event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
             self.network.conn.privmsg(
                 self.name, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])
@@ -365,7 +433,7 @@ class PrivateRoom(Room):
                 return
 
             # allow commanding the appservice in rooms
-            match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", body)
+            match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", event["content"]["body"])
             if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:
                 try:
                     await self.commands.trigger(match.group(2))
@@ -374,23 +442,4 @@ class PrivateRoom(Room):
                 finally:
                     return
 
-            lines = 0
-            for line in body.split("\n"):
-                if line == "":
-                    continue
-
-                messages = split_long(
-                    self.network.conn.real_nickname,
-                    self.network.conn.username,
-                    self.network.real_host,
-                    self.name,
-                    line,
-                )
-
-                lines += len(messages)
-
-                for message in messages:
-                    self.network.conn.privmsg(self.name, message)
-
-            if lines > 1:
-                self.react(event["event_id"], f"\u2702 {lines} lines")
+            await self._send_message(event, self.network.conn.privmsg)

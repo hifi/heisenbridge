@@ -345,7 +345,11 @@ class NetworkRoom(Room):
         cmd.add_argument(
             "--no-zwsp", dest="zwsp", action="store_false", help="Disable Zero-Width-Space anti-ping for relaybot mode"
         )
-        cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None, disambiguation=None, zwsp=None)
+        cmd.add_argument("--notice", dest="notice", action="store_true", help="Allow Matrix notices to be relayed")
+        cmd.add_argument(
+            "--no-notice", dest="notice", action="store_false", help="Disallow Matrix notices to be relayed"
+        )
+        cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None, disambiguation=None, zwsp=None, notice=None)
         self.commands.register(cmd, self.cmd_plumbcfg)
 
         cmd = CommandParser(
@@ -608,6 +612,10 @@ class NetworkRoom(Room):
             room.use_zwsp = args.zwsp
             save = True
 
+        if args.notice is not None:
+            room.allow_notice = args.notice
+            save = True
+
         self.send_notice(f"{args.channel} settings:")
         self.send_notice(f"\tMax lines is {room.max_lines}")
         self.send_notice(f"\tPastebin is {'enabled' if room.use_pastebin else 'disabled'}")
@@ -615,6 +623,7 @@ class NetworkRoom(Room):
         self.send_notice(f"\tDisambiguation is {'enabled' if room.use_disambiguation else 'disabled'}")
         self.send_notice(f"\tZero-Width-Space is {'enabled' if room.use_zwsp else 'disabled'}")
         self.send_notice(f"\tMember sync is {room.member_sync}")
+        self.send_notice(f"\tNotice relay is {'enabled' if room.allow_notice else 'disabled'}")
 
         if save:
             await room.save()

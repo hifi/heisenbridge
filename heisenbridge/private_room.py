@@ -421,7 +421,7 @@ class PrivateRoom(Room):
             return
 
         if event["content"]["msgtype"] == "m.emote":
-            await self._send_message(event, self.network.conn.action, "emote")
+            await self._send_message(event, self.network.conn.action)
         elif event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
             self.network.conn.privmsg(
                 self.name, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])

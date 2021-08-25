@@ -355,7 +355,7 @@ class ChannelRoom(PrivateRoom):
             return
 
         irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)
-        self._remove_puppet(irc_user_id)
+        self._remove_puppet(irc_user_id, event.arguments[0] if len(event.arguments) else None)
 
     def update_key(self, modes):
         # update channel key

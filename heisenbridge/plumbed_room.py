@@ -105,6 +105,13 @@ class PlumbedRoom(ChannelRoom):
             text=f"{self.name}: {text}", user_id=user_id, formatted=formatted, fallback_html=fallback_html
         )
 
+    def send_notice_html(self, text: str, user_id: Optional[str] = None, forward=True) -> None:
+        if user_id is not None or forward is False:
+            super().send_notice_html(text=text, user_id=user_id)
+            return
+
+        self.network.send_notice_html(text=f"{self.name}: {text}")
+
     # don't try to set room topic when we're plumbed, just show it
     def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:
         self.send_notice(f"New topic is: '{topic}'")

@@ -410,7 +410,7 @@ class PrivateRoom(Room):
 
         # show number of lines sent to IRC
         if self.max_lines == 0 and len(messages) > 1:
-            self.react(event["event_id"], f"\u2702 {lines} lines")
+            self.react(event["event_id"], f"\u2702 {len(messages)} lines")
 
     async def on_mx_message(self, event) -> None:
         if event["sender"] != self.user_id:

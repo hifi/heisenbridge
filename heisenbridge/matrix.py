@@ -94,19 +94,21 @@ class Matrix:
                     return ret
                 except MatrixErrorUnknown:
                     logging.warning(
-                        f"Request to HS failed with unknown error, HTTP code {resp.status}, falling through to retry."
+                        f"Request to HS failed with unknown Matrix error, HTTP code {resp.status}, falling through to retry."
                     )
                 except MatrixLimitExceeded as e:
                     logging.warning(f"Request to HS was rate limited, retrying in {e.retry_after_s} seconds...")
                     await asyncio.sleep(e.retry_after_s)
                     continue
-                except ClientResponseError:
+                except ClientResponseError as e:
                     # fail fast if no retry allowed if dealing with HTTP error
+                    logging.debug(str(e))
                     if not retry:
                         raise
 
-                except (ClientError, asyncio.TimeoutError):
+                except (ClientError, asyncio.TimeoutError) as e:
                     # catch and fall-through to sleep
+                    logging.debug(str(e))
                     pass
 
                 logging.warning(f"Request to HS failed, assuming it is down, retry {i+1}/60...")

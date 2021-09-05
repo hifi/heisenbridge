@@ -25,6 +25,7 @@ def test_pills():
     assert fmt("foo foo foo") == pill("foo") + " " + pill("foo") + " " + pill("foo")
     assert fmt("foo: bar") == pill("foo") + ": bar"
     assert fmt("foo, bar") == pill("foo") + ", bar"
+    assert fmt("foo; bar") == pill("foo") + "; bar"
     assert fmt("foo...") == pill("foo") + "..."
     assert fmt("foo bar") == pill("foo") + " bar"
     assert fmt("bar foo.") == "bar " + pill("foo") + "."

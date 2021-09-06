@@ -144,6 +144,42 @@ def split_long(nick, user, host, target, message):
     return out
 
 
+# generate an edit that follows usual IRC conventions
+def line_diff(a, b):
+    a = a.split()
+    b = b.split()
+
+    pre = None
+    post = None
+    mlen = min(len(a), len(b))
+
+    for i in range(0, mlen):
+        if a[i] != b[i]:
+            break
+
+        pre = i + 1
+
+    for i in range(1, mlen + 1):
+        if a[-i] != b[-i]:
+            break
+
+        post = -i
+
+    rem = a[pre:post]
+    add = b[pre:post]
+
+    if len(add) == 0 and len(rem) > 0:
+        return "-" + (" ".join(rem))
+
+    if len(rem) == 0 and len(add) > 0:
+        return "+" + (" ".join(add))
+
+    if len(add) > 0:
+        return "* " + (" ".join(add))
+
+    return None
+
+
 class PrivateRoom(Room):
     # irc nick of the other party, name for consistency
     name: str
@@ -336,20 +372,20 @@ class PrivateRoom(Room):
         else:
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {html.escape(command)}</b> (ignored)")
 
-    async def _send_message(self, event, func, prefix=""):
+    def _process_event_content(self, event, prefix):
+        content = event["content"]
+        if "m.new_content" in content:
+            content = content["m.new_content"]
+
         body = None
-        if "body" in event["content"]:
-            body = event["content"]["body"]
+        if "body" in content:
+            body = content["body"]
 
             for user_id, displayname in self.displaynames.items():
                 body = body.replace(user_id, displayname)
 
                 # XXX: FluffyChat started doing this...
                 body = body.replace("@" + displayname, displayname)
-
-        # ignore edits for now
-        if "m.new_content" in event["content"]:
-            return
 
         lines = body.split("\n")
 
@@ -387,12 +423,54 @@ class PrivateRoom(Room):
                 prefix + line,
             )
 
+        return messages
+
+    async def _send_message(self, event, func, prefix=""):
+
+        if "m.new_content" in event["content"]:
+            messages = self._process_event_content(event, prefix)
+            event_id = event["content"]["m.relates_to"]["event_id"]
+            prev_event = self.last_messages[event["user_id"]]
+            if prev_event and prev_event["event_id"] == event_id:
+                old_messages = self._process_event_content(prev_event, prefix)
+
+                mlen = max(len(messages), len(old_messages))
+                edits = []
+                for i in range(0, mlen):
+                    try:
+                        old_msg = old_messages[i]
+                    except KeyError:
+                        old_msg = ""
+                    try:
+                        new_msg = messages[i]
+                    except KeyError:
+                        new_msg = ""
+
+                    edit = line_diff(old_msg, new_msg)
+                    if edit:
+                        edits.append(prefix + edit)
+
+                # use edits only if one line was edited
+                if len(edits) == 1:
+                    messages = edits
+
+            else:
+                # last event was not found so we fall back to full message BUT we can reconstrut enough of it
+                self.last_messages[event["user_id"]] = {
+                    "event_id": event["content"]["m.relates_to"]["event_id"],
+                    "content": event["content"]["m.new_content"],
+                }
+        else:
+            # keep track of the last message
+            self.last_messages[event["user_id"]] = event
+            messages = self._process_event_content(event, prefix)
+
         for i, message in enumerate(messages):
             if self.max_lines > 0 and i == self.max_lines - 1 and len(messages) > self.max_lines:
                 self.react(event["event_id"], "\u2702")  # scissors
 
                 resp = await self.serv.api.post_media_upload(
-                    body.encode("utf-8"), content_type="text/plain; charset=UTF-8"
+                    "\n".join(messages).encode("utf-8"), content_type="text/plain; charset=UTF-8"
                 )
 
                 if self.use_pastebin:
@@ -428,10 +506,6 @@ class PrivateRoom(Room):
             )
             self.react(event["event_id"], "\U0001F517")  # link
         elif event["content"]["msgtype"] == "m.text":
-            if "m.new_content" in event["content"]:
-                self.send_notice("Editing messages is not supported on IRC, edited text was NOT sent.")
-                return
-
             # allow commanding the appservice in rooms
             match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", event["content"]["body"])
             if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:

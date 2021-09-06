@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 from abc import ABC
+from collections import defaultdict
 from typing import Callable
 from typing import Dict
 from typing import List
@@ -35,6 +36,7 @@ class Room(ABC):
         self.members = members
         self.lazy_members = {}
         self.displaynames = {}
+        self.last_messages = defaultdict(str)
 
         self._mx_handlers = {}
         self._queue = EventQueue(self._flush_events)
@@ -98,6 +100,8 @@ class Room(ABC):
             self.members.remove(event["state_key"])
             if event["state_key"] in self.displaynames:
                 del self.displaynames[event["state_key"]]
+            if event["state_key"] in self.last_messages:
+                del self.last_messages[event["state_key"]]
 
             if not self.is_valid():
                 raise RoomInvalidError(

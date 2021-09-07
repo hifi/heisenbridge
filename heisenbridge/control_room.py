@@ -1,6 +1,7 @@
 import asyncio
 import re
 from argparse import Namespace
+from urllib.parse import urlparse
 
 from heisenbridge import __version__
 from heisenbridge.command_parse import CommandManager
@@ -148,6 +149,11 @@ class ControlRoom(Room):
             )
             group.add_argument("--full", help="set full sync, members are fully synchronized", action="store_true")
             self.commands.register(cmd, self.cmd_sync)
+
+            cmd = CommandParser(prog="MEDIAURL", description="configure media URL for links")
+            cmd.add_argument("--url", help="new URL override override")
+            cmd.add_argument("--reset", help="remove URL override (will retry auto-detection)", action="store_true")
+            self.commands.register(cmd, self.cmd_media_url)
 
             cmd = CommandParser(prog="VERSION", description="show bridge version")
             self.commands.register(cmd, self.cmd_version)
@@ -440,6 +446,24 @@ class ControlRoom(Room):
             await self.serv.save()
 
         self.send_notice(f"Member sync is set to {self.serv.config['member_sync']}")
+
+    async def cmd_media_url(self, args):
+        if args.reset:
+            self.serv.config["media_url"] = None
+            await self.serv.save()
+            self.serv.endpoint = await self.serv.detect_public_endpoint()
+        elif args.url:
+            parsed = urlparse(args.url)
+            if parsed.scheme in ["http", "https"] and not parsed.params and not parsed.query and not parsed.fragment:
+                self.serv.config["media_url"] = args.url
+                await self.serv.save()
+                self.serv.endpoint = args.url
+            else:
+                self.send_notice(f"Invalid media URL format: {args.url}")
+                return
+
+        self.send_notice(f"Media URL override is set to {self.serv.config['media_url']}")
+        self.send_notice(f"Current active media URL: {self.serv.endpoint}")
 
     async def cmd_open(self, args):
         networks = self.networks()

@@ -375,7 +375,14 @@ class BridgeAppService(AppService):
         self._users = {}
         self.user_id = whoami["user_id"]
         self.server_name = self.user_id.split(":")[1]
-        self.config = {"networks": {}, "owner": None, "allow": {}, "idents": {}, "member_sync": "half"}
+        self.config = {
+            "networks": {},
+            "owner": None,
+            "allow": {},
+            "idents": {},
+            "member_sync": "half",
+            "media_url": None,
+        }
         logging.debug(f"Default config: {self.config}")
         self.synapse_admin = False
 
@@ -387,15 +394,19 @@ class BridgeAppService(AppService):
         except Exception:
             logging.info("Seems we are not connected to Synapse, inviting puppets is required.")
 
-        # figure out where we are publicly for MXC conversions
-        self.endpoint = await self.detect_public_endpoint()
+        # load config from HS
+        await self.load()
+
+        # use configured media_url for endpoint if we have it
+        if self.config["media_url"]:
+            self.endpoint = self.config["media_url"]
+        else:
+            self.endpoint = await self.detect_public_endpoint()
+
         print("Homeserver is publicly available at " + self.endpoint, flush=True)
 
         logging.info("Starting presence loop")
         self._keepalive()
-
-        # load config from HS
-        await self.load()
 
         # do a little migration for servers, remove this later
         for network in self.config["networks"].values():

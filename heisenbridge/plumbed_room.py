@@ -44,6 +44,9 @@ class PlumbedRoom(ChannelRoom):
         room.network_name = network.name
         room.need_invite = join_rules["join_rule"] != "public"
 
+        # stamp global member sync setting at room creation time
+        room.member_sync = network.serv.config["member_sync"]
+
         for user_id, data in joined_members.items():
             if user_id not in room.members:
                 room.members.append(user_id)

@@ -894,7 +894,7 @@ class NetworkRoom(Room):
                     # 400-599
                     self.conn.add_global_handler("nosuchnick", self.on_pass_if)
                     self.conn.add_global_handler("nosuchchannel", self.on_pass_if)
-                    self.conn.add_global_handler("cannotsendtochan", self.on_pass_if)
+                    self.conn.add_global_handler("cannotsendtochan", self.on_pass0)
                     self.conn.add_global_handler("nicknameinuse", self.on_nicknameinuse)
                     self.conn.add_global_handler("erroneusnickname", self.on_erroneusnickname)
                     self.conn.add_global_handler("unavailresource", self.on_unavailresource)

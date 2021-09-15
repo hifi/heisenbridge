@@ -98,6 +98,11 @@ class ChannelRoom(PrivateRoom):
         cmd.add_argument("nick", help="nick to target")
         self.commands.register(cmd, self.cmd_devoice)
 
+        cmd = CommandParser(prog="KICK", description="kick someone")
+        cmd.add_argument("nick", help="nick to target")
+        cmd.add_argument("reason", nargs="*", help="reason")
+        self.commands.register(cmd, self.cmd_kick)
+
         self.names_buffer = []
         self.bans_buffer = []
 
@@ -206,6 +211,9 @@ class ChannelRoom(PrivateRoom):
 
     async def cmd_topic(self, args) -> None:
         self.network.conn.topic(self.name, " ".join(args.text))
+
+    async def cmd_kick(self, args) -> None:
+        self.network.conn.kick(self.name, args.nick, " ".join(args.reason))
 
     def on_pubmsg(self, conn, event):
         self.on_privmsg(conn, event)
@@ -378,6 +386,9 @@ class ChannelRoom(PrivateRoom):
     def on_chanoprivsneeded(self, conn, event) -> None:
         self.send_notice(event.arguments[1] if len(event.arguments) > 1 else "You're not operator.")
 
+    def on_cannotsendtochan(self, conn, event) -> None:
+        self.send_notice(event.arguments[1] if len(event.arguments) > 1 else "Cannot send to channel.")
+
     def on_mode(self, conn, event) -> None:
         modes = list(event.arguments)
 
@@ -403,8 +414,16 @@ class ChannelRoom(PrivateRoom):
         self.set_topic(plain)
 
     def on_kick(self, conn, event) -> None:
-        target_user_id = self.serv.irc_user_id(self.network.name, event.arguments[0])
-        self.kick(target_user_id, f"Kicked by {event.source.nick}: {event.arguments[1]}")
+        reason = (": " + event.arguments[1]) if len(event.arguments) > 1 and len(event.arguments[1]) > 0 else ""
+
+        if event.arguments[0] == conn.real_nickname:
+            self.send_notice_html(f"You were kicked from the channel by <b>{event.source.nick}</b>{reason}")
+            self.send_notice_html(
+                f"To rejoin the channel, type <b>JOIN {event.target}</b> in the <b>{self.network_name}</b> network room."
+            )
+        else:
+            target_user_id = self.serv.irc_user_id(self.network.name, event.arguments[0])
+            self.kick(target_user_id, f"Kicked by {event.source.nick}{reason}")
 
     def on_banlist(self, conn, event) -> None:
         parts = list(event.arguments)

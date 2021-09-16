@@ -123,7 +123,7 @@ optional arguments:
 Install
 -------
 
-1. Install Python 3.6 or newer
+1. Install Python 3.7 or newer
 2. Install dependencies in virtualenv
 
    ```bash
@@ -153,7 +153,7 @@ To update your installation, run `pip install --upgrade --force-reinstall git+ht
 Develop
 -------
 
-1. Install Python 3.6 or newer
+1. Install Python 3.7 or newer
 2. Install dependencies
 
    ```bash

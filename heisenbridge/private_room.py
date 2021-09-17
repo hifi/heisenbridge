@@ -447,11 +447,11 @@ class PrivateRoom(Room):
                 for i in range(0, mlen):
                     try:
                         old_msg = old_messages[i]
-                    except KeyError:
+                    except IndexError:
                         old_msg = ""
                     try:
                         new_msg = messages[i]
-                    except KeyError:
+                    except IndexError:
                         new_msg = ""
 
                     edit = line_diff(old_msg, new_msg)

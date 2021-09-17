@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParserError
+from heisenbridge.parser import IRCMatrixParser
 from heisenbridge.room import Room
 
 
@@ -380,49 +381,50 @@ class PrivateRoom(Room):
         else:
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {html.escape(command)}</b> (ignored)")
 
-    def _process_event_content(self, event, prefix):
+    def _process_event_content(self, event, prefix, reply_to):
         content = event["content"]
         if "m.new_content" in content:
             content = content["m.new_content"]
 
-        body = None
-        if "body" in content:
+        if "formatted_body" in content:
+            lines = str(IRCMatrixParser.parse(content["formatted_body"])).split("\n")
+        elif "body" in content:
             body = content["body"]
 
             for user_id, displayname in self.displaynames.items():
                 body = body.replace(user_id, displayname)
 
-                # XXX: FluffyChat started doing this...
+                # FluffyChat prefixes mentions in fallback with @
                 body = body.replace("@" + displayname, displayname)
 
-        lines = body.split("\n")
+            lines = body.split("\n")
 
-        # remove reply text but preserve mention
-        if "m.relates_to" in event["content"] and "m.in_reply_to" in event["content"]["m.relates_to"]:
-            # pull the mention out, it's already converted to IRC nick but the regex still matches
-            m = re.match(r"> <([^>]+)>", lines.pop(0))
-            reply_to = m.group(1) if m else None
+            # remove original text that was replied to
+            if "m.relates_to" in event["content"] and "m.in_reply_to" in event["content"]["m.relates_to"]:
+                # skip all quoted lines, it will skip the next empty line as well (it better be empty)
+                while len(lines) > 0 and lines.pop(0).startswith(">"):
+                    pass
+        else:
+            logging.warning("_process_event_content called with no usable body")
+            return
 
-            # skip all quoted lines, it will skip the next empty line as well (it better be empty)
-            while len(lines) > 0 and lines.pop(0).startswith(">"):
-                pass
+        # drop all whitespace-only lines
+        lines = [x for x in lines if not re.match(r"^\s*$", x)]
 
-            # convert mention to IRC convention
-            if reply_to:
-                first_line = reply_to + ": " + lines.pop(0)
-                lines.insert(0, first_line)
+        # handle replies
+        if reply_to:
+            # resolve displayname
+            sender = reply_to["user_id"]
+            if sender in self.displaynames:
+                sender = self.displaynames[sender]
+
+            # prefix first line with nickname of the reply_to source
+            first_line = sender + ": " + lines.pop(0)
+            lines.insert(0, first_line)
 
         messages = []
 
         for line in lines:
-            # drop all whitespace-only lines
-            if re.match(r"^\s*$", line):
-                continue
-
-            # drop all code block lines
-            if re.match(r"^\s*```\s*$", line):
-                continue
-
             messages += split_long(
                 self.network.conn.real_nickname,
                 self.network.conn.username,
@@ -434,13 +436,33 @@ class PrivateRoom(Room):
         return messages
 
     async def _send_message(self, event, func, prefix=""):
+        # try to find out if this was a reply
+        reply_to = None
+        if "m.relates_to" in event["content"]:
+            rel_event = event
+
+            # traverse back all edits
+            while (
+                "m.relates_to" in rel_event["content"]
+                and "rel_type" in rel_event["content"]["m.relates_to"]
+                and rel_event["content"]["m.relates_to"]["rel_type"] == "m.replace"
+            ):
+                rel_event = await self.serv.api.get_room_event(
+                    self.id, rel_event["content"]["m.relates_to"]["event_id"]
+                )
+
+            # see if the original is a reply
+            if "m.relates_to" in rel_event["content"] and "m.in_reply_to" in rel_event["content"]["m.relates_to"]:
+                reply_to = await self.serv.api.get_room_event(
+                    self.id, rel_event["content"]["m.relates_to"]["m.in_reply_to"]["event_id"]
+                )
 
         if "m.new_content" in event["content"]:
-            messages = self._process_event_content(event, prefix)
+            messages = self._process_event_content(event, prefix, reply_to)
             event_id = event["content"]["m.relates_to"]["event_id"]
             prev_event = self.last_messages[event["user_id"]]
             if prev_event and prev_event["event_id"] == event_id:
-                old_messages = self._process_event_content(prev_event, prefix)
+                old_messages = self._process_event_content(prev_event, prefix, reply_to)
 
                 mlen = max(len(messages), len(old_messages))
                 edits = []
@@ -473,7 +495,7 @@ class PrivateRoom(Room):
         else:
             # keep track of the last message
             self.last_messages[event["user_id"]] = event
-            messages = self._process_event_content(event, prefix)
+            messages = self._process_event_content(event, prefix, reply_to)
 
         for i, message in enumerate(messages):
             if self.max_lines > 0 and i == self.max_lines - 1 and len(messages) > self.max_lines:

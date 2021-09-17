@@ -462,6 +462,8 @@ class PrivateRoom(Room):
                 if len(edits) == 1:
                     messages = edits
 
+                # update last message _content_ to current so re-edits work
+                self.last_messages[event["user_id"]]["content"] = event["content"]
             else:
                 # last event was not found so we fall back to full message BUT we can reconstrut enough of it
                 self.last_messages[event["user_id"]] = {

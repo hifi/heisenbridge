@@ -51,7 +51,7 @@ class PlumbedRoom(ChannelRoom):
             if user_id not in room.members:
                 room.members.append(user_id)
             if "display_name" in data and data["display_name"] is not None:
-                room.displaynames[user_id] = data["display_name"]
+                room.displaynames[user_id] = str(data["display_name"])
 
         network.serv.register_room(room)
         network.rooms[room.name] = room
@@ -149,6 +149,9 @@ class PlumbedRoom(ChannelRoom):
                 sender_displayname = f"{sender_displayname[:1]}\u200B{sender_displayname[1:]}"
 
             sender = sender_displayname
+
+        # limit plumbed sender max length to 100 characters
+        sender = sender[:100]
 
         if event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
             self.network.conn.privmsg(

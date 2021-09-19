@@ -460,11 +460,11 @@ class BridgeAppService(AppService):
                 # add to room displayname
                 for user_id, data in joined_members.items():
                     if "display_name" in data and data["display_name"] is not None:
-                        room.displaynames[user_id] = data["display_name"]
+                        room.displaynames[user_id] = str(data["display_name"])
 
                     # add to global puppet cache if it's a puppet
                     if user_id.startswith("@" + self.puppet_prefix) and self.is_local(user_id):
-                        self._users[user_id] = data["display_name"]
+                        self._users[user_id] = str(data["display_name"])
 
                 # only add valid rooms to event handler
                 if room.is_valid():

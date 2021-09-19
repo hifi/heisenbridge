@@ -113,7 +113,7 @@ class Room(ABC):
                 self.members.append(event["state_key"])
 
             if "displayname" in event["content"] and event["content"]["displayname"] is not None:
-                self.displaynames[event["state_key"]] = event["content"]["displayname"]
+                self.displaynames[event["state_key"]] = str(event["content"]["displayname"])
             elif event["state_key"] in self.displaynames:
                 del self.displaynames[event["state_key"]]
 

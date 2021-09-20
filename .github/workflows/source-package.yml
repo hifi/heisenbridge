@@ -17,35 +17,36 @@ jobs:
         id: get_tag
         run: |
           [[ ! "$GITHUB_REF" =~ refs/tags ]] && exit
-          echo "::set-output name=value::${GITHUB_REF#refs/tags/}"
+          echo "::set-output name=value::${GITHUB_REF#refs/tags/v}"
 
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
           python-version: 3.9
 
-      - name: Generate version and create source archive
+      - name: Build source archive and wheel
         shell: bash
         run: |
-          python setup.py gen_version
-          git archive --prefix=heisenbridge-${{ steps.get_tag.outputs.value }}/ HEAD -o heisenbridge-${{ steps.get_tag.outputs.value }}.tar
-          # fine I'm lazy
-          mkdir -p heisenbridge-${{ steps.get_tag.outputs.value }}/heisenbridge/
-          cp heisenbridge/version.txt heisenbridge-${{ steps.get_tag.outputs.value }}/heisenbridge/
-          tar --append --file=heisenbridge-${{ steps.get_tag.outputs.value }}.tar heisenbridge-${{ steps.get_tag.outputs.value }}/heisenbridge/version.txt
-          gzip -9 heisenbridge-${{ steps.get_tag.outputs.value }}.tar
+          pip install wheel
+          python setup.py sdist
+          python setup.py bdist_wheel
 
       - name: Upload archive
         uses: actions/upload-artifact@v2
         with:
           name: "heisenbridge-${{ steps.get_tag.outputs.value }}.tar.gz"
-          path: "heisenbridge-${{ steps.get_tag.outputs.value }}.tar.gz"
+          path: "dist/heisenbridge-${{ steps.get_tag.outputs.value }}.tar.gz"
 
       - name: Upload tagged release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: "${{ steps.get_tag.outputs.value }}"
+          tag_name: "v${{ steps.get_tag.outputs.value }}"
           files: |
-            heisenbridge-${{ steps.get_tag.outputs.value }}.tar.gz
+            dist/heisenbridge-${{ steps.get_tag.outputs.value }}.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@master
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

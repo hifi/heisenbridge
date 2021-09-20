@@ -5,9 +5,13 @@ import subprocess
 module_dir = os.path.dirname(__file__)
 root_dir = module_dir + "/../"
 
+__version__ = "0.0.0"
+__git_version__ = None
+
 if os.path.exists(module_dir + "/version.txt"):
     __version__ = open(module_dir + "/version.txt").read().strip()
-elif os.path.exists(root_dir + ".git") and shutil.which("git"):
+
+if os.path.exists(root_dir + ".git") and shutil.which("git"):
     try:
         git_env = {
             "PATH": os.environ["PATH"],
@@ -22,15 +26,15 @@ elif os.path.exists(root_dir + ".git") and shutil.which("git"):
             .split("-")
         )
 
-        __version__ = git_bits[0][1:]
+        __git_version__ = git_bits[0][1:]
 
         if len(git_bits) > 1:
-            __version__ += f".dev{git_bits[1]}"
+            __git_version__ += f".dev{git_bits[1]}"
 
         if len(git_bits) > 2:
-            __version__ += f"+{git_bits[2]}"
+            __git_version__ += f"+{git_bits[2]}"
 
+        # always override version with git version if we have a valid version number
+        __version__ = __git_version__
     except (subprocess.SubprocessError, OSError):
-        __version__ = "0.0.0+unknown"
-else:
-    __version__ = "0.0.0"
+        pass

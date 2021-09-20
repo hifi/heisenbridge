@@ -3,7 +3,7 @@ Heisenbridge
 
 a bouncer-style Matrix IRC bridge.
 
-<img align="right" width="220" height="250" src="logo/heisenbridge-light-transparent.png">
+<img align="right" width="220" height="250" src="https://raw.githubusercontent.com/hifi/heisenbridge/master/logo/heisenbridge-light-transparent.png">
 
 Heisenbridge brings IRC to Matrix by creating an environment where every user connects to each network individually like they would with a traditional IRC bouncer.
 Simplicity is achieved by exposing IRC in the most straightforward way as possible where it makes sense so it feels familiar for long time IRC users.
@@ -72,13 +72,24 @@ Any Matrix user joining plumbed or portal IRC rooms are automatically connected 
 Both IRC and Matrix users' identities are only relayed through the messages they send.
 The bot operator manages everything and does not require any user interaction on either side.
 
+PyPI
+----
+GitHub releases are automatically published to [PyPI](https://pypi.org/project/heisenbridge/):
+
+```sh
+pip install heisenbridge
+```
+
 Docker
 ------
 The master branch is automatically published to [Docker Hub](https://hub.docker.com/r/hif1/heisenbridge):
-```
+```sh
 docker pull hif1/heisenbridge
 docker run --rm hif1/heisenbridge -h
 ```
+
+Each GitHub release is also tagged as `x.y.z`, `x.y` and `x`.
+
 Additionally, if you use [`matrix-docker-ansible-deploy`](https://github.com/spantaleev/matrix-docker-ansible-deploy) to deploy your Synapse server, you can use it to integrate Heisenbridge as well - just follow the [relevant docs](https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/master/docs/configuring-playbook-bridge-heisenbridge.md)
 
 Usage

@@ -4,6 +4,7 @@ import importlib.util
 from setuptools import Command
 from setuptools import setup
 from setuptools.command.build_py import build_py
+from setuptools.command.sdist import sdist
 
 # pull git or local version
 spec = importlib.util.spec_from_file_location("version", "heisenbridge/version.py")
@@ -28,13 +29,19 @@ class GenerateVersionCommand(Command):
 
 class BuildPyCommand(build_py):
     def run(self):
-        GenerateVersionCommand.run(None)
+        self.run_command("gen_version")
         build_py.run(self)
+
+
+class SDistCommand(sdist):
+    def run(self):
+        self.run_command("gen_version")
+        sdist.run(self)
 
 
 setup(
     version=version.__version__,
-    cmdclass={"gen_version": GenerateVersionCommand, "build_py": BuildPyCommand},
+    cmdclass={"gen_version": GenerateVersionCommand, "build_py": BuildPyCommand, "sdist": SDistCommand},
     packages=["heisenbridge"],
     package_data={"heisenbridge": ["version.txt"]},
 )

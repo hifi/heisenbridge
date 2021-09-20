@@ -2,6 +2,7 @@ import asyncio
 import html
 import logging
 import re
+import unicodedata
 from datetime import datetime
 from datetime import timezone
 from html import escape
@@ -498,6 +499,9 @@ class PrivateRoom(Room):
             messages = self._process_event_content(event, prefix, reply_to)
 
         for i, message in enumerate(messages):
+            # filter control characters except ZWSP
+            message = "".join(c for c in message if unicodedata.category(c)[0] != "C" or c == "\u200B")
+
             if self.max_lines > 0 and i == self.max_lines - 1 and len(messages) > self.max_lines:
                 self.react(event["event_id"], "\u2702")  # scissors
 

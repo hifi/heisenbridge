@@ -126,6 +126,10 @@ class PlumbedRoom(ChannelRoom):
         sender = event["sender"]
         (name, server) = sender.split(":")
 
+        # ignore self messages
+        if sender == self.serv.user_id:
+            return
+
         # prevent re-sending federated messages back
         if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:
             return

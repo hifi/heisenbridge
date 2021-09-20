@@ -412,7 +412,7 @@ class PrivateRoom(Room):
         lines = [x for x in lines if not re.match(r"^\s*$", x)]
 
         # handle replies
-        if reply_to:
+        if reply_to and reply_to["user_id"] != event["user_id"]:
             # resolve displayname
             sender = reply_to["user_id"]
             if sender in self.displaynames:

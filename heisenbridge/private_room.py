@@ -413,9 +413,9 @@ class PrivateRoom(Room):
         lines = [x for x in lines if not re.match(r"^\s*$", x)]
 
         # handle replies
-        if reply_to and reply_to["user_id"] != event["user_id"]:
+        if reply_to and reply_to["sender"] != event["sender"]:
             # resolve displayname
-            sender = reply_to["user_id"]
+            sender = reply_to["sender"]
             if sender in self.displaynames:
                 sender = self.displaynames[sender]
 
@@ -461,7 +461,7 @@ class PrivateRoom(Room):
         if "m.new_content" in event["content"]:
             messages = self._process_event_content(event, prefix, reply_to)
             event_id = event["content"]["m.relates_to"]["event_id"]
-            prev_event = self.last_messages[event["user_id"]]
+            prev_event = self.last_messages[event["sender"]]
             if prev_event and prev_event["event_id"] == event_id:
                 old_messages = self._process_event_content(prev_event, prefix, reply_to)
 
@@ -486,16 +486,16 @@ class PrivateRoom(Room):
                     messages = edits
 
                 # update last message _content_ to current so re-edits work
-                self.last_messages[event["user_id"]]["content"] = event["content"]
+                self.last_messages[event["sender"]]["content"] = event["content"]
             else:
                 # last event was not found so we fall back to full message BUT we can reconstrut enough of it
-                self.last_messages[event["user_id"]] = {
+                self.last_messages[event["sender"]] = {
                     "event_id": event["content"]["m.relates_to"]["event_id"],
                     "content": event["content"]["m.new_content"],
                 }
         else:
             # keep track of the last message
-            self.last_messages[event["user_id"]] = event
+            self.last_messages[event["sender"]] = event
             messages = self._process_event_content(event, prefix, reply_to)
 
         for i, message in enumerate(messages):

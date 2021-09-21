@@ -158,10 +158,12 @@ class PlumbedRoom(ChannelRoom):
         sender = sender[:100]
 
         if event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
-            self.network.conn.privmsg(
-                self.name,
-                "<{}> {}".format(sender, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])),
-            )
+
+            # process media event like it was a text message
+            media_event = {"content": {"body": self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])}}
+            messages = self._process_event_content(media_event, prefix=f"<{sender}> ")
+            self.network.conn.privmsg(self.name, messages[0])
+
             self.react(event["event_id"], "\U0001F517")  # link
             self.media.append([event["event_id"], event["content"]["url"]])
             await self.save()

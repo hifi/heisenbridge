@@ -383,7 +383,7 @@ class PrivateRoom(Room):
         else:
             self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {html.escape(command)}</b> (ignored)")
 
-    def _process_event_content(self, event, prefix, reply_to):
+    def _process_event_content(self, event, prefix, reply_to=None):
         content = event["content"]
         if "m.new_content" in content:
             content = content["m.new_content"]

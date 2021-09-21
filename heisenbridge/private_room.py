@@ -14,6 +14,7 @@ from urllib.parse import urlparse
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.parser import IRCMatrixParser
+from heisenbridge.parser import IRCRecursionContext
 from heisenbridge.room import Room
 
 
@@ -388,7 +389,9 @@ class PrivateRoom(Room):
             content = content["m.new_content"]
 
         if "formatted_body" in content:
-            lines = str(IRCMatrixParser.parse(content["formatted_body"])).split("\n")
+            lines = str(
+                IRCMatrixParser.parse(content["formatted_body"], IRCRecursionContext(displaynames=self.displaynames))
+            ).split("\n")
         elif "body" in content:
             body = content["body"]
 

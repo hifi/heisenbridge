@@ -937,6 +937,7 @@ class NetworkRoom(Room):
 
                     # generated
                     self.conn.add_global_handler("ctcp", self.on_ctcp)
+                    self.conn.add_global_handler("ctcpreply", self.on_pass)
                     self.conn.add_global_handler("action", lambda conn, event: None)
 
                     # anything not handled above

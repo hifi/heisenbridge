@@ -381,7 +381,15 @@ class PrivateRoom(Room):
                 plain, irc_user_id, fallback_html=f"<b>Emote from {str(event.source)}</b>: {html.escape(plain)}"
             )
         else:
-            self.send_notice_html(f"<b>{event.source.nick}</b> requested <b>CTCP {html.escape(command)}</b> (ignored)")
+            (plain, formatted) = parse_irc_formatting(" ".join(event.arguments))
+            self.send_notice_html(f"<b>{str(event.source)}</b> requested <b>CTCP {html.escape(plain)}</b> (ignored)")
+
+    def on_ctcpreply(self, conn, event) -> None:
+        if self.network is None:
+            return
+
+        (plain, formatted) = parse_irc_formatting(" ".join(event.arguments))
+        self.send_notice_html(f"<b>{str(event.source)}</b> sent <b>CTCP REPLY {html.escape(plain)}</b> (ignored)")
 
     def _process_event_content(self, event, prefix, reply_to=None):
         content = event["content"]

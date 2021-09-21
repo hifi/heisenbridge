@@ -1,6 +1,7 @@
 import re
 from typing import Dict
 from typing import Optional
+from typing import Pattern
 
 from mautrix.types import RoomAlias
 from mautrix.types import UserID
@@ -53,6 +54,9 @@ class IRCString(MarkdownString):
 class IRCMatrixParser(MatrixParser):
     fs = IRCString
     list_bullets = ("-", "*", "+", "=")
+
+    # use .* to account for legacy empty mxid
+    mention_regex: Pattern = re.compile("https://matrix.to/#/(@.*:.+)")
 
     @classmethod
     def tag_aware_parse_node(cls, node: HTMLNode, ctx: RecursionContext) -> T:

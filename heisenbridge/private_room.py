@@ -521,16 +521,26 @@ class PrivateRoom(Room):
                         "\n".join(messages).encode("utf-8"), content_type="text/plain; charset=UTF-8"
                     )
 
-                    func(
-                        self.name,
-                        f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
-                    )
+                    if self.max_lines == 1:
+                        func(
+                            self.name,
+                            f"{prefix}{self.serv.mxc_to_url(resp['content_uri'])} (long message, {len(messages)} lines)",
+                        )
+                    else:
+                        func(
+                            self.name,
+                            f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
+                        )
                     self.react(event["event_id"], "\U0001f4dd")  # memo
 
                     self.media.append([event["event_id"], resp["content_uri"]])
                     await self.save()
                 else:
-                    func(self.name, "... long message truncated")
+                    if self.max_lines == 1:
+                        # best effort is to send the first line and give up
+                        func(self.name, message)
+                    else:
+                        func(self.name, "... long message truncated")
 
                 return
 

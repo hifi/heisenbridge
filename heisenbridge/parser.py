@@ -20,6 +20,14 @@ class IRCRecursionContext(RecursionContext):
         self.displaynames = displaynames
         super().__init__(strip_linebreaks, ul_depth)
 
+    def enter_list(self) -> "RecursionContext":
+        return IRCRecursionContext(
+            strip_linebreaks=self.strip_linebreaks, ul_depth=self.ul_depth + 1, displaynames=self.displaynames
+        )
+
+    def enter_code_block(self) -> "RecursionContext":
+        return IRCRecursionContext(strip_linebreaks=False, ul_depth=self.ul_depth, displaynames=self.displaynames)
+
 
 class IRCString(MarkdownString):
     def format(self, entity_type: EntityType, **kwargs) -> "IRCString":

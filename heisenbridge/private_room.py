@@ -436,13 +436,17 @@ class PrivateRoom(Room):
 
         messages = []
 
-        for line in lines:
+        for i, line in enumerate(lines):
+            # prefix first line if needed
+            if i == 0 and prefix and len(prefix) > 0:
+                line = prefix + line
+
             messages += split_long(
                 self.network.conn.real_nickname,
                 self.network.conn.username,
                 self.network.real_host,
                 self.name,
-                prefix + line,
+                line,
             )
 
         return messages

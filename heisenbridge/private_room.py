@@ -580,6 +580,8 @@ class PrivateRoom(Room):
 
             await self._send_message(event, self.network.conn.privmsg)
 
+        await self.serv.api.post_room_receipt(event["room_id"], event["event_id"])
+
     async def on_mx_redaction(self, event) -> None:
         for media in self.media:
             if media[0] == event["redacts"]:

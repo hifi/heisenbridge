@@ -174,6 +174,8 @@ class PlumbedRoom(ChannelRoom):
         elif event["content"]["msgtype"] == "m.notice" and self.allow_notice:
             await self._send_message(event, self.network.conn.notice, prefix=f"<{sender}> ")
 
+        await self.serv.api.post_room_receipt(event["room_id"], event["event_id"])
+
     def pills(self):
         ret = super().pills()
 

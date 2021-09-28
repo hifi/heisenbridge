@@ -240,6 +240,13 @@ class Matrix:
     async def post_room_create(self, data):
         return await self.call("POST", "/_matrix/client/r0/createRoom", data)
 
+    async def post_room_receipt(self, room_id, event_id, receipt_type="m.read"):
+        room_id = urllib.parse.quote(room_id, safe="")
+        event_id = urllib.parse.quote(event_id, safe="")
+        receipt_type = urllib.parse.quote(receipt_type, safe="")
+
+        return await self.call("POST", f"/_matrix/client/r0/rooms/{room_id}/receipt/{receipt_type}/{event_id}")
+
     async def post_user_register(self, data):
         return await self.call("POST", "/_matrix/client/r0/register?kind=user", data)
 

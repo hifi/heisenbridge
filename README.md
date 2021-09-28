@@ -140,7 +140,7 @@ Install
    ```bash
    virtualenv venv
    source venv/bin/activate
-   pip install git+https://github.com/hifi/heisenbridge
+   pip install heisenbridge
    ```
 
 3. Generate registration YAML
@@ -159,7 +159,7 @@ Install
 
 7. Start a DM with `@heisenbridge:your.homeserver` to get online usage help
 
-To update your installation, run `pip install --upgrade --force-reinstall git+https://github.com/hifi/heisenbridge`
+To update your installation, run `pip install --upgrade heisenbridge`
 
 Develop
 -------

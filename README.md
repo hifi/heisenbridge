@@ -90,7 +90,9 @@ docker run --rm hif1/heisenbridge -h
 
 Each GitHub release is also tagged as `x.y.z`, `x.y` and `x`.
 
-Additionally, if you use [`matrix-docker-ansible-deploy`](https://github.com/spantaleev/matrix-docker-ansible-deploy) to deploy your Synapse server, you can use it to integrate Heisenbridge as well - just follow the [relevant docs](https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/master/docs/configuring-playbook-bridge-heisenbridge.md)
+An example docker-compose setup is in [docker-compose/](docker-compose/).
+
+Additionally, if you use [matrix-docker-ansible-deploy](https://github.com/spantaleev/matrix-docker-ansible-deploy) to deploy your Synapse server, you can use it to integrate Heisenbridge as well - just follow the [relevant docs](https://github.com/spantaleev/matrix-docker-ansible-deploy/blob/master/docs/configuring-playbook-bridge-heisenbridge.md)
 
 Usage
 -----

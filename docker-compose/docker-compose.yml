@@ -1,0 +1,21 @@
+version: "3"
+services:
+  heisenbridge:
+    image: hif1/heisenbridge:latest
+    volumes:
+      - ./init/heisenbridge-init.sh:/heisenbridge-init.sh:ro
+      - synapse-data:/data
+    entrypoint: /heisenbridge-init.sh
+  homeserver:
+    image: matrixdotorg/synapse:latest
+    environment:
+      SYNAPSE_SERVER_NAME: localhost
+      SYNAPSE_REPORT_STATS: 'no'
+    ports:
+      - '8008:8008'
+    volumes:
+      - ./init/synapse-init.sh:/synapse-init.sh:ro
+      - synapse-data:/data
+    entrypoint: /synapse-init.sh
+volumes:
+  synapse-data:

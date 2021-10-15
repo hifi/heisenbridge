@@ -331,20 +331,27 @@ class BridgeAppService(AppService):
         app.router.add_put("/transactions/{id}", self._transaction)
         app.router.add_put("/_matrix/app/v1/transactions/{id}", self._transaction)
 
-        if (
-            "namespaces" not in self.registration
-            or "users" not in self.registration["namespaces"]
-            or len(self.registration["namespaces"]["users"]) != 1
-        ):
+        if "sender_localpart" not in self.registration:
+            print("Missing sender_localpart from registration file.")
+            sys.exit(1)
+
+        if "namespaces" not in self.registration or "users" not in self.registration["namespaces"]:
+            print("User namespaces missing from registration file.")
+            sys.exit(1)
+
+        # remove self namespace if exists
+        self_ns = f"@{self.registration['sender_localpart']}:.*"
+        ns_users = [x for x in self.registration["namespaces"]["users"] if x["regex"] != self_ns]
+
+        if len(ns_users) != 1:
             print("A single user namespace is required for puppets in the registration file.")
             sys.exit(1)
 
-        user_namespace = self.registration["namespaces"]["users"][0]
-        if "exclusive" not in user_namespace or not user_namespace["exclusive"]:
+        if "exclusive" not in ns_users[0] or not ns_users[0]["exclusive"]:
             print("User namespace must be exclusive.")
             sys.exit(1)
 
-        m = re.match(r"^@([^.]+)\.\*$", user_namespace["regex"])
+        m = re.match(r"^@([^.]+)\.\*$", ns_users[0]["regex"])
         if not m:
             print("User namespace regex must be a prefix like '@irc_.*' and not contain anything else.")
             sys.exit(1)
@@ -531,7 +538,13 @@ def main():
     parser.add_argument(
         "--generate",
         action="store_true",
-        help="generate registration YAML for Matrix homeserver",
+        help="generate registration YAML for Matrix homeserver (Synapse)",
+        default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--generate-compat",
+        action="store_true",
+        help="generate registration YAML for Matrix homeserver (Dendrite and Conduit)",
         default=argparse.SUPPRESS,
     )
     parser.add_argument(
@@ -563,7 +576,7 @@ def main():
 
     logging.basicConfig(stream=sys.stdout, level=logging_level)
 
-    if "generate" in args:
+    if "generate" in args or "generate_compat" in args:
         letters = string.ascii_letters + string.digits
 
         registration = {
@@ -579,6 +592,13 @@ def main():
                 "rooms": [],
             },
         }
+
+        if "generate_compat" in args:
+            registration["namespaces"]["users"].append({"regex": "@heisenbridge:.*", "exclusive": True})
+
+        if os.path.isfile(args.config):
+            print("Registration file already exists, not overwriting.")
+            sys.exit(1)
 
         with open(args.config, "w") as f:
             yaml.dump(registration, f, sort_keys=False)

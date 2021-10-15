@@ -97,10 +97,11 @@ Additionally, if you use [matrix-docker-ansible-deploy](https://github.com/spant
 Usage
 -----
 ```
-usage: python -m heisenbridge [-h] [-v] -c CONFIG [-l LISTEN_ADDRESS]
-                              [-p LISTEN_PORT] [-u UID] [-g GID] [-i]
-                              [--identd-port IDENTD_PORT] [--generate]
-                              [--reset] [-o OWNER]
+usage: python -m heisenbridge [-h] [-v] (-c CONFIG | --version)
+                              [-l LISTEN_ADDRESS] [-p LISTEN_PORT] [-u UID]
+                              [-g GID] [-i] [--identd-port IDENTD_PORT]
+                              [--generate] [--generate-compat] [--reset]
+                              [-o OWNER]
                               [homeserver]
 
 a bouncer-style Matrix IRC bridge
@@ -116,6 +117,7 @@ optional arguments:
   -c CONFIG, --config CONFIG
                         registration YAML file path, must be writable if
                         generating (default: None)
+  --version             show bridge version
   -l LISTEN_ADDRESS, --listen-address LISTEN_ADDRESS
                         bridge listen address (default: 127.0.0.1)
   -p LISTEN_PORT, --listen-port LISTEN_PORT
@@ -126,12 +128,35 @@ optional arguments:
   --identd-port IDENTD_PORT
                         identd listen port (default: 113)
   --generate            generate registration YAML for Matrix homeserver
+                        (Synapse)
+  --generate-compat     generate registration YAML for Matrix homeserver
+                        (Dendrite and Conduit)
   --reset               reset ALL bridge configuration from homeserver and
                         exit
   -o OWNER, --owner OWNER
                         set owner MXID (eg: @user:homeserver) or first talking
                         local user will claim the bridge (default: None)
 ```
+
+Generate a registration file to use with your homeserver using the `--generate` switch.
+If you are using Dendrite or Conduit prefer `--generate-compat` as otherwise you can't talk with Heisenbridge.
+
+Both your homeserver and Heisenbridge use the same registration file to configure their shared secrets.
+With Heisenbridge you need to use the generated registration file with the `--config` switch on startup.
+If you are running Docker a shared volume mount is adviced for the registration file that both containers can access.
+
+Communication between the homeserver and any bridge is bi-directional and requires that both can access each other directly over the network.
+By default Heisenbridge expects your homeserver to be accessible on localhost port 8008/TCP and the bridge itself listens on localhost port 9898/TCP.
+You can override these defaults using the appropriate command line options but prefer local addresses when possible.
+If you are running Docker the homeserver is likely on a different hostname inside the Docker network so change it accordingly by setting the positional argument on startup.
+
+Please note that the URL for Heisenbridge in the registration file is used by the homeserver to connect to it so make sure it is correct and accessible from where the homeserver is running.
+
+If for whatever reason you run Heisenbridge over the internet and require HTTPS you need to put Heisenbridge behind a reverse proxy that does TLS termination as it doesn't itself support loading a TLS certificate.
+
+For [Synapse](https://github.com/matrix-org/synapse) see their [installation instructions](https://github.com/matrix-org/synapse/blob/develop/docs/application_services.md) for appservices.
+
+For [Conduit](https://gitlab.com/famedly/conduit) see their [installation instructions](https://gitlab.com/famedly/conduit/-/blob/next/APPSERVICES.md) for appservices.
 
 Install
 -------

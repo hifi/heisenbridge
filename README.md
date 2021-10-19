@@ -35,6 +35,7 @@ Features
 * smart message edits from Matrix to IRC by sending only corrections
 * automatic identify/auth with server password or automatic command on connect
 * SASL plain authentication
+* CertFP authentication
 * CTCP support
 * SOCKS proxy configuration per server
 

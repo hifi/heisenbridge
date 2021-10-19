@@ -65,7 +65,7 @@ class CommandManager:
             for alias in aliases:
                 self._commands[alias] = (cmd, func)
 
-    async def trigger(self, text, allowed=None):
+    async def trigger(self, text, tail=None, allowed=None):
         for args in split(text):
             command = args.pop(0).upper()
 
@@ -74,7 +74,10 @@ class CommandManager:
 
             if command in self._commands:
                 (cmd, func) = self._commands[command]
-                await func(cmd.parse_args(args))
+                cmd_args = cmd.parse_args(args)
+                cmd_args._tail = tail
+                await func(cmd_args)
+                tail = None
             elif command == "HELP":
                 out = ["Following commands are supported:", ""]
                 for name, (cmd, func) in self._commands.items():

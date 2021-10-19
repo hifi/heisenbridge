@@ -9,6 +9,7 @@ from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.matrix import MatrixError
 from heisenbridge.network_room import NetworkRoom
+from heisenbridge.parser import IRCMatrixParser
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
 
@@ -189,7 +190,15 @@ class ControlRoom(Room):
             return
 
         try:
-            await self.commands.trigger(event["content"]["body"])
+            if "formatted_body" in event["content"]:
+                lines = str(IRCMatrixParser.parse(event["content"]["formatted_body"])).split("\n")
+            else:
+                lines = event["content"]["body"].split("\n")
+
+            command = lines.pop(0)
+            tail = "\n".join(lines) if len(lines) > 0 else None
+
+            await self.commands.trigger(command, tail)
         except CommandParserError as e:
             self.send_notice(str(e))
 

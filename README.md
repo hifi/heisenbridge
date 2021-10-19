@@ -21,7 +21,7 @@ Features
 * channel management through bridge bot - type `heisenbridge: help` to get started!
 * online help within Matrix
 * access control for local and federated users
-* fully puppeted users from IRC, they come and go as they would on Matrix
+* configurable IRC user synchronization in rooms (fully synced on connect, half synced on join or lazy on talk)
 * tested with up to 2000 users in a single channel
 * optional room plumbing with single puppeting on Matrix <-> relaybot on IRC
 * IRCnet !channels _are_ supported, you're welcome
@@ -29,8 +29,14 @@ Features
 * channel customization by setting the name and avatar
 * TLS support for networks that have it
 * customizable ident support
+* configurable pillifying of IRC nicks
 * long message splitting directly to IRC
-* automatic identify/auth with server password or command on connect
+* smart message formatting from Matrix to IRC using IRC conventions
+* smart message edits from Matrix to IRC by sending only corrections
+* automatic identify/auth with server password or automatic command on connect
+* SASL plain authentication
+* CTCP support
+* SOCKS proxy configuration per server
 
 Comparison
 ----------

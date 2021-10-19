@@ -89,6 +89,7 @@ class ControlRoom(Room):
                 help="ignore TLS verification errors (hostname, self-signed, expired)",
                 default=False,
             )
+            cmd.add_argument("--proxy", help="use a SOCKS proxy (socks5://...)", default=None)
             self.commands.register(cmd, self.cmd_addserver)
 
             cmd = CommandParser(prog="DELSERVER", description="delete server from a network")
@@ -282,7 +283,8 @@ class ControlRoom(Room):
                     with_tls = "with insecure TLS"
                 else:
                     with_tls = "with TLS"
-            self.send_notice(f"\t{server['address']}:{server['port']} {with_tls}")
+            proxy = f" through {server['proxy']}" if "proxy" in server and len(server["proxy"]) > 0 else ""
+            self.send_notice(f"\t{server['address']}:{server['port']} {with_tls}{proxy}")
 
     async def cmd_addserver(self, args):
         networks = self.networks()
@@ -298,7 +300,13 @@ class ControlRoom(Room):
                 return self.send_notice("This server already exists.")
 
         self.serv.config["networks"][network["name"]]["servers"].append(
-            {"address": address, "port": args.port, "tls": args.tls, "tls_insecure": args.tls_insecure}
+            {
+                "address": address,
+                "port": args.port,
+                "tls": args.tls,
+                "tls_insecure": args.tls_insecure,
+                "proxy": args.proxy,
+            }
         )
         await self.serv.save()
 

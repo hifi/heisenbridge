@@ -4,6 +4,7 @@ import html
 import logging
 import re
 import ssl
+import tempfile
 from argparse import Namespace
 from base64 import b32encode
 from time import time
@@ -22,6 +23,7 @@ from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.irc import HeisenReactor
+from heisenbridge.parser import IRCMatrixParser
 from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.private_room import PrivateRoom
@@ -85,6 +87,7 @@ class NetworkRoom(Room):
     pills_length: int
     pills_ignore: list
     autoquery: bool
+    tls_cert: str
 
     # state
     commands: CommandManager
@@ -107,6 +110,7 @@ class NetworkRoom(Room):
         self.pills_ignore = []
         self.autoquery = True
         self.allow_ctcp = False
+        self.tls_cert = None
 
         self.commands = CommandManager()
         self.conn = None
@@ -178,6 +182,22 @@ class NetworkRoom(Room):
         cmd.add_argument("--password", help="SASL password")
         cmd.add_argument("--remove", action="store_true", help="remove stored credentials")
         self.commands.register(cmd, self.cmd_sasl)
+
+        cmd = CommandParser(
+            prog="CERTFP",
+            description="configure CertFP authentication for this network",
+            epilog=(
+                "Using the set command requires you to paste a bundled PEM certificate (cert + key) on the next line"
+                " after the command within the same message. The certificate needs to include both the certificate and"
+                " the private key for it to be accepted.\n"
+                "\n"
+                "OpenSSL generation example (from Libera.Chat guides):\n"
+                "$ openssl req -x509 -new -newkey rsa:4096 -sha256 -days 1096 -nodes -out libera.pem -keyout libera.pem"
+            ),
+        )
+        cmd.add_argument("--set", action="store_true", help="set X509 certificate bundle (PEM)")
+        cmd.add_argument("--remove", action="store_true", help="remove stored certificate")
+        self.commands.register(cmd, self.cmd_certfp)
 
         cmd = CommandParser(
             prog="AUTOCMD",
@@ -448,6 +468,9 @@ class NetworkRoom(Room):
         if "allow_ctcp" in config:
             self.allow_ctcp = config["allow_ctcp"]
 
+        if "tls_cert" in config:
+            self.tls_cert = config["tls_cert"]
+
     def to_config(self) -> dict:
         return {
             "name": self.name,
@@ -460,6 +483,7 @@ class NetworkRoom(Room):
             "sasl_password": self.sasl_password,
             "autocmd": self.autocmd,
             "allow_ctcp": self.allow_ctcp,
+            "tls_cert": self.tls_cert,
             "pills_length": self.pills_length,
             "pills_ignore": self.pills_ignore,
         }
@@ -491,7 +515,15 @@ class NetworkRoom(Room):
             return
 
         try:
-            await self.commands.trigger(event["content"]["body"])
+            if "formatted_body" in event["content"]:
+                lines = str(IRCMatrixParser.parse(event["content"]["formatted_body"])).split("\n")
+            else:
+                lines = event["content"]["body"].split("\n")
+
+            command = lines.pop(0)
+            tail = "\n".join(lines) if len(lines) > 0 else None
+
+            await self.commands.trigger(command, tail)
         except CommandParserError as e:
             self.send_notice(str(e))
 
@@ -778,6 +810,49 @@ class NetworkRoom(Room):
         await self.save()
         self.send_notice("SASL credentials updated.")
 
+    async def cmd_certfp(self, args) -> None:
+        if args.remove:
+            self.tls_cert = None
+            await self.save()
+            self.send_notice("CertFP certificate removed.")
+        elif args.set:
+            if args._tail is None:
+                example = (
+                    "CERTFP --set\n"
+                    "-----BEGIN CERTIFICATE-----\n"
+                    "...\n"
+                    "-----END CERTIFICATE-----\n"
+                    "-----BEGIN PRIVATE KEY-----\n"
+                    "...\n"
+                    "-----END PRIVATE KEY-----\n"
+                )
+                self.send_notice_html(
+                    f"<p>Expected the certificate to follow command. Certificate not updated.</p><pre><code>{example}</code></pre>"
+                )
+                return
+
+            # simple sanity checks it possibly looks alright
+            if not args._tail.startswith("-----"):
+                self.send_notice("This does not look like a PEM certificate.")
+                return
+
+            if "-----BEGIN CERTIFICATE----" not in args._tail:
+                self.send_notice("Certificate section is missing.")
+                return
+
+            if "-----BEGIN PRIVATE KEY----" not in args._tail:
+                self.send_notice("Private key section is missing.")
+                return
+
+            self.tls_cert = args._tail
+            await self.save()
+            self.send_notice("Client certificate saved.")
+        else:
+            if self.tls_cert:
+                self.send_notice("CertFP certificate exists.")
+            else:
+                self.send_notice("CertFP certificate does not exist.")
+
     async def cmd_autocmd(self, args) -> None:
         autocmd = " ".join(args.command)
 
@@ -896,6 +971,19 @@ class NetworkRoom(Room):
                         else:
                             with_tls = " with TLS"
                             ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+
+                        if self.tls_cert:
+                            with_tls += " and CertFP"
+
+                            # do this awful hack to allow the SSL stack to load the cert and key
+                            cert_file = tempfile.NamedTemporaryFile()
+                            cert_file.write(self.tls_cert.encode("utf-8"))
+                            cert_file.flush()
+
+                            ssl_ctx.load_cert_chain(cert_file.name)
+
+                            cert_file.close()
+
                         server_hostname = server["address"]
 
                     proxy = None

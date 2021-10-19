@@ -14,6 +14,7 @@ import irc.client
 import irc.client_aio
 import irc.connection
 from jaraco.stream import buffer
+from python_socks.async_.asyncio import Proxy
 
 from heisenbridge import __version__
 from heisenbridge.channel_room import ChannelRoom
@@ -885,7 +886,8 @@ class NetworkRoom(Room):
                 try:
                     with_tls = ""
                     ssl_ctx = False
-                    if server["tls"]:
+                    server_hostname = None
+                    if server["tls"] or ("tls_insecure" in server and server["tls_insecure"]):
                         ssl_ctx = ssl.create_default_context()
                         if "tls_insecure" in server and server["tls_insecure"]:
                             with_tls = " with insecure TLS"
@@ -894,8 +896,23 @@ class NetworkRoom(Room):
                         else:
                             with_tls = " with TLS"
                             ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+                        server_hostname = server["address"]
 
-                    self.send_notice(f"Connecting to {server['address']}:{server['port']}{with_tls}...")
+                    proxy = None
+                    sock = None
+                    address = server["address"]
+                    port = server["port"]
+
+                    with_proxy = ""
+                    if "proxy" in server and server["proxy"] is not None and len(server["proxy"]) > 0:
+                        proxy = Proxy.from_url(server["proxy"])
+                        address = port = None
+                        with_proxy = " through a SOCKS proxy"
+
+                    self.send_notice(f"Connecting to {server['address']}:{server['port']}{with_tls}{with_proxy}...")
+
+                    if proxy:
+                        sock = await proxy.connect(dest_host=server["address"], dest_port=server["port"])
 
                     if self.sasl_username and self.sasl_password:
                         self.send_notice(f"Using SASL credentials for username {self.sasl_username}")
@@ -903,10 +920,10 @@ class NetworkRoom(Room):
                     reactor = HeisenReactor(loop=asyncio.get_event_loop())
                     irc_server = reactor.server()
                     irc_server.buffer_class = buffer.LenientDecodingLineBuffer
-                    factory = irc.connection.AioFactory(ssl=ssl_ctx)
+                    factory = irc.connection.AioFactory(ssl=ssl_ctx, sock=sock, server_hostname=server_hostname)
                     self.conn = await irc_server.connect(
-                        server["address"],
-                        server["port"],
+                        address,
+                        port,
                         self.get_nick(),
                         self.password,
                         username=self.get_ident() if self.username is None else self.username,

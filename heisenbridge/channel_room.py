@@ -406,7 +406,8 @@ class ChannelRoom(PrivateRoom):
 
     def on_topicinfo(self, conn, event) -> None:
         settime = unix_to_local(event.arguments[2]) if len(event.arguments) > 2 else "?"
-        self.send_notice(f"Topic set by {event.arguments[1]} at {settime}")
+        (plain, formatted) = parse_irc_formatting(event.arguments[1])
+        self.send_notice(f"Topic set by {plain} at {settime}")
 
     def on_topic(self, conn, event) -> None:
         self.send_notice("{} changed the topic".format(event.source.nick))

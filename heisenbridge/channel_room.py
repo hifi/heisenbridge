@@ -5,6 +5,8 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from irc.modes import parse_channel_modes
+
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.private_room import PrivateRoom
@@ -359,21 +361,12 @@ class ChannelRoom(PrivateRoom):
         self._remove_puppet(irc_user_id, event.arguments[0] if len(event.arguments) else None)
 
     def update_key(self, modes):
-        # update channel key
-        if modes[0].startswith("-") and modes[0].find("k") > -1:
-            if self.key is not None:
-                self.key = None
-                if self.id is not None:
-                    asyncio.ensure_future(self.save())
-        elif modes[0].startswith("+"):
-            key_pos = modes[0].find("k")
-            if key_pos > -1:
-                # FIXME: we need to calculate the position correctly from known modes
-                if key_pos > len(modes) - 1:
-                    key_pos = len(modes) - 1
-                key = modes[key_pos]
-                if self.key != key:
-                    self.key = key
+        for sign, key, value in parse_channel_modes(" ".join(modes)):
+            # update channel key
+            if key == "k":
+                value = None if sign == "-" else value
+                if value != self.key:
+                    self.key = value
                     if self.id is not None:
                         asyncio.ensure_future(self.save())
 

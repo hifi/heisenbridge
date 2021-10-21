@@ -1097,9 +1097,6 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("whoisaccount", self.on_whoisaccount)  # is logged in as
                     self.conn.add_global_handler("whoisoperator", self.on_whoisoperator)
                     self.conn.add_global_handler("338", self.on_whoisrealhost)  # is actually using host
-                    self.conn.add_global_handler("378", self.on_whoisextra)
-                    self.conn.add_global_handler("379", self.on_whoisextra)
-                    self.conn.add_global_handler("671", self.on_whoisextra)  # is using a secure connection
                     self.conn.add_global_handler("away", self.on_away)
                     self.conn.add_global_handler("endofwhois", self.on_endofwhois)
 
@@ -1184,7 +1181,15 @@ class NetworkRoom(Room):
         self.send_notice(" ".join(event.arguments))
 
     def on_server_message(self, conn, event) -> None:
-        self.send_notice(" ".join(event.arguments))
+        # test if the first argument is an ongoing whois target
+        if event.arguments[0] in self.whois_data:
+            data = self.whois_data[event.arguments[0]]
+            if "extra" not in data:
+                data["extra"] = []
+
+            data["extra"].append(" ".join(event.arguments[1:]))
+        else:
+            self.send_notice(" ".join(event.arguments))
 
     def on_umodeis(self, conn, event) -> None:
         self.send_notice(f"Your user mode is: {event.arguments[0]}")
@@ -1447,13 +1452,6 @@ class NetworkRoom(Room):
     def on_whoisrealhost(self, conn, event) -> None:
         data = self.whois_data[event.arguments[0]]
         data["realhost"] = event.arguments[1]
-
-    def on_whoisextra(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
-        if "extra" not in data:
-            data["extra"] = []
-
-        data["extra"].append(event.arguments[1])
 
     def on_away(self, conn, event) -> None:
         if event.arguments[0] in self.whois_data:

@@ -1468,6 +1468,7 @@ class NetworkRoom(Room):
         del self.whois_data[nick]
 
         reply = []
+        fallback = []
         reply.append("<table>")
 
         for k in [
@@ -1485,11 +1486,13 @@ class NetworkRoom(Room):
         ]:
             if k in data:
                 reply.append(f"<tr><td>{k}</td><td>{html.escape(data[k])}</td>")
+                fallback.append(f"{k}: {data[k]}")
 
         if "extra" in data:
             for v in data["extra"]:
                 reply.append(f"<tr><td></td><td>{html.escape(v)}</td>")
+                fallback.append(f"{data['nick']} {v}")
 
         reply.append("</table>")
 
-        self.send_notice_html(" ".join(reply))
+        self.send_notice(formatted="".join(reply), text="\n".join(fallback))

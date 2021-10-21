@@ -951,6 +951,9 @@ class NetworkRoom(Room):
 
         network = self.serv.config["networks"][self.name]
 
+        # reset whois buffer
+        self.whois_data.clear()
+
         backoff = 10
 
         while not self.disconnect:
@@ -1182,8 +1185,8 @@ class NetworkRoom(Room):
 
     def on_server_message(self, conn, event) -> None:
         # test if the first argument is an ongoing whois target
-        if event.arguments[0] in self.whois_data:
-            data = self.whois_data[event.arguments[0]]
+        if event.arguments[0].lower() in self.whois_data:
+            data = self.whois_data[event.arguments[0].lower()]
             if "extra" not in data:
                 data["extra"] = []
 
@@ -1422,45 +1425,47 @@ class NetworkRoom(Room):
         self.send_notice_html(f"<b>ERROR</b>: {html.escape(event.target)}")
 
     def on_whoisuser(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        data = self.whois_data[event.arguments[0].lower()]
         data["nick"] = event.arguments[0]
         data["host"] = f"{event.arguments[1]}@{event.arguments[2]}"
         data["realname"] = event.arguments[4]
 
     def on_whoisserver(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        data = self.whois_data[event.arguments[0].lower()]
         data["server"] = f"{event.arguments[1]} ({event.arguments[2]})"
 
     def on_whoischannels(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        data = self.whois_data[event.arguments[0].lower()]
         data["channels"] = event.arguments[1]
 
     def on_whoisidle(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        data = self.whois_data[event.arguments[0].lower()]
         data["idle"] = str(datetime.timedelta(seconds=int(event.arguments[1])))
         if len(event.arguments) > 2:
             data["signon"] = unix_to_local(int(event.arguments[2]))
 
     def on_whoisaccount(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        data = self.whois_data[event.arguments[0].lower()]
         data["account"] = event.arguments[1]
 
     def on_whoisoperator(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        data = self.whois_data[event.arguments[0].lower()]
         data["ircop"] = event.arguments[1]
 
     def on_whoisrealhost(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        data = self.whois_data[event.arguments[0].lower()]
         data["realhost"] = event.arguments[1]
 
     def on_away(self, conn, event) -> None:
-        if event.arguments[0] in self.whois_data:
-            self.whois_data[event.arguments[0]]["away"] = event.arguments[1]
+        if event.arguments[0].lower() in self.whois_data:
+            self.whois_data[event.arguments[0].lower()]["away"] = event.arguments[1]
         else:
             self.send_notice(f"{event.arguments[0]} is away: {event.arguments[1]}")
 
     def on_endofwhois(self, conn, event) -> None:
-        data = self.whois_data[event.arguments[0]]
+        nick = event.arguments[0].lower()
+        data = self.whois_data[nick]
+        del self.whois_data[nick]
 
         reply = []
         reply.append("<table>")
@@ -1488,5 +1493,3 @@ class NetworkRoom(Room):
         reply.append("</table>")
 
         self.send_notice_html(" ".join(reply))
-
-        del self.whois_data[event.arguments[0]]

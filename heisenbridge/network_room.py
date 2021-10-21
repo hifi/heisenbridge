@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import hashlib
 import html
 import logging
@@ -7,6 +8,7 @@ import ssl
 import tempfile
 from argparse import Namespace
 from base64 import b32encode
+from collections import defaultdict
 from time import time
 from typing import Any
 from typing import Dict
@@ -120,6 +122,7 @@ class NetworkRoom(Room):
         self.real_host = "?" * 63  # worst case default
         self.keys = {}  # temp dict of join channel keys
         self.keepnick_task = None  # async task
+        self.whois_data = defaultdict(dict)  # buffer for keeping partial whois replies
 
         cmd = CommandParser(
             prog="NICK",
@@ -413,6 +416,10 @@ class NetworkRoom(Room):
         cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable autoquery")
         cmd.set_defaults(enabled=None)
         self.commands.register(cmd, self.cmd_autoquery)
+
+        cmd = CommandParser(prog="WHOIS", description="send a WHOIS(IS) command")
+        cmd.add_argument("nick", help="target nick")
+        self.commands.register(cmd, self.cmd_whois)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -870,6 +877,9 @@ class NetworkRoom(Room):
         await self.save()
         self.send_notice(f"Autocmd set to {self.autocmd}")
 
+    async def cmd_whois(self, args) -> None:
+        self.conn.whois(f"{args.nick} {args.nick}")
+
     async def cmd_pills(self, args) -> None:
         save = False
 
@@ -1078,6 +1088,20 @@ class NetworkRoom(Room):
 
                     self.conn.add_global_handler("kill", self.on_kill)
                     self.conn.add_global_handler("error", self.on_error)
+
+                    # whois
+                    self.conn.add_global_handler("whoisuser", self.on_whoisuser)
+                    self.conn.add_global_handler("whoisserver", self.on_whoisserver)
+                    self.conn.add_global_handler("whoischannels", self.on_whoischannels)
+                    self.conn.add_global_handler("whoisidle", self.on_whoisidle)
+                    self.conn.add_global_handler("whoisaccount", self.on_whoisaccount)  # is logged in as
+                    self.conn.add_global_handler("whoisoperator", self.on_whoisoperator)
+                    self.conn.add_global_handler("338", self.on_whoisrealhost)  # is actually using host
+                    self.conn.add_global_handler("378", self.on_whoisextra)
+                    self.conn.add_global_handler("379", self.on_whoisextra)
+                    self.conn.add_global_handler("671", self.on_whoisextra)  # is using a secure connection
+                    self.conn.add_global_handler("away", self.on_away)
+                    self.conn.add_global_handler("endofwhois", self.on_endofwhois)
 
                     # generated
                     self.conn.add_global_handler("ctcp", self.on_ctcp)
@@ -1391,3 +1415,80 @@ class NetworkRoom(Room):
 
     def on_error(self, conn, event) -> None:
         self.send_notice_html(f"<b>ERROR</b>: {html.escape(event.target)}")
+
+    def on_whoisuser(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        data["nick"] = event.arguments[0]
+        data["host"] = f"{event.arguments[1]}@{event.arguments[2]}"
+        data["realname"] = event.arguments[4]
+
+    def on_whoisserver(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        data["server"] = f"{event.arguments[1]} ({event.arguments[2]})"
+
+    def on_whoischannels(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        data["channels"] = event.arguments[1]
+
+    def on_whoisidle(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        data["idle"] = str(datetime.timedelta(seconds=int(event.arguments[1])))
+        if len(event.arguments) > 2:
+            data["signon"] = unix_to_local(int(event.arguments[2]))
+
+    def on_whoisaccount(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        data["account"] = event.arguments[1]
+
+    def on_whoisoperator(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        data["ircop"] = event.arguments[1]
+
+    def on_whoisrealhost(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        data["realhost"] = event.arguments[1]
+
+    def on_whoisextra(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+        if "extra" not in data:
+            data["extra"] = []
+
+        data["extra"].append(event.arguments[1])
+
+    def on_away(self, conn, event) -> None:
+        if event.arguments[0] in self.whois_data:
+            self.whois_data[event.arguments[0]]["away"] = event.arguments[1]
+        else:
+            self.send_notice(f"{event.arguments[0]} is away: {event.arguments[1]}")
+
+    def on_endofwhois(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[0]]
+
+        reply = []
+        reply.append("<table>")
+
+        for k in [
+            "nick",
+            "host",
+            "realname",
+            "realhost",
+            "away",
+            "channels",
+            "server",
+            "ircop",
+            "idle",
+            "signon",
+            "account",
+        ]:
+            if k in data:
+                reply.append(f"<tr><td>{k}</td><td>{html.escape(data[k])}</td>")
+
+        if "extra" in data:
+            for v in data["extra"]:
+                reply.append(f"<tr><td></td><td>{html.escape(v)}</td>")
+
+        reply.append("</table>")
+
+        self.send_notice_html(" ".join(reply))
+
+        del self.whois_data[event.arguments[0]]

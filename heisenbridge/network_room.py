@@ -531,18 +531,18 @@ class NetworkRoom(Room):
             return self.send_notice(str(e))
 
     async def on_mx_message(self, event) -> None:
-        if event["content"]["msgtype"] != "m.text" or event["sender"] == self.serv.user_id:
+        if str(event.content.msgtype) != "m.text" or event.sender == self.serv.user_id:
             return
 
         # ignore edits
-        if "m.new_content" in event["content"]:
+        if event.content.get_edit():
             return
 
         try:
-            if "formatted_body" in event["content"]:
-                lines = str(IRCMatrixParser.parse(event["content"]["formatted_body"])).split("\n")
+            if event.content.formatted_body:
+                lines = str(IRCMatrixParser.parse(event.content.formatted_body)).split("\n")
             else:
-                lines = event["content"]["body"].split("\n")
+                lines = event.content.body.split("\n")
 
             command = lines.pop(0)
             tail = "\n".join(lines) if len(lines) > 0 else None
@@ -589,7 +589,7 @@ class NetworkRoom(Room):
 
         if target in self.rooms:
             room = self.rooms[target]
-            await self.serv.api.post_room_invite(room.id, self.user_id)
+            await self.az.intent.invite_user(room.id, self.user_id)
             self.send_notice("Inviting back to private chat with {}.".format(args.nick))
         else:
             room = PrivateRoom.create(self, args.nick)
@@ -885,15 +885,15 @@ class NetworkRoom(Room):
         irc_user_id = await self.serv.ensure_irc_user_id(self.name, args.nick, update_cache=False)
 
         if args.remove:
-            await self.serv.api.put_user_avatar_url(irc_user_id, "")
+            await self.az.intent.user(irc_user_id).set_avatar_url("")
             self.send_notice("Avatar removed.")
         elif args.url:
-            await self.serv.api.put_user_avatar_url(irc_user_id, args.url)
+            await self.az.intent.user(irc_user_id).set_avatar_url(args.url)
             self.send_notice("Avatar updated.")
         else:
-            resp = await self.serv.api.get_user_avatar_url(irc_user_id)
-            if "avatar_url" in resp:
-                self.send_notice(f"Current avatar for {args.nick} is {resp['avatar_url']}")
+            avatar_url = await self.az.intent.user(irc_user_id).get_avatar_url(irc_user_id)
+            if avatar_url:
+                self.send_notice(f"Current avatar for {args.nick} is {avatar_url}")
             else:
                 self.send_notice(f"{args.nick} does not have a custom avatar.")
 
@@ -1411,7 +1411,7 @@ class NetworkRoom(Room):
         else:
             room = self.rooms[target]
             if not room.in_room(self.user_id):
-                asyncio.ensure_future(self.serv.api.post_room_invite(self.rooms[target].id, self.user_id))
+                asyncio.ensure_future(self.az.intent.invite_user(self.rooms[target].id, self.user_id))
 
     @ircroom_event()
     def on_join(self, conn, event) -> None:

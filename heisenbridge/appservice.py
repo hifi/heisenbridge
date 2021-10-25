@@ -2,8 +2,9 @@ from abc import ABC
 from abc import abstractmethod
 from typing import List
 
-from heisenbridge.matrix import Matrix
-from heisenbridge.matrix import MatrixNotFound
+from mautrix.api import Method
+from mautrix.api import Path
+from mautrix.errors import MNotFound
 
 
 class Room:
@@ -11,22 +12,23 @@ class Room:
 
 
 class AppService(ABC):
-    api: Matrix
     user_id: str
     server_name: str
     config: dict
 
     async def load(self):
         try:
-            self.config.update(await self.api.get_user_account_data(self.user_id, "irc"))
-        except MatrixNotFound:
+            self.config.update(await self.az.intent.get_account_data("irc"))
+        except MNotFound:
             await self.save()
 
     async def save(self):
-        await self.api.put_user_account_data(self.user_id, "irc", self.config)
+        await self.az.intent.set_account_data("irc", self.config)
 
     async def create_room(self, name: str, topic: str, invite: List[str]) -> str:
-        resp = await self.api.post_room_create(
+        resp = await self.az.intent.api.request(
+            Method.POST,
+            Path.createRoom,
             {
                 "visibility": "private",
                 "name": name,
@@ -44,7 +46,7 @@ class AppService(ABC):
                         "m.room.avatar": 0,  # these work as long as rooms are private
                     },
                 },
-            }
+            },
         )
 
         return resp["room_id"]

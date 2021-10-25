@@ -11,6 +11,9 @@ from typing import Optional
 from typing import Tuple
 from urllib.parse import urlparse
 
+from mautrix.api import Method
+from mautrix.api import SynapseAdminPath
+
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
@@ -278,7 +281,7 @@ class PrivateRoom(Room):
                 [self.network.user_id, irc_user_id],
             )
             self.serv.register_room(self)
-            await self.network.serv.api.post_room_join(self.id, irc_user_id)
+            await self.az.intent.user(irc_user_id).ensure_joined(self.id)
             await self.save()
             # start event queue now that we have an id
             self._queue.start()
@@ -433,16 +436,14 @@ class PrivateRoom(Room):
         self.send_notice_html(f"<b>{str(event.source)}</b> sent <b>CTCP REPLY {html.escape(plain)}</b> (ignored)")
 
     def _process_event_content(self, event, prefix, reply_to=None):
-        content = event["content"]
-        if "m.new_content" in content:
-            content = content["m.new_content"]
+        content = event.content
 
-        if "formatted_body" in content:
+        if content.formatted_body:
             lines = str(
-                IRCMatrixParser.parse(content["formatted_body"], IRCRecursionContext(displaynames=self.displaynames))
+                IRCMatrixParser.parse(content.formatted_body, IRCRecursionContext(displaynames=self.displaynames))
             ).split("\n")
-        elif "body" in content:
-            body = content["body"]
+        elif content.body:
+            body = content.body
 
             for user_id, displayname in self.displaynames.items():
                 body = body.replace(user_id, displayname)
@@ -451,12 +452,6 @@ class PrivateRoom(Room):
                 body = body.replace("@" + displayname, displayname)
 
             lines = body.split("\n")
-
-            # remove original text that was replied to
-            if "m.relates_to" in event["content"] and "m.in_reply_to" in event["content"]["m.relates_to"]:
-                # skip all quoted lines, it will skip the next empty line as well (it better be empty)
-                while len(lines) > 0 and lines.pop(0).startswith(">"):
-                    pass
         else:
             logging.warning("_process_event_content called with no usable body")
             return
@@ -465,9 +460,9 @@ class PrivateRoom(Room):
         lines = [x for x in lines if not re.match(r"^\s*$", x)]
 
         # handle replies
-        if reply_to and reply_to["sender"] != event["sender"]:
+        if reply_to and reply_to.sender != event.sender:
             # resolve displayname
-            sender = reply_to["sender"]
+            sender = reply_to.sender
             if sender in self.displaynames:
                 sender = self.displaynames[sender]
 
@@ -498,30 +493,22 @@ class PrivateRoom(Room):
     async def _send_message(self, event, func, prefix=""):
         # try to find out if this was a reply
         reply_to = None
-        if "m.relates_to" in event["content"]:
+        if event.content.get_reply_to():
             rel_event = event
 
             # traverse back all edits
-            while (
-                "m.relates_to" in rel_event["content"]
-                and "rel_type" in rel_event["content"]["m.relates_to"]
-                and rel_event["content"]["m.relates_to"]["rel_type"] == "m.replace"
-            ):
-                rel_event = await self.serv.api.get_room_event(
-                    self.id, rel_event["content"]["m.relates_to"]["event_id"]
-                )
+            while rel_event.get_edit():
+                rel_event = await self.az.intent.get_event(self.id, rel_event.content.get_edit())
 
             # see if the original is a reply
-            if "m.relates_to" in rel_event["content"] and "m.in_reply_to" in rel_event["content"]["m.relates_to"]:
-                reply_to = await self.serv.api.get_room_event(
-                    self.id, rel_event["content"]["m.relates_to"]["m.in_reply_to"]["event_id"]
-                )
+            if rel_event.get_reply_to():
+                reply_to = await self.az.intent.get_event(self.id, rel_event.content.get_reply_to())
 
-        if "m.new_content" in event["content"]:
+        if event.content.get_edit():
             messages = self._process_event_content(event, prefix, reply_to)
-            event_id = event["content"]["m.relates_to"]["event_id"]
-            prev_event = self.last_messages[event["sender"]]
-            if prev_event and prev_event["event_id"] == event_id:
+            event_id = event.content.relates_to.event_id
+            prev_event = self.last_messages[event.sender]
+            if prev_event and prev_event.event_id == event_id:
                 old_messages = self._process_event_content(prev_event, prefix, reply_to)
 
                 mlen = max(len(messages), len(old_messages))
@@ -545,40 +532,37 @@ class PrivateRoom(Room):
                     messages = edits
 
                 # update last message _content_ to current so re-edits work
-                self.last_messages[event["sender"]]["content"] = event["content"]
+                self.last_messages[event.sender].content = event.content
             else:
                 # last event was not found so we fall back to full message BUT we can reconstrut enough of it
-                self.last_messages[event["sender"]] = {
-                    "event_id": event["content"]["m.relates_to"]["event_id"],
-                    "content": event["content"]["m.new_content"],
-                }
+                self.last_messages[event.sender] = event
         else:
             # keep track of the last message
-            self.last_messages[event["sender"]] = event
+            self.last_messages[event.sender] = event
             messages = self._process_event_content(event, prefix, reply_to)
 
         for i, message in enumerate(messages):
             if self.max_lines > 0 and i == self.max_lines - 1 and len(messages) > self.max_lines:
-                self.react(event["event_id"], "\u2702")  # scissors
+                self.react(event.event_id, "\u2702")  # scissors
 
                 if self.use_pastebin:
-                    resp = await self.serv.api.post_media_upload(
-                        "\n".join(messages).encode("utf-8"), content_type="text/plain; charset=UTF-8"
+                    content_uri = await self.az.intent.upload_media(
+                        "\n".join(messages).encode("utf-8"), mime_type="text/plain; charset=UTF-8"
                     )
 
                     if self.max_lines == 1:
                         func(
                             self.name,
-                            f"{prefix}{self.serv.mxc_to_url(resp['content_uri'])} (long message, {len(messages)} lines)",
+                            f"{prefix}{self.serv.mxc_to_url(str(content_uri))} (long message, {len(messages)} lines)",
                         )
                     else:
                         func(
                             self.name,
-                            f"... long message truncated: {self.serv.mxc_to_url(resp['content_uri'])} ({len(messages)} lines)",
+                            f"... long message truncated: {self.serv.mxc_to_url(str(content_uri))} ({len(messages)} lines)",
                         )
-                    self.react(event["event_id"], "\U0001f4dd")  # memo
+                    self.react(event.event_id, "\U0001f4dd")  # memo
 
-                    self.media.append([event["event_id"], resp["content_uri"]])
+                    self.media.append([event.event_id, str(content_uri)])
                     await self.save()
                 else:
                     if self.max_lines == 1:
@@ -593,28 +577,26 @@ class PrivateRoom(Room):
 
         # show number of lines sent to IRC
         if self.max_lines == 0 and len(messages) > 1:
-            self.react(event["event_id"], f"\u2702 {len(messages)} lines")
+            self.react(event.event_id, f"\u2702 {len(messages)} lines")
 
     async def on_mx_message(self, event) -> None:
-        if event["sender"] != self.user_id:
+        if event.sender != self.user_id:
             return
 
         if self.network is None or self.network.conn is None or not self.network.conn.connected:
             self.send_notice("Not connected to network.")
             return
 
-        if event["content"]["msgtype"] == "m.emote":
+        if str(event.content.msgtype) == "m.emote":
             await self._send_message(event, self.network.conn.action)
-        elif event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
-            self.network.conn.privmsg(
-                self.name, self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])
-            )
-            self.react(event["event_id"], "\U0001F517")  # link
-            self.media.append([event["event_id"], event["content"]["url"]])
+        elif str(event.content.msgtype) in ["m.image", "m.file", "m.audio", "m.video"]:
+            self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event.content.url, event.content.body))
+            self.react(event.event_id, "\U0001F517")  # link
+            self.media.append([event.event_id, event.content.url])
             await self.save()
-        elif event["content"]["msgtype"] == "m.text":
+        elif str(event.content.msgtype) == "m.text":
             # allow commanding the appservice in rooms
-            match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", event["content"]["body"])
+            match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", event.content.body)
             if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:
                 try:
                     await self.commands.trigger(match.group(2))
@@ -625,28 +607,31 @@ class PrivateRoom(Room):
 
             await self._send_message(event, self.network.conn.privmsg)
 
-        await self.serv.api.post_room_receipt(event["room_id"], event["event_id"])
+        await self.az.intent.send_receipt(event.room_id, event.event_id)
 
     async def on_mx_redaction(self, event) -> None:
         for media in self.media:
-            if media[0] == event["redacts"]:
+            if media[0] == event.redacts:
                 url = urlparse(media[1])
                 if self.serv.synapse_admin:
                     try:
-                        await self.serv.api.post_synapse_admin_media_quarantine(url.netloc, url.path[1:])
+                        await self.az.intent.api.request(
+                            Method.POST, SynapseAdminPath.v1.media.quarantine[url.netloc][url.path[1:]]
+                        )
+
                         self.network.send_notice(
-                            f"Associated media {media[1]} for redacted event {event['redacts']} "
+                            f"Associated media {media[1]} for redacted event {event.redacts} "
                             + f"in room {self.name} was quarantined."
                         )
                     except Exception:
                         self.network.send_notice(
                             f"Failed to quarantine media! Associated media {media[1]} "
-                            + f"for redacted event {event['redacts']} in room {self.name} is left available."
+                            + f"for redacted event {event.redacts} in room {self.name} is left available."
                         )
                 else:
                     self.network.send_notice(
                         f"No permission to quarantine media! Associated media {media[1]} "
-                        + f"for redacted event {event['redacts']} in room {self.name} is left available."
+                        + f"for redacted event {event.redacts} in room {self.name} is left available."
                     )
                 return
 

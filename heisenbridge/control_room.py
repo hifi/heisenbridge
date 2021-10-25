@@ -3,11 +3,12 @@ import re
 from argparse import Namespace
 from urllib.parse import urlparse
 
+from mautrix.errors import MatrixRequestError
+
 from heisenbridge import __version__
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
-from heisenbridge.matrix import MatrixError
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.parser import IRCMatrixParser
 from heisenbridge.room import Room
@@ -183,18 +184,18 @@ class ControlRoom(Room):
             return self.send_notice(str(e))
 
     async def on_mx_message(self, event) -> bool:
-        if event["content"]["msgtype"] != "m.text" or event["sender"] == self.serv.user_id:
+        if str(event.content.msgtype) != "m.text" or event.sender == self.serv.user_id:
             return
 
         # ignore edits
-        if "m.new_content" in event["content"]:
+        if event.content.get_edit():
             return
 
         try:
-            if "formatted_body" in event["content"]:
-                lines = str(IRCMatrixParser.parse(event["content"]["formatted_body"])).split("\n")
+            if event.content.formatted_body:
+                lines = str(IRCMatrixParser.parse(event.content.formatted_body)).split("\n")
             else:
-                lines = event["content"]["body"].split("\n")
+                lines = event.content.body.split("\n")
 
             command = lines.pop(0)
             tail = "\n".join(lines) if len(lines) > 0 else None
@@ -420,26 +421,26 @@ class ControlRoom(Room):
             self.serv.unregister_room(room.id)
 
             try:
-                await self.serv.api.post_room_leave(room.id)
-            except MatrixError:
+                await self.az.intent.leave_room(room.id)
+            except MatrixRequestError:
                 pass
             try:
-                await self.serv.api.post_room_forget(room.id)
-            except MatrixError:
+                await self.az.intent.forget_room(room.id)
+            except MatrixRequestError:
                 pass
 
         self.send_notice(f"Done, I have forgotten about {args.user}")
 
     async def cmd_displayname(self, args):
         try:
-            await self.serv.api.put_user_displayname(self.serv.user_id, args.displayname)
-        except MatrixError as e:
+            await self.az.intent.set_displayname(args.displayname)
+        except MatrixRequestError as e:
             self.send_notice(f"Failed to set displayname: {str(e)}")
 
     async def cmd_avatar(self, args):
         try:
-            await self.serv.api.put_user_avatar_url(self.serv.user_id, args.url)
-        except MatrixError as e:
+            await self.az.intent.set_avatar_url(args.url)
+        except MatrixRequestError as e:
             self.send_notice(f"Failed to set avatar: {str(e)}")
 
     async def cmd_ident(self, args):
@@ -513,7 +514,7 @@ class ControlRoom(Room):
                 if not args.new:
                     if self.user_id not in room.members:
                         self.send_notice(f"Inviting back to {room.name} ({room.id})")
-                        await self.serv.api.post_room_invite(room.id, self.user_id)
+                        await self.az.intent.invite_user(room.id, self.user_id)
                     else:
                         self.send_notice(f"You are already in {room.name} ({room.id})")
 
@@ -545,12 +546,12 @@ class ControlRoom(Room):
             self.serv.unregister_room(room.id)
 
             try:
-                await self.serv.api.post_room_leave(room.id)
-            except MatrixError:
+                await self.az.intent.leave_room(room.id)
+            except MatrixRequestError:
                 pass
             try:
-                await self.serv.api.post_room_forget(room.id)
-            except MatrixError:
+                await self.az.intent.forget_room(room.id)
+            except MatrixRequestError:
                 pass
 
         self.send_notice("Goodbye!")

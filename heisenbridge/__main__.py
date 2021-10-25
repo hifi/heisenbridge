@@ -14,29 +14,39 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
-import aiohttp
-import yaml
-from aiohttp import ClientSession
-from aiohttp import web
+from mautrix.api import HTTPAPI
+from mautrix.api import Method
+from mautrix.api import Path
+from mautrix.api import SynapseAdminPath
+from mautrix.appservice import AppService as MauService
+from mautrix.appservice.state_store import ASStateStore
+from mautrix.client.state_store.memory import MemoryStateStore
+from mautrix.errors import MatrixRequestError
+from mautrix.errors import MForbidden
+from mautrix.types import Membership
+from mautrix.util.config import yaml
 
 from heisenbridge import __version__
 from heisenbridge.appservice import AppService
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.control_room import ControlRoom
 from heisenbridge.identd import Identd
-from heisenbridge.matrix import Matrix
-from heisenbridge.matrix import MatrixError
-from heisenbridge.matrix import MatrixForbidden
-from heisenbridge.matrix import MatrixUserInUse
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
-from heisenbridge.room import unpack_member_states
+
+
+class MemoryBridgeStateStore(ASStateStore, MemoryStateStore):
+    def __init__(self) -> None:
+        ASStateStore.__init__(self)
+        MemoryStateStore.__init__(self)
 
 
 class BridgeAppService(AppService):
+    az: MauService
+    _api: HTTPAPI
     _rooms: Dict[str, Room]
     _users: Dict[str, str]
 
@@ -135,9 +145,9 @@ class BridgeAppService(AppService):
         # if the cached displayname is incorrect
         if displayname and self._users[user_id] != displayname:
             try:
-                await self.api.put_user_displayname(user_id, displayname)
+                await self.az.intent.user(user_id).set_displayname(displayname)
                 self._users[user_id] = displayname
-            except MatrixError as e:
+            except MatrixRequestError as e:
                 logging.warning(f"Failed to set displayname '{displayname}' for user_id '{user_id}', got '{e}'")
 
     def is_user_cached(self, user_id, displayname=None):
@@ -148,15 +158,7 @@ class BridgeAppService(AppService):
 
         # if we've seen this user before, we can skip registering
         if not self.is_user_cached(user_id):
-            try:
-                await self.api.post_user_register(
-                    {
-                        "type": "m.login.application_service",
-                        "username": self.irc_user_id(network, nick, False, False),
-                    }
-                )
-            except MatrixUserInUse:
-                pass
+            await self.az.intent.user(self.irc_user_id(network, nick)).ensure_registered()
 
         # always ensure the displayname is up-to-date
         if update_cache:
@@ -165,12 +167,13 @@ class BridgeAppService(AppService):
         return user_id
 
     async def _on_mx_event(self, event):
-        if "room_id" in event and event["room_id"] in self._rooms:
+
+        if event.room_id and event.room_id in self._rooms:
             try:
-                room = self._rooms[event["room_id"]]
+                room = self._rooms[event.room_id]
                 await room.on_mx_event(event)
             except RoomInvalidError:
-                logging.info(f"Event handler for {event['type']} threw RoomInvalidError, leaving and cleaning up.")
+                logging.info(f"Event handler for {event.type} threw RoomInvalidError, leaving and cleaning up.")
                 self.unregister_room(room.id)
                 room.cleanup()
 
@@ -178,31 +181,30 @@ class BridgeAppService(AppService):
             except Exception:
                 logging.exception("Ignoring exception from room handler. This should be fixed.")
         elif (
-            event["type"] == "m.room.member"
-            and event["sender"] != self.user_id
-            and event["content"]["membership"] == "invite"
+            str(event.type) == "m.room.member"
+            and event.sender != self.user_id
+            and event.content.membership == Membership.INVITE
         ):
-            if "is_direct" not in event["content"] or event["content"]["is_direct"] is not True:
+            if not event.content.is_direct:
                 logging.debug("Got an invite to non-direct room, ignoring")
                 return
 
-            logging.info(f"Got an invite from {event['sender']}")
+            logging.info(f"Got an invite from {event.sender}")
 
             # only respond to an invite
-            if event["room_id"] in self._rooms:
+            if event.room_id in self._rooms:
                 logging.debug("Control room already open, uhh")
                 return
 
             # handle invites against puppets
-            if event["state_key"] != self.user_id:
-                logging.info(f"Whitelisted user {event['sender']} invited {event['state_key']}, going to reject.")
+            if event.state_key != self.user_id:
+                logging.info(f"Whitelisted user {event.sender} invited {event.state_key}, going to reject.")
 
                 try:
-                    await self.api.post_room_kick(
-                        event["room_id"],
-                        event["state_key"],
-                        reason="Inviting puppets is not supported",
-                        user_id=event["state_key"],
+                    await self.az.intent.user(event.state_key).kick_user(
+                        event.room_id,
+                        event.state_key,
+                        "Inviting puppets is not supported",
                     )
                 except Exception:
                     logging.exception("Failed to reject invitation.")
@@ -210,54 +212,37 @@ class BridgeAppService(AppService):
                 return
 
             # set owner if we have none and the user is from the same HS
-            if self.config.get("owner", None) is None and event["sender"].endswith(":" + self.server_name):
-                logging.info(f"We have an owner now, let us rejoice, {event['sender']}!")
-                self.config["owner"] = event["sender"]
+            if self.config.get("owner", None) is None and event.sender.endswith(":" + self.server_name):
+                logging.info(f"We have an owner now, let us rejoice, {event.sender}!")
+                self.config["owner"] = event.sender
                 await self.save()
 
-            if not self.is_user(event["sender"]):
-                logging.info(f"Non-whitelisted user {event['sender']} tried to invite us, ignoring.")
+            if not self.is_user(event.sender):
+                logging.info(f"Non-whitelisted user {event.sender} tried to invite us, ignoring.")
                 return
 
-            logging.info(f"Whitelisted user {event['sender']} invited us, going to accept.")
+            logging.info(f"Whitelisted user {event.sender} invited us, going to accept.")
 
             # accept invite sequence
             try:
-                room = ControlRoom(
-                    id=event["room_id"], user_id=event["sender"], serv=self, members=[event["sender"]], bans=[]
-                )
+                room = ControlRoom(id=event.room_id, user_id=event.sender, serv=self, members=[event.sender], bans=[])
                 await room.save()
                 self.register_room(room)
 
-                # sometimes federated rooms take a while to join
-                for i in range(6):
-                    try:
-                        await self.api.post_room_join(room.id)
-                        break
-                    except MatrixForbidden:
-                        logging.debug("Responding to invite failed, retrying")
-                        await asyncio.sleep((i + 1) * 5)
+                await self.az.intent.join_room(room.id)
 
                 # show help on open
                 await room.show_help()
             except Exception:
-                if event["room_id"] in self._rooms:
-                    del self._rooms[event["room_id"]]
+                if event.room_id in self._rooms:
+                    del self._rooms[event.room_id]
                 logging.exception("Failed to create control room.")
         else:
             pass
             # print(json.dumps(event, indent=4, sort_keys=True))
 
-    async def _transaction(self, req):
-        body = await req.json()
-
-        for event in body["events"]:
-            asyncio.ensure_future(self._on_mx_event(event))
-
-        return web.json_response({})
-
     async def detect_public_endpoint(self):
-        async with ClientSession() as session:
+        async with self.api.session as session:
             # first try https well-known
             try:
                 resp = await session.request(
@@ -279,7 +264,7 @@ class BridgeAppService(AppService):
 
             # give up
             logging.warning("Using internal URL for homeserver, media links are likely broken!")
-            return self.api.url
+            return str(self.api.base_url)
 
     def mxc_to_url(self, mxc, filename=None):
         mxc = urllib.parse.urlparse(mxc)
@@ -293,18 +278,34 @@ class BridgeAppService(AppService):
 
     async def reset(self, config_file, homeserver_url):
         with open(config_file) as f:
-            registration = yaml.safe_load(f)
+            registration = yaml.load(f)
 
-        self.api = Matrix(homeserver_url, registration["as_token"])
-
-        whoami = await self.api.get_user_whoami()
+        api = HTTPAPI(base_url=homeserver_url, token=registration["as_token"])
+        whoami = await api.request(Method.GET, Path.account.whoami)
         self.user_id = whoami["user_id"]
+        self.server_name = self.user_id.split(":")[1]
         print("We are " + whoami["user_id"])
 
-        resp = await self.api.get_user_joined_rooms()
-        print(f"Leaving from {len(resp['joined_rooms'])} rooms...")
+        self.az = MauService(
+            id=registration["id"],
+            domain=self.server_name,
+            server=homeserver_url,
+            as_token=registration["as_token"],
+            hs_token=registration["hs_token"],
+            bot_localpart=registration["sender_localpart"],
+            state_store=MemoryBridgeStateStore(),
+        )
 
-        for room_id in resp["joined_rooms"]:
+        try:
+            await self.az.start(host="127.0.0.1", port=None)
+        except Exception:
+            logging.exception("Failed to listen.")
+            return
+
+        joined_rooms = await self.az.intent.get_joined_rooms()
+        print(f"Leaving from {len(joined_rooms)} rooms...")
+
+        for room_id in joined_rooms:
             print(f"Leaving from {room_id}...")
             await self.leave_room(room_id, None)
 
@@ -316,7 +317,7 @@ class BridgeAppService(AppService):
 
     def load_reg(self, config_file):
         with open(config_file) as f:
-            self.registration = yaml.safe_load(f)
+            self.registration = yaml.load(f)
 
     async def leave_room(self, room_id, members):
         members = members if members else []
@@ -326,23 +327,23 @@ class BridgeAppService(AppService):
 
             if name.startswith("@" + self.puppet_prefix) and server == self.server_name:
                 try:
-                    await self.api.post_room_leave(room_id, member)
+                    await self.az.intent.user(member).leave_room(room_id)
                 except Exception:
                     logging.exception("Removing puppet on leave failed")
 
         try:
-            await self.api.post_room_leave(room_id)
-        except MatrixError:
+            await self.az.intent.leave_room(room_id)
+        except MatrixRequestError:
             pass
         try:
-            await self.api.post_room_forget(room_id)
-        except MatrixError:
+            await self.az.intent.forget_room(room_id)
+        except MatrixRequestError:
             pass
 
     def _keepalive(self):
         async def put_presence():
             try:
-                await self.api.put_user_presence(self.user_id)
+                await self.az.intent.set_presence(self.user_id)
             except Exception:
                 pass
 
@@ -350,10 +351,6 @@ class BridgeAppService(AppService):
         asyncio.get_event_loop().call_later(60, self._keepalive)
 
     async def run(self, listen_address, listen_port, homeserver_url, owner):
-
-        app = aiohttp.web.Application()
-        app.router.add_put("/transactions/{id}", self._transaction)
-        app.router.add_put("/_matrix/app/v1/transactions/{id}", self._transaction)
 
         if "sender_localpart" not in self.registration:
             print("Missing sender_localpart from registration file.")
@@ -387,28 +384,40 @@ class BridgeAppService(AppService):
 
         print(f"Heisenbridge v{__version__}", flush=True)
 
-        self.api = Matrix(homeserver_url, self.registration["as_token"])
+        # mautrix migration requires us to call whoami manually at this point
+        self.api = HTTPAPI(base_url=homeserver_url, token=self.registration["as_token"])
+        whoami = await self.api.request(Method.GET, Path.account.whoami)
+
+        logging.info("We are " + whoami["user_id"])
+
+        self.user_id = whoami["user_id"]
+        self.server_name = self.user_id.split(":")[1]
+
+        self.az = MauService(
+            id=self.registration["id"],
+            domain=self.server_name,
+            server=homeserver_url,
+            as_token=self.registration["as_token"],
+            hs_token=self.registration["hs_token"],
+            bot_localpart=self.registration["sender_localpart"],
+            state_store=MemoryBridgeStateStore(),
+        )
+        self.az.matrix_event_handler(self._on_mx_event)
 
         try:
-            await self.api.post_user_register(
-                {
-                    "type": "m.login.application_service",
-                    "username": self.registration["sender_localpart"],
-                }
-            )
-            logging.debug("Appservice user registration succeeded.")
-        except MatrixUserInUse:
-            logging.debug("Appservice user is already registered.")
+            await self.az.start(host=listen_address, port=listen_port)
+        except Exception:
+            logging.exception("Failed to listen.")
+            return
+
+        try:
+            await self.az.intent.ensure_registered()
+            logging.debug("Appservice user exists at least now.")
         except Exception:
             logging.exception("Unexpected failure when registering appservice user.")
 
-        whoami = await self.api.get_user_whoami()
-        logging.info("We are " + whoami["user_id"])
-
         self._rooms = {}
         self._users = {}
-        self.user_id = whoami["user_id"]
-        self.server_name = self.user_id.split(":")[1]
         self.config = {
             "networks": {},
             "owner": None,
@@ -421,11 +430,12 @@ class BridgeAppService(AppService):
         self.synapse_admin = False
 
         try:
-            is_admin = await self.api.get_synapse_admin_users_admin(self.user_id)
+            is_admin = await self.api.request(Method.GET, SynapseAdminPath.v1.users[self.user_id].admin)
             self.synapse_admin = is_admin["admin"]
-        except MatrixForbidden:
+        except MForbidden:
             logging.info(f"We ({self.user_id}) are not a server admin, inviting puppets is required.")
         except Exception:
+            logging.exception()
             logging.info("Seems we are not connected to Synapse, inviting puppets is required.")
 
         # load config from HS
@@ -462,8 +472,10 @@ class BridgeAppService(AppService):
             self.config["owner"] = owner
             await self.save()
 
-        resp = await self.api.get_user_joined_rooms()
-        logging.debug(f"Appservice rooms: {resp['joined_rooms']}")
+        joined_rooms = await self.az.intent.get_joined_rooms()
+        logging.debug(f"Appservice rooms: {joined_rooms}")
+
+        Room.init_class(self.az)
 
         # room types and their init order, network must be before chat and group
         room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom]
@@ -473,11 +485,11 @@ class BridgeAppService(AppService):
             room_type_map[room_type.__name__] = room_type
 
         # import all rooms
-        for room_id in resp["joined_rooms"]:
+        for room_id in joined_rooms:
             joined = {}
 
             try:
-                config = await self.api.get_room_account_data(self.user_id, room_id, "irc")
+                config = await self.az.intent.get_account_data("irc", room_id)
 
                 if "type" not in config or "user_id" not in config:
                     raise Exception("Invalid config")
@@ -486,19 +498,22 @@ class BridgeAppService(AppService):
                 if not cls:
                     raise Exception("Unknown room type")
 
-                members = await self.api.get_room_members(room_id)
-                joined, banned = unpack_member_states(members)
+                # refresh state store
+                await self.az.intent.get_state(room_id)
 
-                room = cls(id=room_id, user_id=config["user_id"], serv=self, members=joined.keys(), bans=banned.keys())
+                joined = await self.az.state_store.get_member_profiles(room_id, (Membership.JOIN,))
+                banned = await self.az.state_store.get_members(room_id, (Membership.BAN,))
+
+                room = cls(id=room_id, user_id=config["user_id"], serv=self, members=joined.keys(), bans=banned)
                 room.from_config(config)
 
                 # add to room displayname
-                for user_id, displayname in joined.items():
-                    if displayname is not None:
-                        room.displaynames[user_id] = displayname
+                for user_id, member in joined.items():
+                    if member.displayname is not None:
+                        room.displaynames[user_id] = member.displayname
                     # add to global puppet cache if it's a puppet
                     if user_id.startswith("@" + self.puppet_prefix) and self.is_local(user_id):
-                        self._users[user_id] = displayname
+                        self._users[user_id] = member.displayname
 
                 # only add valid rooms to event handler
                 if room.is_valid():
@@ -510,12 +525,7 @@ class BridgeAppService(AppService):
                 logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")
 
                 self.unregister_room(room_id)
-                await self.leave_room(room_id, joined.keys())
-
-        runner = aiohttp.web.AppRunner(app)
-        await runner.setup()
-        site = aiohttp.web.TCPSite(runner, listen_address, listen_port)
-        await site.start()
+                # await self.leave_room(room_id, joined.keys())
 
         logging.info("Connecting network rooms...")
 
@@ -628,7 +638,7 @@ def main():
             sys.exit(1)
 
         with open(args.config, "w") as f:
-            yaml.dump(registration, f, sort_keys=False)
+            yaml.dump(registration, f)
 
         print(f"Registration file generated and saved to {args.config}")
     elif "reset" in args:

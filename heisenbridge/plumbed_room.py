@@ -4,12 +4,12 @@ import re
 from typing import Optional
 
 from irc.modes import parse_channel_modes
+from mautrix.errors import MatrixRequestError
+from mautrix.types import Membership
 
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandParser
-from heisenbridge.matrix import MatrixError
 from heisenbridge.private_room import parse_irc_formatting
-from heisenbridge.room import unpack_member_states
 
 
 class NetworkRoom:
@@ -29,7 +29,6 @@ def connected(f):
 
 
 class PlumbedRoom(ChannelRoom):
-    need_invite = False
     max_lines = 5
     use_pastebin = True
     use_displaynames = True
@@ -106,23 +105,26 @@ class PlumbedRoom(ChannelRoom):
     async def create(network: "NetworkRoom", id: str, channel: str, key: str) -> "ChannelRoom":
         logging.debug(f"PlumbedRoom.create(network='{network.name}', id='{id}', channel='{channel}', key='{key}'")
 
+        network.send_notice(f"Joining room {id} to initiate plumb...")
         try:
-            resp = await network.serv.api.post_room_join_alias(id)
-            join_rules = await network.serv.api.get_room_state_event(resp["room_id"], "m.room.join_rules")
-            members = await network.serv.api.get_room_members(resp["room_id"])
-        except MatrixError as e:
+            room_id = await network.az.intent.join_room(id)
+        except MatrixRequestError as e:
             network.send_notice(f"Failed to join room: {str(e)}")
             return
 
-        joined, banned = unpack_member_states(members)
+        network.send_notice(f"Joined room {room_id}, refreshing state...")
+        await network.az.intent.get_state(room_id)
+        network.send_notice(f"Got state for room {room_id}, plumbing...")
 
-        room = PlumbedRoom(resp["room_id"], network.user_id, network.serv, joined.keys(), banned.keys())
+        joined = await network.az.state_store.get_member_profiles(room_id, (Membership.JOIN,))
+        banned = await network.az.state_store.get_members(room_id, (Membership.BAN,))
+
+        room = PlumbedRoom(room_id, network.user_id, network.serv, joined, banned)
         room.name = channel.lower()
         room.key = key
         room.network = network
         room.network_id = network.id
         room.network_name = network.name
-        room.need_invite = join_rules["join_rule"] != "public"
 
         # stamp global member sync setting at room creation time
         room.member_sync = network.serv.config["member_sync"]
@@ -135,7 +137,7 @@ class PlumbedRoom(ChannelRoom):
         network.rooms[room.name] = room
         await room.save()
 
-        network.send_notice(f"Plumbed {resp['room_id']} to {channel}, to unplumb just kick me out.")
+        network.send_notice(f"Plumbed {room_id} to {channel}, to unplumb just kick me out.")
         return room
 
     def from_config(self, config: dict) -> None:
@@ -186,13 +188,13 @@ class PlumbedRoom(ChannelRoom):
 
     @connected
     async def _on_mx_room_topic(self, event) -> None:
-        if event["sender"] != self.serv.user_id and self.topic_sync in ["irc", "any"]:
-            topic = re.sub(r"[\r\n]", " ", event["content"]["topic"])
+        if event.sender != self.serv.user_id and self.topic_sync in ["irc", "any"]:
+            topic = re.sub(r"[\r\n]", " ", event.content.topic)
             self.network.conn.topic(self.name, topic)
 
     @connected
     async def on_mx_message(self, event) -> None:
-        sender = event["sender"]
+        sender = str(event.sender)
         (name, server) = sender.split(":")
 
         # ignore self messages
@@ -207,13 +209,13 @@ class PlumbedRoom(ChannelRoom):
         if self.use_zwsp:
             sender = f"{name[:2]}\u200B{name[2:]}:{server[:1]}\u200B{server[1:]}"
 
-        if self.use_displaynames and event["sender"] in self.displaynames:
-            sender_displayname = self.displaynames[event["sender"]]
+        if self.use_displaynames and event.sender in self.displaynames:
+            sender_displayname = self.displaynames[event.sender]
 
             # ensure displayname is unique
             if self.use_disambiguation:
                 for user_id, displayname in self.displaynames.items():
-                    if user_id != event["sender"] and displayname == sender_displayname:
+                    if user_id != event.sender and displayname == sender_displayname:
                         sender_displayname += f" ({sender})"
                         break
 
@@ -226,24 +228,24 @@ class PlumbedRoom(ChannelRoom):
         # limit plumbed sender max length to 100 characters
         sender = sender[:100]
 
-        if event["content"]["msgtype"] in ["m.image", "m.file", "m.audio", "m.video"]:
+        if str(event.content.msgtype) in ["m.image", "m.file", "m.audio", "m.video"]:
 
             # process media event like it was a text message
-            media_event = {"content": {"body": self.serv.mxc_to_url(event["content"]["url"], event["content"]["body"])}}
+            media_event = {"content": {"body": self.serv.mxc_to_url(event.content.url, event.content.body)}}
             messages = self._process_event_content(media_event, prefix=f"<{sender}> ")
             self.network.conn.privmsg(self.name, messages[0])
 
-            self.react(event["event_id"], "\U0001F517")  # link
-            self.media.append([event["event_id"], event["content"]["url"]])
+            self.react(event.event_id, "\U0001F517")  # link
+            self.media.append([event.event_id, event.content.url])
             await self.save()
-        elif event["content"]["msgtype"] == "m.emote":
+        elif str(event.content.msgtype) == "m.emote":
             await self._send_message(event, self.network.conn.action, prefix=f"{sender} ")
-        elif event["content"]["msgtype"] == "m.text":
+        elif str(event.content.msgtype) == "m.text":
             await self._send_message(event, self.network.conn.privmsg, prefix=f"<{sender}> ")
-        elif event["content"]["msgtype"] == "m.notice" and self.allow_notice:
+        elif str(event.content.msgtype) == "m.notice" and self.allow_notice:
             await self._send_message(event, self.network.conn.notice, prefix=f"<{sender}> ")
 
-        await self.serv.api.post_room_receipt(event["room_id"], event["event_id"])
+        await self.az.intent.send_receipt(event.room_id, event.event_id)
 
     @connected
     async def on_mx_ban(self, user_id) -> None:

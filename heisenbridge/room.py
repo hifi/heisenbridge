@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import re
 from abc import ABC
@@ -8,28 +7,12 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from mautrix.appservice import AppService as MauService
+from mautrix.types import Membership
+from mautrix.types.event.type import EventType
+
 from heisenbridge.appservice import AppService
 from heisenbridge.event_queue import EventQueue
-from heisenbridge.matrix import MatrixForbidden
-
-
-def unpack_member_states(members):
-    joined = {}
-    banned = {}
-
-    for event in members["chunk"]:
-        displayname = (
-            str(event["content"]["displayname"])
-            if ("displayname" in event["content"] and event["content"]["displayname"] is not None)
-            else None
-        )
-
-        if event["content"]["membership"] == "join":
-            joined[event["state_key"]] = displayname
-        elif event["content"]["membership"] == "ban":
-            banned[event["state_key"]] = displayname
-
-    return (joined, banned)
 
 
 class RoomInvalidError(Exception):
@@ -37,6 +20,7 @@ class RoomInvalidError(Exception):
 
 
 class Room(ABC):
+    az: MauService
     id: str
     user_id: str
     serv: AppService
@@ -44,7 +28,6 @@ class Room(ABC):
     lazy_members: Dict[str, str]
     bans: List[str]
     displaynames: Dict[str, str]
-    need_invite: bool = True
 
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
     _queue: EventQueue
@@ -54,7 +37,7 @@ class Room(ABC):
         self.user_id = user_id
         self.serv = serv
         self.members = list(members)
-        self.bans = list(bans)
+        self.bans = list(bans) if bans else []
         self.lazy_members = {}
         self.displaynames = {}
         self.last_messages = defaultdict(str)
@@ -68,9 +51,12 @@ class Room(ABC):
 
         # we track room members
         self.mx_register("m.room.member", self._on_mx_room_member)
-        self.mx_register("m.room.join_rules", self._on_mx_room_join_rules)
 
         self.init()
+
+    @classmethod
+    def init_class(cls, az: MauService):
+        cls.az = az
 
     def from_config(self, config: dict) -> None:
         pass
@@ -91,7 +77,7 @@ class Room(ABC):
         config = self.to_config()
         config["type"] = type(self).__name__
         config["user_id"] = self.user_id
-        await self.serv.api.put_room_account_data(self.serv.user_id, self.id, "irc", config)
+        await self.az.intent.set_account_data("irc", config, self.id)
 
     def mx_register(self, type: str, func: Callable[[dict], bool]) -> None:
         if type not in self._mx_handlers:
@@ -100,7 +86,7 @@ class Room(ABC):
         self._mx_handlers[type].append(func)
 
     async def on_mx_event(self, event: dict) -> None:
-        handlers = self._mx_handlers.get(event["type"], [self._on_mx_unhandled_event])
+        handlers = self._mx_handlers.get(str(event.type), [self._on_mx_unhandled_event])
 
         for handler in handlers:
             await handler(event)
@@ -120,61 +106,43 @@ class Room(ABC):
     async def _on_mx_unhandled_event(self, event: dict) -> None:
         pass
 
-    async def _on_mx_room_join_rules(self, event: dict) -> None:
-        self.need_invite = event["content"]["join_rule"] != "public"
-        logging.debug("Room invite rule updated to " + str(self.need_invite))
-        await self.save()
-
     async def _on_mx_room_member(self, event: dict) -> None:
-        if event["content"]["membership"] in ["leave", "ban"] and event["state_key"] in self.members:
-            self.members.remove(event["state_key"])
-            if event["state_key"] in self.displaynames:
-                del self.displaynames[event["state_key"]]
-            if event["state_key"] in self.last_messages:
-                del self.last_messages[event["state_key"]]
+        if event.content.membership in [Membership.LEAVE, Membership.BAN] and event.state_key in self.members:
+            self.members.remove(event.state_key)
+            if event.state_key in self.displaynames:
+                del self.displaynames[event.state_key]
+            if event.state_key in self.last_messages:
+                del self.last_messages[event.state_key]
 
             if not self.is_valid():
                 raise RoomInvalidError(
                     f"Room {self.id} ended up invalid after membership change, returning false from event handler."
                 )
 
-        if event["content"]["membership"] == "leave":
-            if event["state_key"] in self.bans:
-                self.bans.remove(event["state_key"])
-                await self.on_mx_unban(event["state_key"])
+        if event.content.membership == Membership.LEAVE:
+            if event.state_key in self.bans:
+                self.bans.remove(event.state_key)
+                await self.on_mx_unban(event.state_key)
             else:
-                await self.on_mx_leave(event["state_key"])
+                await self.on_mx_leave(event.state_key)
 
-        if event["content"]["membership"] == "ban":
-            if event["state_key"] not in self.bans:
-                self.bans.append(event["state_key"])
+        if event.content.membership == Membership.BAN:
+            if event.state_key not in self.bans:
+                self.bans.append(event.state_key)
 
-            await self.on_mx_ban(event["state_key"])
+            await self.on_mx_ban(event.state_key)
 
-        if event["content"]["membership"] == "join":
-            if event["state_key"] not in self.members:
-                self.members.append(event["state_key"])
+        if event.content.membership == Membership.JOIN:
+            if event.state_key not in self.members:
+                self.members.append(event.state_key)
 
-            if "displayname" in event["content"] and event["content"]["displayname"] is not None:
-                self.displaynames[event["state_key"]] = str(event["content"]["displayname"])
-            elif event["state_key"] in self.displaynames:
-                del self.displaynames[event["state_key"]]
+            if event.content.displayname is not None:
+                self.displaynames[event.state_key] = str(event.content.displayname)
+            elif event.state_key in self.displaynames:
+                del self.displaynames[event.state_key]
 
     async def _join(self, user_id, nick=None):
-        if not self.serv.synapse_admin or not self.serv.is_local(self.id):
-
-            if self.need_invite:
-                await self.serv.api.post_room_invite(self.id, user_id)
-
-            for i in range(0, 10):
-                try:
-                    await self.serv.api.post_room_join(self.id, user_id)
-                    break
-                except MatrixForbidden:
-                    logging.warning("Puppet joining a room was forbidden, retrying")
-                    await asyncio.sleep(i)
-        else:
-            await self.serv.api.post_synapse_admin_room_join(self.id, user_id)
+        await self.az.intent.user(user_id).ensure_joined(self.id, ignore_cache=True)
 
         self.members.append(user_id)
         if nick is not None:
@@ -198,11 +166,11 @@ class Room(ABC):
 
                     if event["user_id"] in self.members:
                         if event["reason"] is not None:
-                            await self.serv.api.post_room_kick(
-                                self.id, event["user_id"], user_id=event["user_id"], reason=event["reason"]
+                            await self.az.intent.user(event["user_id"]).kick_user(
+                                self.id, event["user_id"], event["reason"]
                             )
                         else:
-                            await self.serv.api.post_room_leave(self.id, event["user_id"])
+                            await self.az.intent.user(event["user_id"]).leave_room(self.id)
                         self.members.remove(event["user_id"])
                         if event["user_id"] in self.displaynames:
                             del self.displaynames[event["user_id"]]
@@ -226,11 +194,8 @@ class Room(ABC):
                         await self.serv.ensure_irc_user_id(self.network.name, event["new_nick"])
 
                         # old puppet away
-                        await self.serv.api.post_room_kick(
-                            self.id,
-                            old_irc_user_id,
-                            user_id=old_irc_user_id,
-                            reason=f"Changing nick to {event['new_nick']}",
+                        await self.az.intent.user(old_irc_user_id).kick_user(
+                            self.id, old_irc_user_id, f"Changing nick to {event['new_nick']}"
                         )
                         self.members.remove(old_irc_user_id)
                         if old_irc_user_id in self.displaynames:
@@ -242,15 +207,20 @@ class Room(ABC):
 
                 elif event["type"] == "_kick":
                     if event["user_id"] in self.members:
-                        await self.serv.api.post_room_kick(self.id, event["user_id"], event["reason"])
+                        await self.az.intent.kick_user(self.id, event["user_id"], event["reason"])
                         self.members.remove(event["user_id"])
                         if event["user_id"] in self.displaynames:
                             del self.displaynames[event["user_id"]]
                 elif event["type"] == "_ensure_irc_user_id":
                     await self.serv.ensure_irc_user_id(event["network"], event["nick"])
                 elif "state_key" in event:
-                    await self.serv.api.put_room_send_state(
-                        self.id, event["type"], event["state_key"], event["content"], event["user_id"]
+                    intent = self.az.intent
+
+                    if event["user_id"]:
+                        intent = intent.user(event["user_id"])
+
+                    await intent.send_state_event(
+                        self.id, EventType.find(event["type"]), state_key=event["state_key"], content=event["content"]
                     )
                 else:
                     # invite puppet *now* if we are lazy loading and it should be here
@@ -277,7 +247,10 @@ class Room(ABC):
 
                         # unpuppet
                         event["user_id"] = None
-                    await self.serv.api.put_room_send_event(self.id, event["type"], event["content"], event["user_id"])
+
+                    intent = self.az.intent.user(event["user_id"]) if event["user_id"] else self.az.intent
+                    type = EventType.find(event["type"])
+                    await intent.send_message_event(self.id, type, event["content"])
             except Exception:
                 logging.exception("Queued event failed")
 

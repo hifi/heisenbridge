@@ -91,6 +91,8 @@ class NetworkRoom(Room):
     pills_ignore: list
     autoquery: bool
     tls_cert: str
+    rejoin_invite: bool
+    rejoin_kick: bool
 
     # state
     commands: CommandManager
@@ -114,6 +116,8 @@ class NetworkRoom(Room):
         self.autoquery = True
         self.allow_ctcp = False
         self.tls_cert = None
+        self.rejoin_invite = True
+        self.rejoin_kick = False
 
         self.commands = CommandManager()
         self.conn = None
@@ -386,6 +390,14 @@ class NetworkRoom(Room):
         cmd.add_argument("command", help="Command and arguments", nargs=argparse.REMAINDER)
         self.commands.register(cmd, self.cmd_room)
 
+        cmd = CommandParser(prog="REJOIN", description="configure rejoin behavior for channel rooms")
+        cmd.add_argument("--enable-invite", dest="invite", action="store_true", help="Enable rejoin on invite")
+        cmd.add_argument("--disable-invite", dest="invite", action="store_false", help="Disable rejoin on invite")
+        cmd.add_argument("--enable-kick", dest="kick", action="store_true", help="Enable rejoin on kick")
+        cmd.add_argument("--disable-kick", dest="kick", action="store_false", help="Disable rejoin on kick")
+        cmd.set_defaults(invite=None, kick=None)
+        self.commands.register(cmd, self.cmd_rejoin)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -443,6 +455,12 @@ class NetworkRoom(Room):
         if "tls_cert" in config:
             self.tls_cert = config["tls_cert"]
 
+        if "rejoin_invite" in config:
+            self.rejoin_invite = config["rejoin_invite"]
+
+        if "rejoin_kick" in config:
+            self.rejoin_kick = config["rejoin_kick"]
+
     def to_config(self) -> dict:
         return {
             "name": self.name,
@@ -458,6 +476,8 @@ class NetworkRoom(Room):
             "tls_cert": self.tls_cert,
             "pills_length": self.pills_length,
             "pills_ignore": self.pills_ignore,
+            "rejoin_invite": self.rejoin_invite,
+            "rejoin_kick": self.rejoin_kick,
         }
 
     def is_valid(self) -> bool:
@@ -835,6 +855,18 @@ class NetworkRoom(Room):
             await self.save()
 
         self.send_notice(f"Autoquery is {'enabled' if self.autoquery else 'disabled'}")
+
+    async def cmd_rejoin(self, args) -> None:
+        if args.invite is not None:
+            self.rejoin_invite = args.invite
+            await self.save()
+
+        if args.kick is not None:
+            self.rejoin_kick = args.kick
+            await self.save()
+
+        self.send_notice(f"Rejoin on invite is {'enabled' if self.rejoin_invite else 'disabled'}")
+        self.send_notice(f"Rejoin on kick is {'enabled' if self.rejoin_kick else 'disabled'}")
 
     async def connect(self) -> None:
         if self.connlock.locked():
@@ -1332,7 +1364,16 @@ class NetworkRoom(Room):
         self.keepnick_task = asyncio.get_event_loop().call_later(300, try_keepnick)
 
     def on_invite(self, conn, event) -> None:
-        self.send_notice_html(f"<b>{event.source.nick}</b> has invited you to <b>{html.escape(event.arguments[0])}</b>")
+        rejoin = ""
+
+        target = event.arguments[0].lower()
+        if self.rejoin_invite and target in self.rooms:
+            self.conn.join(event.arguments[0])
+            rejoin = " (rejoin on invite is enabled, joining back)"
+
+        self.send_notice_html(
+            f"<b>{event.source.nick}</b> has invited you to <b>{html.escape(event.arguments[0])}</b>{rejoin}"
+        )
 
     def on_wallops(self, conn, event) -> None:
         plain, formatted = parse_irc_formatting(event.target)

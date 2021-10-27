@@ -412,9 +412,13 @@ class ChannelRoom(PrivateRoom):
 
         if event.arguments[0] == conn.real_nickname:
             self.send_notice_html(f"You were kicked from the channel by <b>{event.source.nick}</b>{reason}")
-            self.send_notice_html(
-                f"To rejoin the channel, type <b>JOIN {event.target}</b> in the <b>{self.network_name}</b> network room."
-            )
+            if self.network.rejoin_kick:
+                self.send_notice("Rejoin on kick is enabled, trying to join back immediately...")
+                conn.join(event.target)
+            else:
+                self.send_notice_html(
+                    f"To rejoin the channel, type <b>JOIN {event.target}</b> in the <b>{self.network_name}</b> network room."
+                )
         else:
             target_user_id = self.serv.irc_user_id(self.network.name, event.arguments[0])
             self.kick(target_user_id, f"Kicked by {event.source.nick}{reason}")

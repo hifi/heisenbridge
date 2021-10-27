@@ -12,6 +12,7 @@ from typing import Tuple
 from urllib.parse import urlparse
 
 from heisenbridge.command_parse import CommandManager
+from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.parser import IRCMatrixParser
 from heisenbridge.parser import IRCRecursionContext
@@ -29,6 +30,19 @@ def unix_to_local(timestamp: Optional[str]):
     except ValueError:
         logging.debug("Tried to convert '{timestamp}' to int")
         return timestamp
+
+
+def connected(f):
+    def wrapper(*args, **kwargs):
+        self = args[0]
+
+        if not self.network or not self.network.conn or not self.network.conn.connected:
+            self.send_notice("Need to be connected to use this command.")
+            return asyncio.sleep(0)
+
+        return f(*args, **kwargs)
+
+    return wrapper
 
 
 # this is very naive and will break html tag close/open order right now
@@ -205,6 +219,10 @@ class PrivateRoom(Room):
         self.media = []
 
         self.commands = CommandManager()
+
+        if type(self) == PrivateRoom:
+            cmd = CommandParser(prog="WHOIS", description="WHOIS the other user")
+            self.commands.register(cmd, self.cmd_whois)
 
         self.mx_register("m.room.message", self.on_mx_message)
         self.mx_register("m.room.redaction", self.on_mx_redaction)
@@ -628,3 +646,7 @@ class PrivateRoom(Room):
                         + f"for redacted event {event['redacts']} in room {self.name} is left available."
                     )
                 return
+
+    @connected
+    async def cmd_whois(self, args) -> None:
+        self.network.conn.whois(f"{self.name} {self.name}")

@@ -1421,4 +1421,9 @@ class NetworkRoom(Room):
 
         reply.append("</table>")
 
-        self.send_notice(formatted="".join(reply), text="\n".join(fallback))
+        # forward whois reply to a DM if exists
+        target = self
+        if nick in self.rooms:
+            target = self.rooms[nick]
+
+        target.send_notice(formatted="".join(reply), text="\n".join(fallback))

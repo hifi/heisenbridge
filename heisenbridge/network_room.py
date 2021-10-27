@@ -1034,7 +1034,7 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("join", self.on_join_update_host)
                     self.conn.add_global_handler("kick", self.on_pass)
                     self.conn.add_global_handler("mode", self.on_pass)
-                    self.conn.add_global_handler("part", self.on_pass)
+                    self.conn.add_global_handler("part", self.on_part)
                     self.conn.add_global_handler("privmsg", self.on_privmsg)
                     self.conn.add_global_handler("privnotice", self.on_privnotice)
                     self.conn.add_global_handler("pubmsg", self.on_pass)
@@ -1298,6 +1298,14 @@ class NetworkRoom(Room):
         if event.source.nick == self.conn.real_nickname and self.real_host != event.source.host:
             self.real_host = event.source.host
             logging.debug(f"Self host updated to '{self.real_host}'")
+
+    @ircroom_event()
+    def on_part(self, conn, event) -> None:
+        if conn.real_nickname == event.source.nick:
+            self.send_notice_html(f"You left <b>{html.escape(event.target)}</b>")
+        else:
+            # should usually never end up here
+            self.send_notice_html(f"<b>{html.escape(event.source.nick)}</b> left <b>{html.escape(event.target)}</b>")
 
     def on_quit(self, conn, event) -> None:
         irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)

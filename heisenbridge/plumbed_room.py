@@ -2,6 +2,7 @@ import logging
 from typing import Optional
 
 from heisenbridge.channel_room import ChannelRoom
+from heisenbridge.command_parse import CommandParser
 from heisenbridge.matrix import MatrixError
 
 
@@ -18,6 +19,55 @@ class PlumbedRoom(ChannelRoom):
     use_zwsp = False
     allow_notice = False
     force_forward = True
+
+    def init(self) -> None:
+        super().init()
+
+        cmd = CommandParser(
+            prog="MAXLINES", description="set maximum number of lines per message until truncation or pastebin"
+        )
+        cmd.add_argument("lines", type=int, nargs="?", help="Number of lines")
+        self.commands.register(cmd, self.cmd_maxlines)
+
+        cmd = CommandParser(prog="PASTEBIN", description="enable or disable automatic pastebin of long messages")
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable pastebin")
+        cmd.add_argument(
+            "--disable", dest="enabled", action="store_false", help="Disable pastebin (messages will be truncated)"
+        )
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_pastebin)
+
+        cmd = CommandParser(
+            prog="DISPLAYNAMES", description="enable or disable use of displaynames in relayed messages"
+        )
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable displaynames")
+        cmd.add_argument(
+            "--disable", dest="enabled", action="store_false", help="Disable displaynames (fallback to MXID)"
+        )
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_displaynames)
+
+        cmd = CommandParser(
+            prog="DISAMBIGUATION", description="enable or disable disambiguation of conflicting displaynames"
+        )
+        cmd.add_argument(
+            "--enable", dest="enabled", action="store_true", help="Enable disambiguation (postfix with MXID)"
+        )
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable disambiguation")
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_disambiguation)
+
+        cmd = CommandParser(prog="ZWSP", description="enable or disable Zero-Width-Space anti-ping")
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable ZWSP anti-ping")
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable ZWSP anti-ping")
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_zwsp)
+
+        cmd = CommandParser(prog="NOTICERELAY", description="enable or disable relaying of Matrix notices to IRC")
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable notice relay")
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable notice relay")
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_noticerelay)
 
     def is_valid(self) -> bool:
         # we are valid as long as the appservice is in the room
@@ -163,3 +213,45 @@ class PlumbedRoom(ChannelRoom):
             del ret[nick]
 
         return ret
+
+    async def cmd_maxlines(self, args) -> None:
+        if args.lines is not None:
+            self.max_lines = args.lines
+            await self.save()
+
+        self.send_notice(f"Max lines is {self.max_lines}")
+
+    async def cmd_pastebin(self, args) -> None:
+        if args.enabled is not None:
+            self.use_pastebin = args.enabled
+            await self.save()
+
+        self.send_notice(f"Pastebin is {'enabled' if self.use_pastebin else 'disabled'}")
+
+    async def cmd_displaynames(self, args) -> None:
+        if args.enabled is not None:
+            self.use_displaynames = args.enabled
+            await self.save()
+
+        self.send_notice(f"Displaynames are {'enabled' if self.use_displaynames else 'disabled'}")
+
+    async def cmd_disambiguation(self, args) -> None:
+        if args.enabled is not None:
+            self.use_disambiguation = args.enabled
+            await self.save()
+
+        self.send_notice(f"Dismabiguation is {'enabled' if self.use_disambiguation else 'disabled'}")
+
+    async def cmd_zwsp(self, args) -> None:
+        if args.enabled is not None:
+            self.use_zwsp = args.enabled
+            await self.save()
+
+        self.send_notice(f"Zero-Width-Space anti-ping is {'enabled' if self.use_zwsp else 'disabled'}")
+
+    async def cmd_noticerelay(self, args) -> None:
+        if args.enabled is not None:
+            self.allow_notice = args.enabled
+            await self.save()
+
+        self.send_notice(f"Notice relay is {'enabled' if self.allow_notice else 'disabled'}")

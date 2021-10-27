@@ -352,54 +352,6 @@ class NetworkRoom(Room):
         self.commands.register(cmd, self.cmd_wait)
 
         cmd = CommandParser(
-            prog="PLUMBCFG",
-            description="set configurable settings for plumbed rooms",
-            epilog=("Use the 'no' version of a boolean setting to disable it."),
-        )
-        cmd.add_argument("channel", help="plumbed channel")
-        cmd.add_argument(
-            "--max-lines", type=int, help="Number of lines to pass through from a message before truncating"
-        )
-        cmd.add_argument("--pastebin", dest="pastebin", action="store_true", help="Enable pastebin of long messages")
-        cmd.add_argument(
-            "--no-pastebin", dest="pastebin", action="store_false", help="Disable pastebin of long messages"
-        )
-        cmd.add_argument(
-            "--displaynames", dest="displaynames", action="store_true", help="Enable displaynames for relaybot mode"
-        )
-        cmd.add_argument(
-            "--no-displaynames",
-            dest="displaynames",
-            action="store_false",
-            help="Disable displaynames for relaybot mode",
-        )
-        cmd.add_argument("--sync", choices=["off", "lazy", "half", "full"], help="Set member sync for room")
-        cmd.add_argument(
-            "--disambiguation",
-            dest="disambiguation",
-            action="store_true",
-            help="Enable disambiguation for relaybot mode",
-        )
-        cmd.add_argument(
-            "--no-disambiguation",
-            dest="disambiguation",
-            action="store_false",
-            help="Disable disambiguation for relaybot mode",
-        )
-        cmd.add_argument(
-            "--zwsp", dest="zwsp", action="store_true", help="Enable Zero-Width-Space anti-ping for relaybot mode"
-        )
-        cmd.add_argument(
-            "--no-zwsp", dest="zwsp", action="store_false", help="Disable Zero-Width-Space anti-ping for relaybot mode"
-        )
-        cmd.add_argument("--notice", dest="notice", action="store_true", help="Allow Matrix notices to be relayed")
-        cmd.add_argument(
-            "--no-notice", dest="notice", action="store_false", help="Disallow Matrix notices to be relayed"
-        )
-        cmd.set_defaults(max_lines=None, pastebin=None, displaynames=None, disambiguation=None, zwsp=None, notice=None)
-        self.commands.register(cmd, self.cmd_plumbcfg)
-
-        cmd = CommandParser(
             prog="PILLS",
             description="configure automatic pills",
         )
@@ -667,59 +619,6 @@ class NetworkRoom(Room):
                 self.send_notice(f"Unreasonable wait time: {args.seconds}")
         except ValueError:
             self.send_notice(f"Invalid wait time: {args.seconds}")
-
-    async def cmd_plumbcfg(self, args) -> None:
-        if args.channel not in self.rooms:
-            self.send_notice(f"Not in {args.channel}")
-            return
-
-        room = self.rooms[args.channel]
-        if type(room) is not PlumbedRoom:
-            self.send_notice(f"{args.channel} is not a plumbed room")
-            return
-
-        save = False
-
-        if args.max_lines is not None:
-            room.max_lines = args.max_lines
-            save = True
-
-        if args.pastebin is not None:
-            room.use_pastebin = args.pastebin
-            save = True
-
-        if args.displaynames is not None:
-            room.use_displaynames = args.displaynames
-            save = True
-
-        if args.sync is not None:
-            room.member_sync = args.sync
-            save = True
-
-        if args.disambiguation is not None:
-            room.use_disambiguation = args.disambiguation
-            save = True
-
-        if args.zwsp is not None:
-            room.use_zwsp = args.zwsp
-            save = True
-
-        if args.notice is not None:
-            room.allow_notice = args.notice
-            save = True
-
-        self.send_notice(f"{args.channel} settings:")
-        self.send_notice(f"\tMax lines is {room.max_lines}")
-        self.send_notice(f"\tPastebin is {'enabled' if room.use_pastebin else 'disabled'}")
-        self.send_notice(f"\tDisplaynames is {'enabled' if room.use_displaynames else 'disabled'}")
-        self.send_notice(f"\tDisambiguation is {'enabled' if room.use_disambiguation else 'disabled'}")
-        self.send_notice(f"\tZero-Width-Space is {'enabled' if room.use_zwsp else 'disabled'}")
-        self.send_notice(f"\tMember sync is {room.member_sync}")
-        self.send_notice(f"\tNotice relay is {'enabled' if room.allow_notice else 'disabled'}")
-
-        if save:
-            await room.save()
-            self.send_notice("Settings saved.")
 
     def get_nick(self):
         if self.nick:

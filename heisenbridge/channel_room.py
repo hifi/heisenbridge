@@ -20,6 +20,7 @@ class NetworkRoom:
 class ChannelRoom(PrivateRoom):
     key: Optional[str]
     member_sync: str
+    autocmd: str
     names_buffer: List[str]
     bans_buffer: List[str]
 
@@ -27,9 +28,22 @@ class ChannelRoom(PrivateRoom):
         super().init()
 
         self.key = None
+        self.autocmd = None
 
         # for migration the class default is full
         self.member_sync = "full"
+
+        cmd = CommandParser(
+            prog="AUTOCMD",
+            description="run commands on join",
+            epilog=(
+                "Works _exactly_ like network AUTOCMD and runs in the network context."
+                " You can use this to login to bots or other services after joining a channel."
+            ),
+        )
+        cmd.add_argument("command", nargs="*", help="commands separated with ';'")
+        cmd.add_argument("--remove", action="store_true", help="remove stored command")
+        self.commands.register(cmd, self.cmd_autocmd)
 
         cmd = CommandParser(
             prog="SYNC",
@@ -105,6 +119,9 @@ class ChannelRoom(PrivateRoom):
         cmd.add_argument("reason", nargs="*", help="reason")
         self.commands.register(cmd, self.cmd_kick)
 
+        cmd = CommandParser(prog="PART", description="leave this channel temporarily")
+        self.commands.register(cmd, self.cmd_part)
+
         self.names_buffer = []
         self.bans_buffer = []
 
@@ -117,8 +134,11 @@ class ChannelRoom(PrivateRoom):
         if "member_sync" in config:
             self.member_sync = config["member_sync"]
 
+        if "autocmd" in config:
+            self.autocmd = config["autocmd"]
+
     def to_config(self) -> dict:
-        return {**(super().to_config()), "key": self.key, "member_sync": self.member_sync}
+        return {**(super().to_config()), "key": self.key, "member_sync": self.member_sync, "autocmd": self.autocmd}
 
     @staticmethod
     def create(network: NetworkRoom, name: str) -> "ChannelRoom":
@@ -169,6 +189,23 @@ class ChannelRoom(PrivateRoom):
 
         super().cleanup()
 
+    async def cmd_autocmd(self, args) -> None:
+        autocmd = " ".join(args.command)
+
+        if args.remove:
+            self.autocmd = None
+            await self.save()
+            self.send_notice("Autocmd removed.", forward=args._forward)
+            return
+
+        if autocmd == "":
+            self.send_notice(f"Configured autocmd: {self.autocmd if self.autocmd else ''}", forward=args._forward)
+            return
+
+        self.autocmd = autocmd
+        await self.save()
+        self.send_notice(f"Autocmd set to {self.autocmd}", forward=args._forward)
+
     async def cmd_sync(self, args):
         if args.lazy:
             self.member_sync = "lazy"
@@ -216,6 +253,9 @@ class ChannelRoom(PrivateRoom):
 
     async def cmd_kick(self, args) -> None:
         self.network.conn.kick(self.name, args.nick, " ".join(args.reason))
+
+    async def cmd_part(self, args) -> None:
+        self.network.conn.part(self.name)
 
     def on_pubmsg(self, conn, event):
         self.on_privmsg(conn, event)
@@ -341,8 +381,24 @@ class ChannelRoom(PrivateRoom):
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
             self.send_notice(f"Joined {event.target} as {event.source.nick} ({event.source.userhost})")
+
             # sync channel modes/key on join
             self.network.conn.mode(self.name, "")
+
+            # send autocmd if we have one
+            if self.autocmd:
+
+                async def autocmd(self):
+                    self.send_notice("Executing channel autocmd.")
+                    try:
+                        await self.network.commands.trigger(
+                            self.autocmd, allowed=["RAW", "MSG", "NICKSERV", "NS", "CHANSERV", "CS", "WAIT"]
+                        )
+                    except Exception as e:
+                        self.send_notice(f"Channel autocmd failed: {str(e)}")
+
+                asyncio.ensure_future(autocmd(self))
+
             return
 
         # ensure, append, invite and join
@@ -355,6 +411,10 @@ class ChannelRoom(PrivateRoom):
     def on_part(self, conn, event) -> None:
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
+            self.send_notice_html(
+                f"You left the channel. To rejoin, type <b>JOIN {event.target}</b> in the <b>{self.network_name}</b> network room."
+            )
+            self.send_notice_html("If you want to permanently leave you need to leave this room.")
             return
 
         irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)

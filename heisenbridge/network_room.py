@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import datetime
 import hashlib
@@ -420,6 +421,18 @@ class NetworkRoom(Room):
         cmd = CommandParser(prog="WHOIS", description="send a WHOIS(IS) command")
         cmd.add_argument("nick", help="target nick")
         self.commands.register(cmd, self.cmd_whois)
+
+        cmd = CommandParser(
+            prog="ROOM",
+            description="run a room command from network room",
+            epilog=(
+                "Try 'ROOM #foo' to get the list of commands for a room.",
+                "If a command generates IRC replies in a bouncer room they will appear in the room itself.",
+            ),
+        )
+        cmd.add_argument("target", help="IRC channel or nick that has a room")
+        cmd.add_argument("command", help="Command and arguments", nargs=argparse.REMAINDER)
+        self.commands.register(cmd, self.cmd_room)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -879,6 +892,20 @@ class NetworkRoom(Room):
 
     async def cmd_whois(self, args) -> None:
         self.conn.whois(f"{args.nick} {args.nick}")
+
+    async def cmd_room(self, args) -> None:
+        target = args.target.lower()
+
+        if target not in self.rooms:
+            self.send_notice(f"No room for {args.target}")
+            return
+
+        room = self.rooms[target]
+
+        if len(args.command) == 0:
+            args.command = ["HELP"]
+
+        await room.commands.trigger_args(args.command, forward=True)
 
     async def cmd_pills(self, args) -> None:
         save = False

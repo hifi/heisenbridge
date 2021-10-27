@@ -194,6 +194,7 @@ class PrivateRoom(Room):
 
     # for compatibility with plumbed rooms
     max_lines = 0
+    force_forward = False
 
     commands: CommandManager
 
@@ -278,6 +279,25 @@ class PrivateRoom(Room):
             del self.network.rooms[self.name]
 
         super().cleanup()
+
+    def send_notice(
+        self,
+        text: str,
+        user_id: Optional[str] = None,
+        formatted=None,
+        fallback_html: Optional[str] = None,
+        forward=False,
+    ):
+        if (self.force_forward or forward) and user_id is None:
+            self.network.send_notice(text=f"{self.name}: {text}", formatted=formatted, fallback_html=fallback_html)
+        else:
+            super().send_notice(text=text, user_id=user_id, formatted=formatted, fallback_html=fallback_html)
+
+    def send_notice_html(self, text: str, user_id: Optional[str] = None, forward=False) -> None:
+        if (self.force_forward or forward) and user_id is None:
+            self.network.send_notice_html(text=f"{self.name}: {text}")
+        else:
+            super().send_notice_html(text=text, user_id=user_id)
 
     def pills(self):
         # if pills are disabled, don't generate any

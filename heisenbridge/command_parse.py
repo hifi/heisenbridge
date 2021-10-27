@@ -65,28 +65,32 @@ class CommandManager:
             for alias in aliases:
                 self._commands[alias] = (cmd, func)
 
-    async def trigger(self, text, tail=None, allowed=None):
+    async def trigger_args(self, args, tail=None, allowed=None, forward=None):
+        command = args.pop(0).upper()
+
+        if allowed is not None and command not in allowed:
+            raise CommandParserError(f"Illegal command supplied: '{command}'")
+
+        if command in self._commands:
+            (cmd, func) = self._commands[command]
+            cmd_args = cmd.parse_args(args)
+            cmd_args._tail = tail
+            cmd_args._forward = forward
+            await func(cmd_args)
+        elif command == "HELP":
+            out = ["Following commands are supported:", ""]
+            for name, (cmd, func) in self._commands.items():
+                if cmd.prog == name:
+                    out.append("\t{} - {}".format(cmd.prog, cmd.short_description))
+
+            out.append("")
+            out.append("To get more help, add -h to any command without arguments.")
+
+            raise CommandParserError("\n".join(out))
+        else:
+            raise CommandParserError('Unknown command "{}", type HELP for list'.format(command))
+
+    async def trigger(self, text, tail=None, allowed=None, forward=None):
         for args in split(text):
-            command = args.pop(0).upper()
-
-            if allowed is not None and command not in allowed:
-                raise CommandParserError(f"Illegal command supplied: '{command}'")
-
-            if command in self._commands:
-                (cmd, func) = self._commands[command]
-                cmd_args = cmd.parse_args(args)
-                cmd_args._tail = tail
-                await func(cmd_args)
-                tail = None
-            elif command == "HELP":
-                out = ["Following commands are supported:", ""]
-                for name, (cmd, func) in self._commands.items():
-                    if cmd.prog == name:
-                        out.append("\t{} - {}".format(cmd.prog, cmd.short_description))
-
-                out.append("")
-                out.append("To get more help, add -h to any command without arguments.")
-
-                raise CommandParserError("\n".join(out))
-            else:
-                raise CommandParserError('Unknown command "{}", type HELP for list'.format(command))
+            await self.trigger_args(args, tail, allowed, forward)
+            tail = None

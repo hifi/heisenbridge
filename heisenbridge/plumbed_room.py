@@ -17,6 +17,7 @@ class PlumbedRoom(ChannelRoom):
     use_disambiguation = True
     use_zwsp = False
     allow_notice = False
+    force_forward = True
 
     def is_valid(self) -> bool:
         # we are valid as long as the appservice is in the room
@@ -91,29 +92,6 @@ class PlumbedRoom(ChannelRoom):
             "use_zwsp": self.use_zwsp,
             "allow_notice": self.allow_notice,
         }
-
-    def send_notice(
-        self,
-        text: str,
-        user_id: Optional[str] = None,
-        formatted=None,
-        fallback_html: Optional[str] = None,
-        forward=True,
-    ):
-        if user_id is not None or forward is False:
-            super().send_notice(text=text, user_id=user_id, formatted=formatted, fallback_html=fallback_html)
-            return
-
-        self.network.send_notice(
-            text=f"{self.name}: {text}", user_id=user_id, formatted=formatted, fallback_html=fallback_html
-        )
-
-    def send_notice_html(self, text: str, user_id: Optional[str] = None, forward=True) -> None:
-        if user_id is not None or forward is False:
-            super().send_notice_html(text=text, user_id=user_id)
-            return
-
-        self.network.send_notice_html(text=f"{self.name}: {text}")
 
     # don't try to set room topic when we're plumbed, just show it
     def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:

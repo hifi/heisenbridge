@@ -185,7 +185,7 @@ class ChannelRoom(PrivateRoom):
             self.lazy_members = {}
             await self.save()
 
-        self.send_notice(f"Member sync is set to {self.member_sync}")
+        self.send_notice(f"Member sync is set to {self.member_sync}", forward=args._forward)
 
     async def cmd_mode(self, args) -> None:
         self.network.conn.mode(self.name, " ".join(args.args))

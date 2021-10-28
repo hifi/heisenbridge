@@ -153,8 +153,8 @@ class ControlRoom(Room):
             self.commands.register(cmd, self.cmd_sync)
 
             cmd = CommandParser(prog="MEDIAURL", description="configure media URL for links")
-            cmd.add_argument("--url", help="new URL override override")
-            cmd.add_argument("--reset", help="remove URL override (will retry auto-detection)", action="store_true")
+            cmd.add_argument("url", nargs="?", help="new URL override")
+            cmd.add_argument("--remove", help="remove URL override (will retry auto-detection)", action="store_true")
             self.commands.register(cmd, self.cmd_media_url)
 
             cmd = CommandParser(prog="VERSION", description="show bridge version")
@@ -465,7 +465,7 @@ class ControlRoom(Room):
         self.send_notice(f"Member sync is set to {self.serv.config['member_sync']}")
 
     async def cmd_media_url(self, args):
-        if args.reset:
+        if args.remove:
             self.serv.config["media_url"] = None
             await self.serv.save()
             self.serv.endpoint = await self.serv.detect_public_endpoint()

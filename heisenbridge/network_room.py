@@ -390,6 +390,16 @@ class NetworkRoom(Room):
         cmd.add_argument("command", help="Command and arguments", nargs=argparse.REMAINDER)
         self.commands.register(cmd, self.cmd_room)
 
+        cmd = CommandParser(
+            prog="AVATAR",
+            description="change or show IRC network ghost avatar",
+            epilog="Note: This changes the avatar for everyone using this bridge, use with caution.",
+        )
+        cmd.add_argument("nick", help="nick")
+        cmd.add_argument("url", nargs="?", help="new avatar URL (mxc:// format)")
+        cmd.add_argument("--remove", help="remove avatar", action="store_true")
+        self.commands.register(cmd, self.cmd_avatar)
+
         cmd = CommandParser(prog="REJOIN", description="configure rejoin behavior for channel rooms")
         cmd.add_argument("--enable-invite", dest="invite", action="store_true", help="Enable rejoin on invite")
         cmd.add_argument("--disable-invite", dest="invite", action="store_false", help="Disable rejoin on invite")
@@ -825,6 +835,27 @@ class NetworkRoom(Room):
             args.command = ["HELP"]
 
         await room.commands.trigger_args(args.command, forward=True)
+
+    async def cmd_avatar(self, args):
+        if not self.serv.is_admin(self.user_id):
+            self.send_notice("Setting avatars is reserved for admins only.")
+            return
+
+        # ensure the ghost exists
+        irc_user_id = await self.serv.ensure_irc_user_id(self.name, args.nick)
+
+        if args.remove:
+            await self.serv.api.put_user_avatar_url(irc_user_id, "")
+            self.send_notice("Avatar removed.")
+        elif args.url:
+            await self.serv.api.put_user_avatar_url(irc_user_id, args.url)
+            self.send_notice("Avatar updated.")
+        else:
+            resp = await self.serv.api.get_user_avatar_url(irc_user_id)
+            if "avatar_url" in resp:
+                self.send_notice(f"Current avatar for {args.nick} is {resp['avatar_url']}")
+            else:
+                self.send_notice(f"{args.nick} does not have a custom avatar.")
 
     async def cmd_pills(self, args) -> None:
         save = False

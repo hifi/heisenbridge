@@ -268,6 +268,14 @@ class Matrix:
             {"avatar_url": url},
         )
 
+    async def get_user_avatar_url(self, user_id):
+        user_id = urllib.parse.quote(user_id, safe="")
+
+        return await self.call(
+            "GET",
+            "/_matrix/client/r0/profile/{}/avatar_url?user_id={}".format(user_id, user_id),
+        )
+
     async def put_user_presence(self, user_id, presence="online", status_msg=""):
         user_id = urllib.parse.quote(user_id, safe="")
 

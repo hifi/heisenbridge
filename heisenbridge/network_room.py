@@ -382,8 +382,8 @@ class NetworkRoom(Room):
             prog="ROOM",
             description="run a room command from network room",
             epilog=(
-                "Try 'ROOM #foo' to get the list of commands for a room.",
-                "If a command generates IRC replies in a bouncer room they will appear in the room itself.",
+                "Try 'ROOM #foo' to get the list of commands for a room."
+                "If a command generates IRC replies in a bouncer room they will appear in the room itself."
             ),
         )
         cmd.add_argument("target", help="IRC channel or nick that has a room")

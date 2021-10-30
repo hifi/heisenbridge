@@ -842,7 +842,7 @@ class NetworkRoom(Room):
             return
 
         # ensure the ghost exists
-        irc_user_id = await self.serv.ensure_irc_user_id(self.name, args.nick)
+        irc_user_id = await self.serv.ensure_irc_user_id(self.name, args.nick, update_cache=False)
 
         if args.remove:
             await self.serv.api.put_user_avatar_url(irc_user_id, "")

@@ -122,7 +122,7 @@ class BridgeAppService(AppService):
     def is_user_cached(self, user_id, displayname=None):
         return user_id in self._users and (displayname is None or self._users[user_id] == displayname)
 
-    async def ensure_irc_user_id(self, network, nick):
+    async def ensure_irc_user_id(self, network, nick, update_cache=True):
         user_id = self.irc_user_id(network, nick)
 
         # if we've seen this user before, we can skip registering
@@ -138,7 +138,8 @@ class BridgeAppService(AppService):
                 pass
 
         # always ensure the displayname is up-to-date
-        await self.cache_user(user_id, nick)
+        if update_cache:
+            await self.cache_user(user_id, nick)
 
         return user_id
 

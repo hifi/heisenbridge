@@ -122,6 +122,13 @@ class ChannelRoom(PrivateRoom):
         cmd = CommandParser(prog="PART", description="leave this channel temporarily")
         self.commands.register(cmd, self.cmd_part)
 
+        cmd = CommandParser(
+            prog="STOP",
+            description="immediately clear all queued IRC events like long messages",
+            epilog="Use this to stop accidental long pastes, also known as STAHP!",
+        )
+        self.commands.register(cmd, self.cmd_stop, ["STOP!", "STAHP", "STAHP!"])
+
         self.names_buffer = []
         self.bans_buffer = []
 
@@ -256,6 +263,10 @@ class ChannelRoom(PrivateRoom):
 
     async def cmd_part(self, args) -> None:
         self.network.conn.part(self.name)
+
+    async def cmd_stop(self, args) -> None:
+        filtered = self.network.conn.remove_tag(self.name)
+        self.send_notice(f"{filtered} messages removed from queue.")
 
     def on_pubmsg(self, conn, event):
         self.on_privmsg(conn, event)
@@ -411,6 +422,9 @@ class ChannelRoom(PrivateRoom):
     def on_part(self, conn, event) -> None:
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
+            # immediately dequeue all future events
+            conn.remove_tag(event.target.lower())
+
             self.send_notice_html(
                 f"You left the channel. To rejoin, type <b>JOIN {event.target}</b> in the <b>{self.network_name}</b> network room."
             )
@@ -471,6 +485,9 @@ class ChannelRoom(PrivateRoom):
         reason = (": " + event.arguments[1]) if len(event.arguments) > 1 and len(event.arguments[1]) > 0 else ""
 
         if event.arguments[0] == conn.real_nickname:
+            # immediately dequeue all future events
+            conn.remove_tag(event.target.lower())
+
             self.send_notice_html(f"You were kicked from the channel by <b>{event.source.nick}</b>{reason}")
             if self.network.rejoin_kick:
                 self.send_notice("Rejoin on kick is enabled, trying to join back immediately...")

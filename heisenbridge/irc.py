@@ -19,7 +19,7 @@ class MultiQueue:
         return sum([len(q) for q in self._ques.values()])
 
     def append(self, item):
-        prio, value = item
+        prio, value, tag = item
 
         if prio not in self._prios:
             self._prios.append(prio)
@@ -36,6 +36,18 @@ class MultiQueue:
 
         raise IndexError("Get called when all queues empty")
 
+    def filter(self, func) -> int:
+        filtered = 0
+
+        for que in self._ques.values():
+            tmp = que.copy()
+            olen = len(que)
+            que.clear()
+            que.extend(filter(func, tmp))
+            filtered += olen - len(que)
+
+        return filtered
+
 
 # asyncio.PriorityQueue does not preserve order within priority level
 class OrderedPriorityQueue(asyncio.Queue):
@@ -47,6 +59,9 @@ class OrderedPriorityQueue(asyncio.Queue):
 
     def _put(self, item):
         self._queue.append(item)
+
+    def remove_tag(self, tag) -> int:
+        return self._queue.filter(lambda x: x == tag)
 
 
 class HeisenProtocol(IrcProtocol):
@@ -204,7 +219,7 @@ class HeisenConnection(AioConnection):
 
         while True:
             try:
-                (priority, string) = await self._queue.get()
+                (priority, string, tag) = await self._queue.get()
 
                 diff = int(loop.time() - last)
 
@@ -235,11 +250,12 @@ class HeisenConnection(AioConnection):
 
         logging.debug("IRC event queue ended")
 
-    def send_raw(self, string, priority=0):
-        self._queue.put_nowait((priority, string))
+    def send_raw(self, string, priority=0, tag=None):
+        self._queue.put_nowait((priority, string, tag))
 
     def send_items(self, *items):
         priority = 0
+        tag = None
         if items[0] == "NOTICE":
             # queue CTCP replies even lower than notices
             if len(items) > 2 and len(items[2]) > 1 and items[2][1] == "\001":
@@ -251,7 +267,14 @@ class HeisenConnection(AioConnection):
         elif items[0] == "PONG":
             priority = -1
 
-        self.send_raw(" ".join(filter(None, items)), priority)
+        # tag with target to dequeue with filter
+        if tag is None and items[0] in ["NOTICE", "PRIVMSG", "MODE", "JOIN", "PART", "KICK"]:
+            tag = items[1].lower()
+
+        self.send_raw(" ".join(filter(None, items)), priority, tag)
+
+    def remove_tag(self, tag) -> int:
+        return self._queue.remove_tag(tag)
 
 
 class HeisenReactor(AioReactor):

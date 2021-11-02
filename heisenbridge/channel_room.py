@@ -119,6 +119,9 @@ class ChannelRoom(PrivateRoom):
         cmd.add_argument("reason", nargs="*", help="reason")
         self.commands.register(cmd, self.cmd_kick)
 
+        cmd = CommandParser(prog="JOIN", description="join this channel if not on it")
+        self.commands.register(cmd, self.cmd_join)
+
         cmd = CommandParser(prog="PART", description="leave this channel temporarily")
         self.commands.register(cmd, self.cmd_part)
 
@@ -260,6 +263,9 @@ class ChannelRoom(PrivateRoom):
 
     async def cmd_kick(self, args) -> None:
         self.network.conn.kick(self.name, args.nick, " ".join(args.reason))
+
+    async def cmd_join(self, args) -> None:
+        self.network.conn.join(self.name, self.key)
 
     async def cmd_part(self, args) -> None:
         self.network.conn.part(self.name)

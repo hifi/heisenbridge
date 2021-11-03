@@ -13,6 +13,8 @@ from collections import defaultdict
 from time import time
 from typing import Any
 from typing import Dict
+from typing import List
+from typing import Tuple
 
 import irc.client
 import irc.client_aio
@@ -100,6 +102,7 @@ class NetworkRoom(Room):
     rooms: Dict[str, Room]
     connecting: bool
     real_host: str
+    pending_kickbans: Dict[str, List[Tuple[str, str]]]
 
     def init(self):
         self.name = None
@@ -128,6 +131,7 @@ class NetworkRoom(Room):
         self.keys = {}  # temp dict of join channel keys
         self.keepnick_task = None  # async task
         self.whois_data = defaultdict(dict)  # buffer for keeping partial whois replies
+        self.pending_kickbans = defaultdict(list)
 
         cmd = CommandParser(
             prog="NICK",
@@ -899,6 +903,14 @@ class NetworkRoom(Room):
         self.send_notice(f"Rejoin on invite is {'enabled' if self.rejoin_invite else 'disabled'}")
         self.send_notice(f"Rejoin on kick is {'enabled' if self.rejoin_kick else 'disabled'}")
 
+    def kickban(self, channel: str, nick: str, reason: str) -> None:
+        self.pending_kickbans[nick].append((channel, reason))
+        self.conn.whois(f"{nick}")
+
+    def _do_kickban(self, channel: str, user_data: Dict[str, str], reason: str) -> None:
+        self.conn.mode(channel, f"+b *!*@{user_data['host']}")
+        self.conn.kick(channel, user_data["nick"], reason)
+
     async def connect(self) -> None:
         if self.connlock.locked():
             self.send_notice("Already connecting.")
@@ -940,8 +952,9 @@ class NetworkRoom(Room):
 
         network = self.serv.config["networks"][self.name]
 
-        # reset whois buffer
+        # reset whois and kickbans buffers
         self.whois_data.clear()
+        self.pending_kickbans.clear()
 
         backoff = 10
 
@@ -1474,6 +1487,13 @@ class NetworkRoom(Room):
         nick = event.arguments[0].lower()
         data = self.whois_data[nick]
         del self.whois_data[nick]
+
+        if nick in self.pending_kickbans:
+            channels = self.pending_kickbans[nick]
+            del self.pending_kickbans[nick]
+            for channel, reason in channels:
+                self._do_kickban(channel, data, reason)
+            return
 
         reply = []
         fallback = []

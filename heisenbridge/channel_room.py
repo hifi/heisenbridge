@@ -119,6 +119,11 @@ class ChannelRoom(PrivateRoom):
         cmd.add_argument("reason", nargs="*", help="reason")
         self.commands.register(cmd, self.cmd_kick)
 
+        cmd = CommandParser(prog="KB", description="kick and ban someone")
+        cmd.add_argument("nick", help="nick to target")
+        cmd.add_argument("reason", nargs="*", help="reason")
+        self.commands.register(cmd, self.cmd_kb)
+
         cmd = CommandParser(prog="JOIN", description="join this channel if not on it")
         self.commands.register(cmd, self.cmd_join)
 
@@ -263,6 +268,9 @@ class ChannelRoom(PrivateRoom):
 
     async def cmd_kick(self, args) -> None:
         self.network.conn.kick(self.name, args.nick, " ".join(args.reason))
+
+    async def cmd_kb(self, args) -> None:
+        self.network.kickban(self.name, args.nick, " ".join(args.reason))
 
     async def cmd_join(self, args) -> None:
         self.network.conn.join(self.name, self.key)

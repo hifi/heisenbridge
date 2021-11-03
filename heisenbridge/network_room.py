@@ -1434,7 +1434,8 @@ class NetworkRoom(Room):
     def on_whoisuser(self, conn, event) -> None:
         data = self.whois_data[event.arguments[0].lower()]
         data["nick"] = event.arguments[0]
-        data["host"] = f"{event.arguments[1]}@{event.arguments[2]}"
+        data["user"] = event.arguments[1]
+        data["host"] = event.arguments[2]
         data["realname"] = event.arguments[4]
 
     def on_whoisserver(self, conn, event) -> None:
@@ -1480,6 +1481,7 @@ class NetworkRoom(Room):
 
         for k in [
             "nick",
+            "user",
             "host",
             "realname",
             "realhost",

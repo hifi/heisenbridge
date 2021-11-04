@@ -29,6 +29,7 @@ class ControlRoom(Room):
 
         cmd = CommandParser(prog="OPEN", description="open network for connecting")
         cmd.add_argument("name", help="network name (see NETWORKS)")
+        cmd.add_argument("--new", action="store_true", help="force open a new network connection")
         self.commands.register(cmd, self.cmd_open)
 
         cmd = CommandParser(
@@ -491,17 +492,26 @@ class ControlRoom(Room):
 
         network = networks[name]
 
+        found = 0
         for room in self.serv.find_rooms(NetworkRoom, self.user_id):
             if room.name == network["name"]:
-                if self.user_id not in room.members:
-                    self.send_notice(f"Inviting back to {room.name}")
-                    await self.serv.api.post_room_invite(room.id, self.user_id)
-                else:
-                    self.send_notice(f"You are already in {room.name}")
-                return
+                found += 1
 
-        self.send_notice(f"You have been invited to {network['name']}")
-        await NetworkRoom.create(self.serv, network["name"], self.user_id)
+                if not args.new:
+                    if self.user_id not in room.members:
+                        self.send_notice(f"Inviting back to {room.name} ({room.id})")
+                        await self.serv.api.post_room_invite(room.id, self.user_id)
+                    else:
+                        self.send_notice(f"You are already in {room.name} ({room.id})")
+
+        # if we found at least one network room, no need to create unless forced
+        if found > 0 and not args.new:
+            return
+
+        name = network["name"] if found == 0 else f"{network['name']} {found + 1}"
+
+        self.send_notice(f"You have been invited to {name}")
+        await NetworkRoom.create(self.serv, network["name"], self.user_id, name)
 
     async def cmd_quit(self, args):
         rooms = self.serv.find_rooms(None, self.user_id)

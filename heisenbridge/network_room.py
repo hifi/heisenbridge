@@ -415,10 +415,10 @@ class NetworkRoom(Room):
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
-    async def create(serv, name, user_id):
-        room_id = await serv.create_room(name, "Network room for {}".format(name), [user_id])
+    async def create(serv, network, user_id, name):
+        room_id = await serv.create_room(name, "Network room for {}".format(network), [user_id])
         room = NetworkRoom(room_id, user_id, serv, [serv.user_id, user_id])
-        room.from_config({"name": name})
+        room.from_config({"name": network})
         await room.save()
         serv.register_room(room)
         await room.show_help()

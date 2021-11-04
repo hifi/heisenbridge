@@ -537,3 +537,7 @@ class ChannelRoom(PrivateRoom):
     def on_channelcreate(self, conn, event) -> None:
         created = unix_to_local(event.arguments[1])
         self.send_notice(f"Channel was created at {created}")
+
+    def on_328(self, conn, event) -> None:
+        (plain, formatted) = parse_irc_formatting(event.arguments[1])
+        self.send_notice(f"URL for {event.arguments[0]}: {plain}")

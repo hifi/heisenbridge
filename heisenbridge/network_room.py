@@ -1036,6 +1036,7 @@ class NetworkRoom(Room):
                     self.conn.add_global_handler("endofnames", self.on_pass0)
                     self.conn.add_global_handler("banlist", self.on_pass0)
                     self.conn.add_global_handler("endofbanlist", self.on_pass0)
+                    self.conn.add_global_handler("328", self.on_pass0)  # channel URL
 
                     # 400-599
                     self.conn.add_global_handler("nosuchnick", self.on_pass_if)

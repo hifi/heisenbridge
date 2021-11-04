@@ -203,7 +203,8 @@ class PrivateRoom(Room):
     # irc nick of the other party, name for consistency
     name: str
     network: Optional[NetworkRoom]
-    network_name: str
+    network_id: str
+    network_name: Optional[str]
     media: List[List[str]]
 
     # for compatibility with plumbed rooms
@@ -215,7 +216,8 @@ class PrivateRoom(Room):
     def init(self) -> None:
         self.name = None
         self.network = None
-        self.network_name = None
+        self.network_id = None
+        self.network_name = None  # deprecated
         self.media = []
 
         self.commands = CommandManager()
@@ -231,17 +233,23 @@ class PrivateRoom(Room):
         if "name" not in config:
             raise Exception("No name key in config for ChatRoom")
 
-        if "network" not in config:
-            raise Exception("No network key in config for ChatRoom")
-
         self.name = config["name"]
-        self.network_name = config["network"]
+
+        if "network_id" in config:
+            self.network_id = config["network_id"]
 
         if "media" in config:
             self.media = config["media"]
 
+        # only used for migration
+        if "network" in config:
+            self.network_name = config["network"]
+
+        if self.network_name is None and self.network_id is None:
+            raise Exception("No network or network_id key in config for PrivateRoom")
+
     def to_config(self) -> dict:
-        return {"name": self.name, "network": self.network_name, "media": self.media[:5]}
+        return {"name": self.name, "network": self.network_name, "network_id": self.network_id, "media": self.media[:5]}
 
     @staticmethod
     def create(network: NetworkRoom, name: str) -> "PrivateRoom":
@@ -255,6 +263,7 @@ class PrivateRoom(Room):
         )
         room.name = name.lower()
         room.network = network
+        room.network_id = network.id
         room.network_name = network.name
         asyncio.ensure_future(room._create_mx(name))
         return room
@@ -274,16 +283,13 @@ class PrivateRoom(Room):
             self._queue.start()
 
     def is_valid(self) -> bool:
-        if self.network_name is None:
+        if self.network_id is None and self.network_name is None:
             return False
 
         if self.name is None:
             return False
 
         if self.user_id is None:
-            return False
-
-        if self.network_name is None:
             return False
 
         if not self.in_room(self.user_id):

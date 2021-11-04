@@ -927,23 +927,20 @@ class NetworkRoom(Room):
             return
 
         # attach loose sub-rooms to us
-        for room in self.serv.find_rooms(PrivateRoom, self.user_id):
-            if room.name not in self.rooms and room.network_name == self.name:
-                logging.debug(f"NetworkRoom {self.id} attaching PrivateRoom {room.id}")
-                room.network = self
-                self.rooms[room.name] = room
-
-        for room in self.serv.find_rooms(ChannelRoom, self.user_id):
-            if room.name not in self.rooms and room.network_name == self.name:
-                logging.debug(f"NetworkRoom {self.id} attaching ChannelRoom {room.id}")
-                room.network = self
-                self.rooms[room.name] = room
-
-        for room in self.serv.find_rooms(PlumbedRoom, self.user_id):
-            if room.name not in self.rooms and room.network_name == self.name:
-                logging.debug(f"NetworkRoom {self.id} attaching PlumbedRoom {room.id}")
-                room.network = self
-                self.rooms[room.name] = room
+        for type in [PrivateRoom, ChannelRoom, PlumbedRoom]:
+            for room in self.serv.find_rooms(type, self.user_id):
+                if room.name not in self.rooms and (
+                    room.network_id == self.id or (room.network_id is None and room.network_name == self.name)
+                ):
+                    room.network = self
+                    # this doubles as a migration
+                    if room.network_id is None:
+                        logging.debug(f"{self.id} attaching and migrating {room.id}")
+                        room.network_id = self.id
+                        await room.save()
+                    else:
+                        logging.debug(f"{self.id} attaching {room.id}")
+                    self.rooms[room.name] = room
 
         # force cleanup
         if self.conn:

@@ -92,6 +92,7 @@ class PlumbedRoom(ChannelRoom):
         room.name = channel.lower()
         room.key = key
         room.network = network
+        room.network_id = network.id
         room.network_name = network.name
         room.need_invite = join_rules["join_rule"] != "public"
 

@@ -162,6 +162,7 @@ class ChannelRoom(PrivateRoom):
         room = ChannelRoom(None, network.user_id, network.serv, [network.serv.user_id, network.user_id])
         room.name = name.lower()
         room.network = network
+        room.network_id = network.id
         room.network_name = network.name
 
         # fetch stored channel key if used for join command
@@ -430,7 +431,7 @@ class ChannelRoom(PrivateRoom):
         if self.member_sync == "full" or self.member_sync == "half":
             self._add_puppet(event.source.nick)
         elif self.member_sync != "off":
-            irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)
+            irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
             self.join(irc_user_id, event.source.nick, lazy=True)
 
     def on_part(self, conn, event) -> None:
@@ -440,12 +441,12 @@ class ChannelRoom(PrivateRoom):
             conn.remove_tag(event.target.lower())
 
             self.send_notice_html(
-                f"You left the channel. To rejoin, type <b>JOIN {event.target}</b> in the <b>{self.network_name}</b> network room."
+                f"You left the channel. To rejoin, type <b>JOIN {event.target}</b> in the <b>{self.network.name}</b> network room."
             )
             self.send_notice_html("If you want to permanently leave you need to leave this room.")
             return
 
-        irc_user_id = self.serv.irc_user_id(self.network_name, event.source.nick)
+        irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
         self._remove_puppet(irc_user_id, event.arguments[0] if len(event.arguments) else None)
 
     def update_key(self, modes):
@@ -508,7 +509,7 @@ class ChannelRoom(PrivateRoom):
                 conn.join(event.target)
             else:
                 self.send_notice_html(
-                    f"To rejoin the channel, type <b>JOIN {event.target}</b> in the <b>{self.network_name}</b> network room."
+                    f"To rejoin the channel, type <b>JOIN {event.target}</b> in the <b>{self.network.name}</b> network room."
                 )
         else:
             target_user_id = self.serv.irc_user_id(self.network.name, event.arguments[0])

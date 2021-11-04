@@ -266,6 +266,7 @@ class PrivateRoom(Room):
                 "{} ({})".format(displayname, self.network.name),
                 "Private chat with {} on {}".format(displayname, self.network.name),
                 [self.network.user_id, irc_user_id],
+                True,
             )
             self.serv.register_room(self)
             await self.network.serv.api.post_room_join(self.id, irc_user_id)

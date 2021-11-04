@@ -180,6 +180,7 @@ class ChannelRoom(PrivateRoom):
             f"{visible_name} ({self.network.name})",
             "",
             [self.network.user_id],
+            False,
         )
         self.serv.register_room(self)
         await self.save()

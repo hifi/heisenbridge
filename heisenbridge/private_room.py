@@ -261,7 +261,7 @@ class PrivateRoom(Room):
 
     async def _create_mx(self, displayname) -> None:
         if self.id is None:
-            irc_user_id = await self.network.serv.ensure_irc_user_id(self.network.name, displayname)
+            irc_user_id = await self.network.serv.ensure_irc_user_id(self.network.name, displayname, update_cache=False)
             self.id = await self.network.serv.create_room(
                 "{} ({})".format(displayname, self.network.name),
                 "Private chat with {} on {}".format(displayname, self.network.name),

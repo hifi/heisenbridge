@@ -103,6 +103,10 @@ class NetworkRoom(Room):
     connecting: bool
     real_host: str
     pending_kickbans: Dict[str, List[Tuple[str, str]]]
+    backoff: int
+    backoff_task: Any
+    next_server: int
+    connected_at: int
 
     def init(self):
         self.name = None
@@ -121,6 +125,10 @@ class NetworkRoom(Room):
         self.tls_cert = None
         self.rejoin_invite = True
         self.rejoin_kick = False
+        self.backoff = 0
+        self.backoff_task = None
+        self.next_server = 0
+        self.connected_at = 0
 
         self.commands = CommandManager()
         self.conn = None
@@ -537,9 +545,14 @@ class NetworkRoom(Room):
         await self.connect()
 
     async def cmd_disconnect(self, args) -> None:
-        if not self.disconnect:
-            self.send_notice("Aborting connection attempt after backoff.")
-            self.disconnect = True
+        self.disconnect = True
+
+        if self.backoff_task:
+            self.backoff_task.cancel()
+
+        self.backoff = 0
+        self.next_server = 0
+        self.connected_at = 0
 
         if self.connected:
             self.connected = False
@@ -551,9 +564,8 @@ class NetworkRoom(Room):
 
     @connected
     async def cmd_reconnect(self, args) -> None:
-        self.send_notice("Reconnecting...")
-        self.conn.disconnect()
-        await self.connect()
+        await self.cmd_disconnect(Namespace())
+        await self.cmd_connect(Namespace())
 
     @connected
     async def cmd_raw(self, args) -> None:
@@ -917,15 +929,14 @@ class NetworkRoom(Room):
             return
 
         async with self.connlock:
+            if self.conn and self.conn.connected:
+                self.send_notice("Already connected.")
+                return
+
+            self.disconnect = False
             await self._connect()
 
     async def _connect(self) -> None:
-        self.disconnect = False
-
-        if self.conn and self.conn.connected:
-            self.send_notice("Already connected.")
-            return
-
         # attach loose sub-rooms to us
         for type in [PrivateRoom, ChannelRoom, PlumbedRoom]:
             for room in self.serv.find_rooms(type, self.user_id):
@@ -953,8 +964,6 @@ class NetworkRoom(Room):
         self.whois_data.clear()
         self.pending_kickbans.clear()
 
-        backoff = 10
-
         while not self.disconnect:
             if self.name not in self.serv.config["networks"]:
                 self.send_notice("This network does not exist on this bridge anymore.")
@@ -966,176 +975,181 @@ class NetworkRoom(Room):
                 await self.save()
                 return
 
-            for i, server in enumerate(network["servers"]):
-                if i > 0:
-                    await asyncio.sleep(10)
+            server = network["servers"][self.next_server % len(network["servers"])]
+            self.next_server += 1
 
-                try:
-                    with_tls = ""
-                    ssl_ctx = False
-                    server_hostname = None
-                    if server["tls"] or ("tls_insecure" in server and server["tls_insecure"]):
-                        ssl_ctx = ssl.create_default_context()
-                        if "tls_insecure" in server and server["tls_insecure"]:
-                            with_tls = " with insecure TLS"
-                            ssl_ctx.check_hostname = False
-                            ssl_ctx.verify_mode = ssl.CERT_NONE
-                        else:
-                            with_tls = " with TLS"
-                            ssl_ctx.verify_mode = ssl.CERT_REQUIRED
+            try:
+                with_tls = ""
+                ssl_ctx = False
+                server_hostname = None
+                if server["tls"] or ("tls_insecure" in server and server["tls_insecure"]):
+                    ssl_ctx = ssl.create_default_context()
+                    if "tls_insecure" in server and server["tls_insecure"]:
+                        with_tls = " with insecure TLS"
+                        ssl_ctx.check_hostname = False
+                        ssl_ctx.verify_mode = ssl.CERT_NONE
+                    else:
+                        with_tls = " with TLS"
+                        ssl_ctx.verify_mode = ssl.CERT_REQUIRED
 
-                        if self.tls_cert:
-                            with_tls += " and CertFP"
+                    if self.tls_cert:
+                        with_tls += " and CertFP"
 
-                            # do this awful hack to allow the SSL stack to load the cert and key
-                            cert_file = tempfile.NamedTemporaryFile()
-                            cert_file.write(self.tls_cert.encode("utf-8"))
-                            cert_file.flush()
+                        # do this awful hack to allow the SSL stack to load the cert and key
+                        cert_file = tempfile.NamedTemporaryFile()
+                        cert_file.write(self.tls_cert.encode("utf-8"))
+                        cert_file.flush()
 
-                            ssl_ctx.load_cert_chain(cert_file.name)
+                        ssl_ctx.load_cert_chain(cert_file.name)
 
-                            cert_file.close()
+                        cert_file.close()
 
-                        server_hostname = server["address"]
+                    server_hostname = server["address"]
 
-                    proxy = None
-                    sock = None
-                    address = server["address"]
-                    port = server["port"]
+                proxy = None
+                sock = None
+                address = server["address"]
+                port = server["port"]
 
-                    with_proxy = ""
-                    if "proxy" in server and server["proxy"] is not None and len(server["proxy"]) > 0:
-                        proxy = Proxy.from_url(server["proxy"])
-                        address = port = None
-                        with_proxy = " through a SOCKS proxy"
+                with_proxy = ""
+                if "proxy" in server and server["proxy"] is not None and len(server["proxy"]) > 0:
+                    proxy = Proxy.from_url(server["proxy"])
+                    address = port = None
+                    with_proxy = " through a SOCKS proxy"
 
-                    self.send_notice(f"Connecting to {server['address']}:{server['port']}{with_tls}{with_proxy}...")
+                self.send_notice(f"Connecting to {server['address']}:{server['port']}{with_tls}{with_proxy}...")
 
-                    if proxy:
-                        sock = await proxy.connect(dest_host=server["address"], dest_port=server["port"])
+                if proxy:
+                    sock = await proxy.connect(dest_host=server["address"], dest_port=server["port"])
 
-                    if self.sasl_username and self.sasl_password:
-                        self.send_notice(f"Using SASL credentials for username {self.sasl_username}")
+                if self.sasl_username and self.sasl_password:
+                    self.send_notice(f"Using SASL credentials for username {self.sasl_username}")
 
-                    reactor = HeisenReactor(loop=asyncio.get_event_loop())
-                    irc_server = reactor.server()
-                    irc_server.buffer_class = buffer.LenientDecodingLineBuffer
-                    factory = irc.connection.AioFactory(ssl=ssl_ctx, sock=sock, server_hostname=server_hostname)
-                    self.conn = await irc_server.connect(
-                        address,
-                        port,
-                        self.get_nick(),
-                        self.password,
-                        username=self.get_ident() if self.username is None else self.username,
-                        ircname=self.ircname,
-                        connect_factory=factory,
-                        sasl_username=self.sasl_username,
-                        sasl_password=self.sasl_password,
-                    )
+                reactor = HeisenReactor(loop=asyncio.get_event_loop())
+                irc_server = reactor.server()
+                irc_server.buffer_class = buffer.LenientDecodingLineBuffer
+                factory = irc.connection.AioFactory(ssl=ssl_ctx, sock=sock, server_hostname=server_hostname)
+                self.conn = await irc_server.connect(
+                    address,
+                    port,
+                    self.get_nick(),
+                    self.password,
+                    username=self.get_ident() if self.username is None else self.username,
+                    ircname=self.ircname,
+                    connect_factory=factory,
+                    sasl_username=self.sasl_username,
+                    sasl_password=self.sasl_password,
+                )
 
-                    self.conn.add_global_handler("disconnect", self.on_disconnect)
+                self.conn.add_global_handler("disconnect", self.on_disconnect)
 
-                    self.conn.add_global_handler("welcome", self.on_welcome)
-                    self.conn.add_global_handler("umodeis", self.on_umodeis)
-                    self.conn.add_global_handler("channelmodeis", self.on_pass0)
-                    self.conn.add_global_handler("channelcreate", self.on_pass0)
-                    self.conn.add_global_handler("notopic", self.on_pass0)
-                    self.conn.add_global_handler("currenttopic", self.on_pass0)
-                    self.conn.add_global_handler("topicinfo", self.on_pass0)
-                    self.conn.add_global_handler("namreply", self.on_pass1)
-                    self.conn.add_global_handler("endofnames", self.on_pass0)
-                    self.conn.add_global_handler("banlist", self.on_pass0)
-                    self.conn.add_global_handler("endofbanlist", self.on_pass0)
-                    self.conn.add_global_handler("328", self.on_pass0)  # channel URL
+                self.conn.add_global_handler("welcome", self.on_welcome)
+                self.conn.add_global_handler("umodeis", self.on_umodeis)
+                self.conn.add_global_handler("channelmodeis", self.on_pass0)
+                self.conn.add_global_handler("channelcreate", self.on_pass0)
+                self.conn.add_global_handler("notopic", self.on_pass0)
+                self.conn.add_global_handler("currenttopic", self.on_pass0)
+                self.conn.add_global_handler("topicinfo", self.on_pass0)
+                self.conn.add_global_handler("namreply", self.on_pass1)
+                self.conn.add_global_handler("endofnames", self.on_pass0)
+                self.conn.add_global_handler("banlist", self.on_pass0)
+                self.conn.add_global_handler("endofbanlist", self.on_pass0)
+                self.conn.add_global_handler("328", self.on_pass0)  # channel URL
 
-                    # 400-599
-                    self.conn.add_global_handler("nosuchnick", self.on_pass_if)
-                    self.conn.add_global_handler("nosuchchannel", self.on_pass_if)
-                    self.conn.add_global_handler("cannotsendtochan", self.on_pass0)
-                    self.conn.add_global_handler("nicknameinuse", self.on_nicknameinuse)
-                    self.conn.add_global_handler("erroneusnickname", self.on_erroneusnickname)
-                    self.conn.add_global_handler("unavailresource", self.on_unavailresource)
-                    self.conn.add_global_handler("usernotinchannel", self.on_pass1)
-                    self.conn.add_global_handler("notonchannel", self.on_pass0)
-                    self.conn.add_global_handler("useronchannel", self.on_pass1)
-                    self.conn.add_global_handler("nologin", self.on_pass1)
-                    self.conn.add_global_handler("keyset", self.on_pass)
-                    self.conn.add_global_handler("channelisfull", self.on_pass)
-                    self.conn.add_global_handler("inviteonlychan", self.on_pass)
-                    self.conn.add_global_handler("bannedfromchan", self.on_pass)
-                    self.conn.add_global_handler("badchannelkey", self.on_pass0)
-                    self.conn.add_global_handler("badchanmask", self.on_pass)
-                    self.conn.add_global_handler("nochanmodes", self.on_pass)
-                    self.conn.add_global_handler("banlistfull", self.on_pass)
-                    self.conn.add_global_handler("cannotknock", self.on_pass)
-                    self.conn.add_global_handler("chanoprivsneeded", self.on_pass0)
+                # 400-599
+                self.conn.add_global_handler("nosuchnick", self.on_pass_if)
+                self.conn.add_global_handler("nosuchchannel", self.on_pass_if)
+                self.conn.add_global_handler("cannotsendtochan", self.on_pass0)
+                self.conn.add_global_handler("nicknameinuse", self.on_nicknameinuse)
+                self.conn.add_global_handler("erroneusnickname", self.on_erroneusnickname)
+                self.conn.add_global_handler("unavailresource", self.on_unavailresource)
+                self.conn.add_global_handler("usernotinchannel", self.on_pass1)
+                self.conn.add_global_handler("notonchannel", self.on_pass0)
+                self.conn.add_global_handler("useronchannel", self.on_pass1)
+                self.conn.add_global_handler("nologin", self.on_pass1)
+                self.conn.add_global_handler("keyset", self.on_pass)
+                self.conn.add_global_handler("channelisfull", self.on_pass)
+                self.conn.add_global_handler("inviteonlychan", self.on_pass)
+                self.conn.add_global_handler("bannedfromchan", self.on_pass)
+                self.conn.add_global_handler("badchannelkey", self.on_pass0)
+                self.conn.add_global_handler("badchanmask", self.on_pass)
+                self.conn.add_global_handler("nochanmodes", self.on_pass)
+                self.conn.add_global_handler("banlistfull", self.on_pass)
+                self.conn.add_global_handler("cannotknock", self.on_pass)
+                self.conn.add_global_handler("chanoprivsneeded", self.on_pass0)
 
-                    # protocol
-                    # FIXME: error
-                    self.conn.add_global_handler("join", self.on_join)
-                    self.conn.add_global_handler("join", self.on_join_update_host)
-                    self.conn.add_global_handler("kick", self.on_pass)
-                    self.conn.add_global_handler("mode", self.on_pass)
-                    self.conn.add_global_handler("part", self.on_part)
-                    self.conn.add_global_handler("privmsg", self.on_privmsg)
-                    self.conn.add_global_handler("privnotice", self.on_privnotice)
-                    self.conn.add_global_handler("pubmsg", self.on_pass)
-                    self.conn.add_global_handler("pubnotice", self.on_pass)
-                    self.conn.add_global_handler("quit", self.on_quit)
-                    self.conn.add_global_handler("invite", self.on_invite)
-                    self.conn.add_global_handler("wallops", self.on_wallops)
-                    # FIXME: action
-                    self.conn.add_global_handler("topic", self.on_pass)
-                    self.conn.add_global_handler("nick", self.on_nick)
-                    self.conn.add_global_handler("umode", self.on_umode)
+                # protocol
+                # FIXME: error
+                self.conn.add_global_handler("join", self.on_join)
+                self.conn.add_global_handler("join", self.on_join_update_host)
+                self.conn.add_global_handler("kick", self.on_pass)
+                self.conn.add_global_handler("mode", self.on_pass)
+                self.conn.add_global_handler("part", self.on_part)
+                self.conn.add_global_handler("privmsg", self.on_privmsg)
+                self.conn.add_global_handler("privnotice", self.on_privnotice)
+                self.conn.add_global_handler("pubmsg", self.on_pass)
+                self.conn.add_global_handler("pubnotice", self.on_pass)
+                self.conn.add_global_handler("quit", self.on_quit)
+                self.conn.add_global_handler("invite", self.on_invite)
+                self.conn.add_global_handler("wallops", self.on_wallops)
+                # FIXME: action
+                self.conn.add_global_handler("topic", self.on_pass)
+                self.conn.add_global_handler("nick", self.on_nick)
+                self.conn.add_global_handler("umode", self.on_umode)
 
-                    self.conn.add_global_handler("kill", self.on_kill)
-                    self.conn.add_global_handler("error", self.on_error)
+                self.conn.add_global_handler("kill", self.on_kill)
+                self.conn.add_global_handler("error", self.on_error)
 
-                    # whois
-                    self.conn.add_global_handler("whoisuser", self.on_whoisuser)
-                    self.conn.add_global_handler("whoisserver", self.on_whoisserver)
-                    self.conn.add_global_handler("whoischannels", self.on_whoischannels)
-                    self.conn.add_global_handler("whoisidle", self.on_whoisidle)
-                    self.conn.add_global_handler("whoisaccount", self.on_whoisaccount)  # is logged in as
-                    self.conn.add_global_handler("whoisoperator", self.on_whoisoperator)
-                    self.conn.add_global_handler("338", self.on_whoisrealhost)  # is actually using host
-                    self.conn.add_global_handler("away", self.on_away)
-                    self.conn.add_global_handler("endofwhois", self.on_endofwhois)
+                # whois
+                self.conn.add_global_handler("whoisuser", self.on_whoisuser)
+                self.conn.add_global_handler("whoisserver", self.on_whoisserver)
+                self.conn.add_global_handler("whoischannels", self.on_whoischannels)
+                self.conn.add_global_handler("whoisidle", self.on_whoisidle)
+                self.conn.add_global_handler("whoisaccount", self.on_whoisaccount)  # is logged in as
+                self.conn.add_global_handler("whoisoperator", self.on_whoisoperator)
+                self.conn.add_global_handler("338", self.on_whoisrealhost)  # is actually using host
+                self.conn.add_global_handler("away", self.on_away)
+                self.conn.add_global_handler("endofwhois", self.on_endofwhois)
 
-                    # generated
-                    self.conn.add_global_handler("ctcp", self.on_ctcp)
-                    self.conn.add_global_handler("ctcpreply", self.on_ctcpreply)
-                    self.conn.add_global_handler("action", lambda conn, event: None)
+                # generated
+                self.conn.add_global_handler("ctcp", self.on_ctcp)
+                self.conn.add_global_handler("ctcpreply", self.on_ctcpreply)
+                self.conn.add_global_handler("action", lambda conn, event: None)
 
-                    # anything not handled above
-                    self.conn.add_global_handler("unhandled_events", self.on_server_message)
+                # anything not handled above
+                self.conn.add_global_handler("unhandled_events", self.on_server_message)
 
-                    if not self.connected:
-                        self.connected = True
-                        await self.save()
+                if not self.connected:
+                    self.connected = True
+                    await self.save()
 
-                    self.disconnect = False
+                self.disconnect = False
+                self.connected_at = asyncio.get_event_loop().time()
 
-                    # run connection registration (SASL, user, nick)
-                    await self.conn.register()
+                # run connection registration (SASL, user, nick)
+                await self.conn.register()
 
-                    return
-                except TimeoutError:
-                    self.send_notice("Connection timed out.")
-                except irc.client.ServerConnectionError as e:
-                    self.send_notice(str(e))
-                    self.send_notice(f"Failed to connect: {str(e)}")
-                    self.disconnect = True
-                except Exception as e:
-                    self.send_notice(f"Failed to connect: {str(e)}")
+                return
+            except TimeoutError:
+                self.send_notice("Connection timed out.")
+            except irc.client.ServerConnectionError as e:
+                self.send_notice(str(e))
+                self.send_notice(f"Failed to connect: {str(e)}")
+            except Exception as e:
+                self.send_notice(f"Failed to connect: {str(e)}")
 
-            if not self.disconnect:
-                self.send_notice(f"Tried all servers, waiting {backoff} seconds before trying again.")
-                await asyncio.sleep(backoff)
+            if self.backoff < 1800:
+                self.backoff += 5
 
-                if backoff < 60:
-                    backoff += 5
+            self.send_notice(f"Trying next server in {self.backoff} seconds...")
+
+            self.backoff_task = asyncio.ensure_future(asyncio.sleep(self.backoff))
+            try:
+                await self.backoff_task
+            except asyncio.CancelledError:
+                break
+            finally:
+                self.backoff_task = None
 
         self.send_notice("Connection aborted.")
 
@@ -1144,15 +1158,29 @@ class NetworkRoom(Room):
         self.conn.close()
         self.conn = None
 
+        # if we were connected for a while, consider the server working
+        if self.connected_at > 0 and asyncio.get_event_loop().time() - self.connected_at > 300:
+            self.backoff = 0
+            self.next_server = 0
+            self.connected_at = 0
+
         if self.connected and not self.disconnect:
-            self.send_notice("Disconnected, reconnecting...")
+            if self.backoff < 1800:
+                self.backoff += 5
 
-            async def later():
-                await asyncio.sleep(10)
-                if not self.disconnect:
+            self.send_notice(f"Disconnected, reconnecting in {self.backoff} seconds...")
+
+            async def later(self):
+                self.backoff_task = asyncio.ensure_future(asyncio.sleep(self.backoff))
+                try:
+                    await self.backoff_task
                     await self.connect()
+                except asyncio.CancelledError:
+                    self.send_notice("Reconnect cancelled.")
+                finally:
+                    self.backoff_task = None
 
-            asyncio.ensure_future(later())
+            asyncio.ensure_future(later(self))
         else:
             self.send_notice("Disconnected.")
 
@@ -1436,7 +1464,7 @@ class NetworkRoom(Room):
             self.send_notice_html(f"Killed by <b>{source}</b>: {html.escape(event.arguments[0])}")
 
             # do not reconnect after KILL
-            self.connected = False
+            self.disconnect = True
 
     def on_error(self, conn, event) -> None:
         self.send_notice_html(f"<b>ERROR</b>: {html.escape(event.target)}")

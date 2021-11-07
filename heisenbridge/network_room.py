@@ -102,6 +102,7 @@ class NetworkRoom(Room):
     rooms: Dict[str, Room]
     connecting: bool
     real_host: str
+    real_user: str
     pending_kickbans: Dict[str, List[Tuple[str, str]]]
     backoff: int
     backoff_task: Any
@@ -136,6 +137,7 @@ class NetworkRoom(Room):
         self.connlock = asyncio.Lock()
         self.disconnect = True
         self.real_host = "?" * 63  # worst case default
+        self.real_user = "?" * 8  # worst case default
         self.keys = {}  # temp dict of join channel keys
         self.keepnick_task = None  # async task
         self.whois_data = defaultdict(dict)  # buffer for keeping partial whois replies
@@ -392,6 +394,9 @@ class NetworkRoom(Room):
         cmd.add_argument("nick", help="target nick")
         self.commands.register(cmd, self.cmd_whois)
 
+        cmd = CommandParser(prog="WHOAMI", description="send a WHOIS(IS) for ourself")
+        self.commands.register(cmd, self.cmd_whoami)
+
         cmd = CommandParser(
             prog="ROOM",
             description="run a room command from network room",
@@ -421,6 +426,9 @@ class NetworkRoom(Room):
         cmd.add_argument("--disable-kick", dest="kick", action="store_false", help="Disable rejoin on kick")
         cmd.set_defaults(invite=None, kick=None)
         self.commands.register(cmd, self.cmd_rejoin)
+
+        cmd = CommandParser(prog="STATUS", description="show current network status")
+        self.commands.register(cmd, self.cmd_status)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -846,8 +854,13 @@ class NetworkRoom(Room):
         await self.save()
         self.send_notice(f"Autocmd set to {self.autocmd}")
 
+    @connected
     async def cmd_whois(self, args) -> None:
         self.conn.whois(f"{args.nick} {args.nick}")
+
+    @connected
+    async def cmd_whoami(self, args) -> None:
+        self.conn.whois(f"{self.conn.real_nickname} {self.conn.real_nickname}")
 
     async def cmd_room(self, args) -> None:
         target = args.target.lower()
@@ -925,6 +938,40 @@ class NetworkRoom(Room):
 
         self.send_notice(f"Rejoin on invite is {'enabled' if self.rejoin_invite else 'disabled'}")
         self.send_notice(f"Rejoin on kick is {'enabled' if self.rejoin_kick else 'disabled'}")
+
+    async def cmd_status(self, args) -> None:
+        if self.connected_at > 0:
+            conntime = asyncio.get_event_loop().time() - self.connected_at
+            conntime = str(datetime.timedelta(seconds=int(conntime)))
+            self.send_notice(f"Connected for {conntime}")
+
+            if self.real_host[0] != "?":
+                self.send_notice(f"Connected from host {self.real_host}")
+        else:
+            self.send_notice("Not connected to server.")
+
+        await self.cmd_nick(Namespace(nick=None))
+
+        pms = []
+        chans = []
+        plumbs = []
+
+        for room in self.rooms.values():
+            if type(room) == PrivateRoom:
+                pms.append(room.name)
+            elif type(room) == ChannelRoom:
+                chans.append(room.name)
+            elif type(room) == PlumbedRoom:
+                plumbs.append(room.name)
+
+        if len(chans) > 0:
+            self.send_notice(f"Channels: {', '.join(chans)}")
+
+        if len(plumbs) > 0:
+            self.send_notice(f"Plumbs: {', '.join(plumbs)}")
+
+        if len(pms) > 0:
+            self.send_notice(f"PMs: {', '.join(pms)}")
 
     def kickban(self, channel: str, nick: str, reason: str) -> None:
         self.pending_kickbans[nick].append((channel, reason))
@@ -1066,6 +1113,7 @@ class NetworkRoom(Room):
                 self.conn.add_global_handler("banlist", self.on_pass0)
                 self.conn.add_global_handler("endofbanlist", self.on_pass0)
                 self.conn.add_global_handler("328", self.on_pass0)  # channel URL
+                self.conn.add_global_handler("396", self.on_displayed_host)
 
                 # 400-599
                 self.conn.add_global_handler("nosuchnick", self.on_pass_if)
@@ -1239,6 +1287,11 @@ class NetworkRoom(Room):
     def on_umode(self, conn, event) -> None:
         self.send_notice(f"User mode changed for {event.target}: {event.arguments[0]}")
 
+    def on_displayed_host(self, conn, event) -> None:
+        self.send_notice(" ".join(event.arguments))
+        if event.target == conn.real_nickname:
+            self.real_host = event.arguments[0]
+
     def source_text(self, conn, event) -> str:
         source = None
 
@@ -1376,9 +1429,12 @@ class NetworkRoom(Room):
 
     def on_join_update_host(self, conn, event) -> None:
         # update for split long
-        if event.source.nick == self.conn.real_nickname and self.real_host != event.source.host:
+        if event.source.nick == self.conn.real_nickname and (
+            self.real_host != event.source.host or self.real_user != event.source.user
+        ):
             self.real_host = event.source.host
-            logging.debug(f"Self host updated to '{self.real_host}'")
+            self.real_user = event.source.user
+            logging.debug(f"Self host updated to '{self.real_host}', user to '{self.real_user}'")
 
     @ircroom_event()
     def on_part(self, conn, event) -> None:

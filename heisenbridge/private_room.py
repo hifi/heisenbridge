@@ -490,7 +490,7 @@ class PrivateRoom(Room):
 
             messages += split_long(
                 self.network.conn.real_nickname,
-                self.network.conn.username,
+                self.network.real_user,
                 self.network.real_host,
                 self.name,
                 line,

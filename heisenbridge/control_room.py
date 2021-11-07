@@ -366,28 +366,37 @@ class ControlRoom(Room):
 
             for network in self.serv.find_rooms("NetworkRoom", user):
                 connected = "not connected"
-                channels = "not on any channel"
-                privates = "not in any DMs"
+                channels = "not in channels"
+                privates = "not in PMs"
+                plumbs = "not in plumbs"
 
                 if network.conn and network.conn.connected:
-                    connected = f"connected as {network.conn.real_nickname} ({network.get_ident()})"
+                    user = network.real_user if network.real_user[0] != "?" else "?"
+                    host = network.real_host if network.real_host[0] != "?" else "?"
+                    connected = f"connected as {network.conn.real_nickname}!{user}@{host}"
 
                 nchannels = 0
                 nprivates = 0
+                nplumbs = 0
 
                 for room in network.rooms.values():
                     if type(room).__name__ == "PrivateRoom":
                         nprivates += 1
                     if type(room).__name__ == "ChannelRoom":
                         nchannels += 1
+                    if type(room).__name__ == "PlumbedRoom":
+                        nplumbs += 1
 
                 if nprivates > 0:
-                    privates = f"in {nprivates} DMs"
+                    privates = f"in {nprivates} PMs"
 
                 if nchannels > 0:
-                    channels = f"on {nchannels} channels"
+                    channels = f"in {nchannels} channels"
 
-                self.send_notice(f"\t\t{network.name}, {connected}, {channels}, {privates}")
+                if nplumbs > 0:
+                    channels = f"in {nplumbs} plumbs"
+
+                self.send_notice(f"\t\t{network.name}, {connected}, {channels}, {privates}, {plumbs}")
 
     async def cmd_forget(self, args):
         if args.user == self.user_id:

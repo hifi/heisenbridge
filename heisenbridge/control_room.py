@@ -293,7 +293,11 @@ class ControlRoom(Room):
                     with_tls = "with insecure TLS"
                 else:
                     with_tls = "with TLS"
-            proxy = f" through {server['proxy']}" if "proxy" in server and len(server["proxy"]) > 0 else ""
+            proxy = (
+                f" through {server['proxy']}"
+                if "proxy" in server and server["proxy"] is not None and len(server["proxy"]) > 0
+                else ""
+            )
             self.send_notice(f"\t{server['address']}:{server['port']} {with_tls}{proxy}")
 
     async def cmd_addserver(self, args):

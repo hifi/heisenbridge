@@ -394,7 +394,7 @@ class ControlRoom(Room):
                     channels = f"in {nchannels} channels"
 
                 if nplumbs > 0:
-                    channels = f"in {nplumbs} plumbs"
+                    plumbs = f"in {nplumbs} plumbs"
 
                 self.send_notice(f"\t\t{network.name}, {connected}, {channels}, {privates}, {plumbs}")
 

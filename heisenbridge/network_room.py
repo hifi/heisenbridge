@@ -167,13 +167,13 @@ class NetworkRoom(Room):
         self.commands.register(cmd, self.cmd_username)
 
         cmd = CommandParser(
-            prog="IRCNAME",
-            description="set ircname (realname)",
-            epilog=("Setting a new ircname requires reconnecting to the network.\n"),
+            prog="REALNAME",
+            description="set realname",
+            epilog=("Setting a new realname requires reconnecting to the network.\n"),
         )
-        cmd.add_argument("ircname", nargs="?", help="new ircname")
-        cmd.add_argument("--remove", action="store_true", help="remove stored ircname")
-        self.commands.register(cmd, self.cmd_ircname)
+        cmd.add_argument("name", nargs="?", help="new realname")
+        cmd.add_argument("--remove", action="store_true", help="remove stored name")
+        self.commands.register(cmd, self.cmd_realname)
 
         cmd = CommandParser(
             prog="PASSWORD",
@@ -731,20 +731,23 @@ class NetworkRoom(Room):
         await self.save()
         self.send_notice(f"Username set to {self.username}")
 
-    async def cmd_ircname(self, args) -> None:
+    async def cmd_realname(self, args) -> None:
         if args.remove:
             self.ircname = None
             await self.save()
-            self.send_notice("Ircname removed.")
+            self.send_notice("Realname removed.")
             return
 
-        if args.ircname is None:
-            self.send_notice(f"Configured ircname: {str(self.ircname)}")
+        if args.name is None:
+            if self.ircname:
+                self.send_notice(f"Configured realname: {self.ircname}")
+            else:
+                self.send_notice("No configured realname.")
             return
 
-        self.ircname = args.ircname
+        self.ircname = args.name
         await self.save()
-        self.send_notice(f"Ircname set to {self.ircname}")
+        self.send_notice(f"Realname set to {self.ircname}")
 
     async def cmd_password(self, args) -> None:
         if args.remove:

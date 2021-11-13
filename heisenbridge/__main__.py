@@ -95,7 +95,7 @@ class BridgeAppService(AppService):
         ret = re.sub(
             r"[^0-9a-z\-\.=\_/]",
             lambda m: "=" + m.group(0).encode("utf-8").hex(),
-            f"{self.puppet_prefix}{network}_{nick}".lower(),
+            f"{self.puppet_prefix}{network}{self.puppet_separator}{nick}".lower(),
         )
 
         if at:
@@ -352,12 +352,15 @@ class BridgeAppService(AppService):
             print("User namespace must be exclusive.")
             sys.exit(1)
 
-        m = re.match(r"^@([^.]+)\.\*$", ns_users[0]["regex"])
+        m = re.match(r"^@(.+)([\_/])\.\*$", ns_users[0]["regex"])
         if not m:
-            print("User namespace regex must be a prefix like '@irc_.*' and not contain anything else.")
+            print(
+                "User namespace regex must be an exact prefix like '@irc_.*' that includes the separator character (_ or /)."
+            )
             sys.exit(1)
 
-        self.puppet_prefix = m.group(1)
+        self.puppet_separator = m.group(2)
+        self.puppet_prefix = m.group(1) + self.puppet_separator
 
         print(f"Heisenbridge v{__version__}", flush=True)
 

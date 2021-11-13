@@ -171,6 +171,12 @@ class Matrix:
     async def get_room_joined_members(self, room_id):
         return await self.call("GET", "/_matrix/client/r0/rooms/" + room_id + "/joined_members")
 
+    async def get_room_members(self, room_id, not_membership="leave"):
+        q = ""
+        if not_membership:
+            q = f"?not_membership={not_membership}"
+        return await self.call("GET", "/_matrix/client/r0/rooms/" + room_id + "/members" + q)
+
     async def get_room_event(self, room_id, event_id):
         return await self.call("GET", "/_matrix/client/r0/rooms/" + room_id + "/event/" + event_id)
 

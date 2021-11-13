@@ -1445,12 +1445,10 @@ class NetworkRoom(Room):
             self.send_notice_html(f"<b>{html.escape(event.source.nick)}</b> left <b>{html.escape(event.target)}</b>")
 
     def on_quit(self, conn, event) -> None:
-        irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
-
         # leave channels
         for room in self.rooms.values():
             if type(room) is ChannelRoom or type(room) is PlumbedRoom:
-                room._remove_puppet(irc_user_id, f"Quit: {event.arguments[0]}")
+                room.on_quit(conn, event)
 
     def on_nick(self, conn, event) -> None:
         # the IRC library changes real_nickname before running handlers

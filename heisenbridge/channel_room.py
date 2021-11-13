@@ -23,6 +23,7 @@ class ChannelRoom(PrivateRoom):
     autocmd: str
     names_buffer: List[str]
     bans_buffer: List[str]
+    on_channel: List[str]
 
     def init(self) -> None:
         super().init()
@@ -139,6 +140,7 @@ class ChannelRoom(PrivateRoom):
 
         self.names_buffer = []
         self.bans_buffer = []
+        self.on_channel = []
 
     def from_config(self, config: dict) -> None:
         super().from_config(config)
@@ -311,6 +313,7 @@ class ChannelRoom(PrivateRoom):
         self.names_buffer = []
         modes: Dict[str, List[str]] = {}
         others = []
+        on_channel = []
 
         # build to_remove list from our own puppets
         for member in self.members:
@@ -321,6 +324,7 @@ class ChannelRoom(PrivateRoom):
 
         for nick in names:
             nick, mode = self.serv.strip_nick(nick)
+            on_channel.append(nick.lower())
 
             if mode:
                 if mode not in modes:
@@ -403,7 +407,25 @@ class ChannelRoom(PrivateRoom):
         for irc_user_id in to_remove:
             self._remove_puppet(irc_user_id)
 
+        # trust the names reply is always up-to-date
+        self.on_channel = on_channel
+
+    def is_on_channel(self, nick):
+        return nick.lower() in self.on_channel
+
+    def channel_join(self, nick):
+        nick = nick.lower()
+        if nick not in self.on_channel:
+            self.on_channel.append(nick)
+
+    def channel_leave(self, nick):
+        nick = nick.lower()
+        if nick in self.on_channel:
+            self.on_channel.remove(nick)
+
     def on_join(self, conn, event) -> None:
+        self.channel_join(event.source.nick)
+
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
             self.send_notice(f"Joined {event.target} as {event.source.nick} ({event.source.userhost})")
@@ -435,6 +457,8 @@ class ChannelRoom(PrivateRoom):
             self.join(irc_user_id, event.source.nick, lazy=True)
 
     def on_part(self, conn, event) -> None:
+        self.channel_leave(event.source.nick)
+
         # we don't need to sync ourself
         if conn.real_nickname == event.source.nick:
             # immediately dequeue all future events
@@ -448,6 +472,11 @@ class ChannelRoom(PrivateRoom):
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
         self._remove_puppet(irc_user_id, event.arguments[0] if len(event.arguments) else None)
+
+    def on_quit(self, conn, event) -> None:
+        self.channel_leave(event.source.nick)
+        irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
+        self._remove_puppet(irc_user_id, f"Quit: {event.arguments[0]}")
 
     def update_key(self, modes):
         for sign, key, value in parse_channel_modes(" ".join(modes)):
@@ -497,6 +526,8 @@ class ChannelRoom(PrivateRoom):
         self.set_topic(plain)
 
     def on_kick(self, conn, event) -> None:
+        self.channel_leave(event.arguments[0])
+
         reason = (": " + event.arguments[1]) if len(event.arguments) > 1 and len(event.arguments[1]) > 0 else ""
 
         if event.arguments[0] == conn.real_nickname:

@@ -1,5 +1,8 @@
+import asyncio
 import logging
 from typing import Optional
+
+from irc.modes import parse_channel_modes
 
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandParser
@@ -9,6 +12,18 @@ from heisenbridge.room import unpack_member_states
 
 class NetworkRoom:
     pass
+
+
+def connected(f):
+    def wrapper(*args, **kwargs):
+        self = args[0]
+
+        if not self.network or not self.network.conn or not self.network.conn.connected:
+            return asyncio.sleep(0)
+
+        return f(*args, **kwargs)
+
+    return wrapper
 
 
 class PlumbedRoom(ChannelRoom):
@@ -149,10 +164,8 @@ class PlumbedRoom(ChannelRoom):
     def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:
         self.send_notice(f"New topic is: '{topic}'")
 
+    @connected
     async def on_mx_message(self, event) -> None:
-        if self.network is None or self.network.conn is None or not self.network.conn.connected:
-            return
-
         sender = event["sender"]
         (name, server) = sender.split(":")
 
@@ -206,6 +219,35 @@ class PlumbedRoom(ChannelRoom):
 
         await self.serv.api.post_room_receipt(event["room_id"], event["event_id"])
 
+    @connected
+    async def on_mx_ban(self, user_id) -> None:
+        nick = self.serv.nick_from_irc_user_id(self.network.name, user_id)
+        if nick is None:
+            return
+
+        # best effort kick and ban
+        self.network.conn.mode(self.name, f"+b {nick}!*@*")
+        self.network.conn.kick(self.name, nick, "You have been banned on Matrix")
+
+    @connected
+    async def on_mx_unban(self, user_id) -> None:
+        nick = self.serv.nick_from_irc_user_id(self.network.name, user_id)
+        if nick is None:
+            return
+
+        # best effort unban
+        self.network.conn.mode(self.name, f"-b {nick}!*@*")
+
+    @connected
+    async def on_mx_leave(self, user_id) -> None:
+        nick = self.serv.nick_from_irc_user_id(self.network.name, user_id)
+        if nick is None:
+            return
+
+        # best effort kick
+        if self.is_on_channel(nick):
+            self.network.conn.kick(self.name, nick, "You have been kicked on Matrix")
+
     def pills(self):
         ret = super().pills()
 
@@ -257,3 +299,28 @@ class PlumbedRoom(ChannelRoom):
             await self.save()
 
         self.send_notice(f"Notice relay is {'enabled' if self.allow_notice else 'disabled'}")
+
+    def on_mode(self, conn, event) -> None:
+        super().on_mode(conn, event)
+
+        # when we get ops (or half-ops) get current ban list to see if we need to ban someone that has been banned on matrix
+        modes = list(event.arguments)
+        for sign, key, value in parse_channel_modes(" ".join(modes)):
+            if sign == "+" and key in ["o", "h"] and value == self.network.conn.real_nickname:
+                self.network.conn.mode(self.name, "+b")
+
+    def on_endofbanlist(self, conn, event) -> None:
+        masks = [ban[0].lower() for ban in self.bans_buffer]
+        super().on_endofbanlist(conn, event)
+
+        # add any nick bans that are missing from IRC
+        for user_id in self.bans:
+            nick = self.serv.nick_from_irc_user_id(self.network.name, user_id)
+            if nick is None:
+                continue
+
+            mask = f"{nick}!*@*"
+            if mask not in masks:
+                self.network.conn.mode(self.name, f"+b {mask}")
+            if self.is_on_channel(nick):
+                self.network.conn.kick(self.name, nick)

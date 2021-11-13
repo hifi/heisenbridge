@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Optional
 
 from irc.modes import parse_channel_modes
@@ -7,6 +8,7 @@ from irc.modes import parse_channel_modes
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.matrix import MatrixError
+from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.room import unpack_member_states
 
 
@@ -35,6 +37,7 @@ class PlumbedRoom(ChannelRoom):
     use_zwsp = False
     allow_notice = False
     force_forward = True
+    topic_sync = None
 
     def init(self) -> None:
         super().init()
@@ -84,6 +87,13 @@ class PlumbedRoom(ChannelRoom):
         cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable notice relay")
         cmd.set_defaults(enabled=None)
         self.commands.register(cmd, self.cmd_noticerelay)
+
+        cmd = CommandParser(prog="TOPIC", description="show or set channel topic and configure sync mode")
+        cmd.add_argument("--sync", choices=["off", "irc", "matrix", "any"], help="Topic sync targets, defaults to off")
+        cmd.add_argument("text", nargs="*", help="topic text if setting")
+        self.commands.register(cmd, self.cmd_topic)
+
+        self.mx_register("m.room.topic", self._on_mx_room_topic)
 
     def is_valid(self) -> bool:
         # we are valid as long as the appservice is in the room
@@ -149,6 +159,9 @@ class PlumbedRoom(ChannelRoom):
         if "allow_notice" in config:
             self.allow_notice = config["allow_notice"]
 
+        if "topic_sync" in config:
+            self.topic_sync = config["topic_sync"]
+
     def to_config(self) -> dict:
         return {
             **(super().to_config()),
@@ -158,11 +171,24 @@ class PlumbedRoom(ChannelRoom):
             "use_disambiguation": self.use_disambiguation,
             "use_zwsp": self.use_zwsp,
             "allow_notice": self.allow_notice,
+            "topic_sync": self.topic_sync,
         }
 
-    # don't try to set room topic when we're plumbed, just show it
+    # topic updates from channel state replies are ignored because formatting changes
     def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:
-        self.send_notice(f"New topic is: '{topic}'")
+        pass
+
+    def on_topic(self, conn, event) -> None:
+        self.send_notice("{} changed the topic".format(event.source.nick))
+        if conn.real_nickname != event.source.nick and self.topic_sync in ["matrix", "any"]:
+            (plain, formatted) = parse_irc_formatting(event.arguments[0])
+            super().set_topic(plain)
+
+    @connected
+    async def _on_mx_room_topic(self, event) -> None:
+        if event["sender"] != self.serv.user_id and self.topic_sync in ["irc", "any"]:
+            topic = re.sub(r"[\r\n]", " ", event["content"]["topic"])
+            self.network.conn.topic(self.name, topic)
 
     @connected
     async def on_mx_message(self, event) -> None:
@@ -299,6 +325,15 @@ class PlumbedRoom(ChannelRoom):
             await self.save()
 
         self.send_notice(f"Notice relay is {'enabled' if self.allow_notice else 'disabled'}")
+
+    async def cmd_topic(self, args) -> None:
+        if args.sync is None:
+            self.network.conn.topic(self.name, " ".join(args.text))
+            return
+
+        self.topic_sync = args.sync if args.sync != "off" else None
+        self.send_notice(f"Topic sync is {self.topic_sync if self.topic_sync else 'off'}")
+        await self.save()
 
     def on_mode(self, conn, event) -> None:
         super().on_mode(conn, event)

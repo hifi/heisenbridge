@@ -92,9 +92,11 @@ class ChannelRoom(PrivateRoom):
         )
         self.commands.register(cmd, self.cmd_names)
 
-        cmd = CommandParser(prog="TOPIC", description="show or set channel topic")
-        cmd.add_argument("text", nargs="*", help="topic text if setting")
-        self.commands.register(cmd, self.cmd_topic)
+        # plumbs have a slightly adjusted version
+        if type(self) == ChannelRoom:
+            cmd = CommandParser(prog="TOPIC", description="show or set channel topic")
+            cmd.add_argument("text", nargs="*", help="topic text if setting")
+            self.commands.register(cmd, self.cmd_topic)
 
         cmd = CommandParser(prog="BANS", description="show channel ban list")
         self.commands.register(cmd, self.cmd_bans)

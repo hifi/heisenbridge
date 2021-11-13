@@ -260,6 +260,7 @@ class PrivateRoom(Room):
             network.user_id,
             network.serv,
             [network.user_id, irc_user_id, network.serv.user_id],
+            [],
         )
         room.name = name.lower()
         room.network = network

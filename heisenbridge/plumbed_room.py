@@ -4,6 +4,7 @@ from typing import Optional
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.matrix import MatrixError
+from heisenbridge.room import unpack_member_states
 
 
 class NetworkRoom:
@@ -83,12 +84,14 @@ class PlumbedRoom(ChannelRoom):
         try:
             resp = await network.serv.api.post_room_join_alias(id)
             join_rules = await network.serv.api.get_room_state_event(resp["room_id"], "m.room.join_rules")
-            joined_members = (await network.serv.api.get_room_joined_members(resp["room_id"]))["joined"]
+            members = await network.serv.api.get_room_members(resp["room_id"])
         except MatrixError as e:
             network.send_notice(f"Failed to join room: {str(e)}")
             return
 
-        room = PlumbedRoom(resp["room_id"], network.user_id, network.serv, [network.serv.user_id])
+        joined, banned = unpack_member_states(members)
+
+        room = PlumbedRoom(resp["room_id"], network.user_id, network.serv, joined.keys(), banned.keys())
         room.name = channel.lower()
         room.key = key
         room.network = network
@@ -99,11 +102,9 @@ class PlumbedRoom(ChannelRoom):
         # stamp global member sync setting at room creation time
         room.member_sync = network.serv.config["member_sync"]
 
-        for user_id, data in joined_members.items():
-            if user_id not in room.members:
-                room.members.append(user_id)
-            if "display_name" in data and data["display_name"] is not None:
-                room.displaynames[user_id] = str(data["display_name"])
+        for user_id, displayname in joined.items():
+            if displayname is not None:
+                room.displaynames[user_id] = displayname
 
         network.serv.register_room(room)
         network.rooms[room.name] = room

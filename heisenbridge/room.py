@@ -13,6 +13,25 @@ from heisenbridge.event_queue import EventQueue
 from heisenbridge.matrix import MatrixForbidden
 
 
+def unpack_member_states(members):
+    joined = {}
+    banned = {}
+
+    for event in members["chunk"]:
+        displayname = (
+            str(event["content"]["displayname"])
+            if ("displayname" in event["content"] and event["content"]["displayname"] is not None)
+            else None
+        )
+
+        if event["content"]["membership"] == "join":
+            joined[event["state_key"]] = displayname
+        elif event["content"]["membership"] == "ban":
+            banned[event["state_key"]] = displayname
+
+    return (joined, banned)
+
+
 class RoomInvalidError(Exception):
     pass
 
@@ -23,17 +42,19 @@ class Room(ABC):
     serv: AppService
     members: List[str]
     lazy_members: Dict[str, str]
+    bans: List[str]
     displaynames: Dict[str, str]
     need_invite: bool = True
 
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
     _queue: EventQueue
 
-    def __init__(self, id: str, user_id: str, serv: AppService, members: List[str]):
+    def __init__(self, id: str, user_id: str, serv: AppService, members: List[str], bans: List[str]):
         self.id = id
         self.user_id = user_id
         self.serv = serv
-        self.members = members
+        self.members = list(members)
+        self.bans = list(bans)
         self.lazy_members = {}
         self.displaynames = {}
         self.last_messages = defaultdict(str)
@@ -87,6 +108,15 @@ class Room(ABC):
     def in_room(self, user_id):
         return user_id in self.members
 
+    async def on_mx_ban(self, user_id) -> None:
+        pass
+
+    async def on_mx_unban(self, user_id) -> None:
+        pass
+
+    async def on_mx_leave(self, user_id) -> None:
+        pass
+
     async def _on_mx_unhandled_event(self, event: dict) -> None:
         pass
 
@@ -96,7 +126,7 @@ class Room(ABC):
         await self.save()
 
     async def _on_mx_room_member(self, event: dict) -> None:
-        if event["content"]["membership"] == "leave" and event["state_key"] in self.members:
+        if event["content"]["membership"] in ["leave", "ban"] and event["state_key"] in self.members:
             self.members.remove(event["state_key"])
             if event["state_key"] in self.displaynames:
                 del self.displaynames[event["state_key"]]
@@ -107,6 +137,19 @@ class Room(ABC):
                 raise RoomInvalidError(
                     f"Room {self.id} ended up invalid after membership change, returning false from event handler."
                 )
+
+        if event["content"]["membership"] == "leave":
+            if event["state_key"] in self.bans:
+                self.bans.remove(event["state_key"])
+                await self.on_mx_unban(event["state_key"])
+            else:
+                await self.on_mx_leave(event["state_key"])
+
+        if event["content"]["membership"] == "ban":
+            if event["state_key"] not in self.bans:
+                self.bans.append(event["state_key"])
+
+            await self.on_mx_ban(event["state_key"])
 
         if event["content"]["membership"] == "join":
             if event["state_key"] not in self.members:

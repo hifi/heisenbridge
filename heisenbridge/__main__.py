@@ -33,6 +33,7 @@ from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
+from heisenbridge.room import unpack_member_states
 
 
 class BridgeAppService(AppService):
@@ -448,8 +449,6 @@ class BridgeAppService(AppService):
 
         # import all rooms
         for room_id in resp["joined_rooms"]:
-            members = None
-
             try:
                 config = await self.api.get_room_account_data(self.user_id, room_id, "irc")
 
@@ -460,19 +459,19 @@ class BridgeAppService(AppService):
                 if not cls:
                     raise Exception("Unknown room type")
 
-                joined_members = (await self.api.get_room_joined_members(room_id))["joined"]
+                members = await self.api.get_room_members(room_id)
+                joined, banned = unpack_member_states(members)
 
-                room = cls(id=room_id, user_id=config["user_id"], serv=self, members=list(joined_members.keys()))
+                room = cls(id=room_id, user_id=config["user_id"], serv=self, members=joined.keys(), bans=banned.keys())
                 room.from_config(config)
 
                 # add to room displayname
-                for user_id, data in joined_members.items():
-                    if "display_name" in data and data["display_name"] is not None:
-                        room.displaynames[user_id] = str(data["display_name"])
-
+                for user_id, displayname in joined.items():
+                    if displayname is not None:
+                        room.displaynames[user_id] = displayname
                     # add to global puppet cache if it's a puppet
                     if user_id.startswith("@" + self.puppet_prefix) and self.is_local(user_id):
-                        self._users[user_id] = str(data["display_name"])
+                        self._users[user_id] = displayname
 
                 # only add valid rooms to event handler
                 if room.is_valid():

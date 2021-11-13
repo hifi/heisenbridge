@@ -35,6 +35,7 @@ class PlumbedRoom(ChannelRoom):
     use_zwsp = False
     allow_notice = False
     force_forward = True
+    topic_sync = None
 
     def init(self) -> None:
         super().init()
@@ -84,6 +85,11 @@ class PlumbedRoom(ChannelRoom):
         cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable notice relay")
         cmd.set_defaults(enabled=None)
         self.commands.register(cmd, self.cmd_noticerelay)
+
+        cmd = CommandParser(prog="TOPIC", description="show or set channel topic and configure sync mode")
+        cmd.add_argument('--sync',  choices=["off", "irc", "matrix", "any"], help="Topic sync source, defaults to off")
+        cmd.add_argument("text", nargs="*", help="topic text if setting")
+        self.commands.register(cmd, self.cmd_topic)
 
     def is_valid(self) -> bool:
         # we are valid as long as the appservice is in the room
@@ -149,6 +155,9 @@ class PlumbedRoom(ChannelRoom):
         if "allow_notice" in config:
             self.allow_notice = config["allow_notice"]
 
+        if "topic_sync" in config:
+            self.topic_sync = config["topic_sync"]
+
     def to_config(self) -> dict:
         return {
             **(super().to_config()),
@@ -158,11 +167,14 @@ class PlumbedRoom(ChannelRoom):
             "use_disambiguation": self.use_disambiguation,
             "use_zwsp": self.use_zwsp,
             "allow_notice": self.allow_notice,
+            "topic_sync": self.topic_sync,
         }
 
-    # don't try to set room topic when we're plumbed, just show it
     def set_topic(self, topic: str, user_id: Optional[str] = None) -> None:
-        self.send_notice(f"New topic is: '{topic}'")
+        if self.topic_sync in ["irc", "any"]:
+            super().set_topic(topic, user_id)
+        else:
+            self.send_notice(f"New topic is: '{topic}'")
 
     @connected
     async def on_mx_message(self, event) -> None:

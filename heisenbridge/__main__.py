@@ -90,6 +90,26 @@ class BridgeAppService(AppService):
         else:
             raise TypeError(f"Input nick is not valid: '{nick}'")
 
+    def nick_from_irc_user_id(self, network, user_id):
+        (name, server) = user_id.split(":")
+
+        if server != self.server_name:
+            return None
+
+        prefix = "@" + re.sub(
+            r"[^0-9a-z\-\.=\_/]",
+            lambda m: "=" + m.group(0).encode("utf-8").hex(),
+            f"{self.puppet_prefix}{network}_".lower(),
+        )
+
+        if not name.startswith(prefix):
+            return None
+
+        nick = name[len(prefix) :]
+        nick = re.sub(r"=([0-9a-z]{2})", lambda m: bytes.fromhex(m.group(1)).decode("utf-8"), nick)
+
+        return nick
+
     def irc_user_id(self, network, nick, at=True, server=True):
         nick, mode = self.strip_nick(nick)
 

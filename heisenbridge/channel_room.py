@@ -549,7 +549,6 @@ class ChannelRoom(PrivateRoom):
     def on_banlist(self, conn, event) -> None:
         parts = list(event.arguments)
         parts.pop(0)
-        logging.info(parts)
         self.bans_buffer.append(parts)
 
     def on_endofbanlist(self, conn, event) -> None:

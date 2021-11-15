@@ -223,7 +223,9 @@ class BridgeAppService(AppService):
 
             # accept invite sequence
             try:
-                room = ControlRoom(id=event["room_id"], user_id=event["sender"], serv=self, members=[event["sender"]])
+                room = ControlRoom(
+                    id=event["room_id"], user_id=event["sender"], serv=self, members=[event["sender"]], bans=[]
+                )
                 await room.save()
                 self.register_room(room)
 
@@ -472,6 +474,8 @@ class BridgeAppService(AppService):
 
         # import all rooms
         for room_id in resp["joined_rooms"]:
+            joined = {}
+
             try:
                 config = await self.api.get_room_account_data(self.user_id, room_id, "irc")
 
@@ -506,7 +510,7 @@ class BridgeAppService(AppService):
                 logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")
 
                 self.unregister_room(room_id)
-                await self.leave_room(room_id, members)
+                await self.leave_room(room_id, joined.keys())
 
         runner = aiohttp.web.AppRunner(app)
         await runner.setup()

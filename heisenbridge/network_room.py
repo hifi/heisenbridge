@@ -435,7 +435,7 @@ class NetworkRoom(Room):
     @staticmethod
     async def create(serv, network, user_id, name):
         room_id = await serv.create_room(name, "Network room for {}".format(network), [user_id])
-        room = NetworkRoom(room_id, user_id, serv, [serv.user_id, user_id])
+        room = NetworkRoom(room_id, user_id, serv, [serv.user_id, user_id], bans=[])
         room.from_config({"name": network})
         await room.save()
         serv.register_room(room)

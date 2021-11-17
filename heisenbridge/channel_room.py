@@ -477,7 +477,7 @@ class ChannelRoom(PrivateRoom):
 
     def on_quit(self, conn, event) -> None:
         self.channel_leave(event.source.nick)
-        irc_user_id = self.serv.irc_user_id(self.name, event.source.nick)
+        irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
         self._remove_puppet(irc_user_id, f"Quit: {event.arguments[0]}")
 
     def update_key(self, modes):

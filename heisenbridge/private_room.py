@@ -369,10 +369,6 @@ class PrivateRoom(Room):
             fallback_html=f"<b>Message from {str(event.source)}</b>: {html.escape(plain)}",
         )
 
-        # if the local user has left this room invite them back
-        if self.user_id not in self.members:
-            asyncio.ensure_future(self.serv.api.post_room_invite(self.id, self.user_id))
-
         # lazy update displayname if we detect a change
         if (
             not self.serv.is_user_cached(irc_user_id, event.source.nick)

@@ -32,7 +32,7 @@ class PlumbedRoom(ChannelRoom):
     need_invite = False
     max_lines = 5
     use_pastebin = True
-    use_displaynames = False
+    use_displaynames = True
     use_disambiguation = True
     use_zwsp = False
     allow_notice = False

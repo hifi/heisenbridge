@@ -75,6 +75,9 @@ class Matrix:
         return self.session + "-" + str(self.seq)
 
     async def call(self, method, uri, data=None, content_type="application/json", retry=True):
+        if method == "POST" and data is None:
+            data = {}
+
         async with ClientSession(
             headers={"Authorization": "Bearer " + self.token}, connector=self.conn, connector_owner=False
         ) as session:

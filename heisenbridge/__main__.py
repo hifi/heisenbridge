@@ -435,7 +435,6 @@ class BridgeAppService(AppService):
         except MForbidden:
             logging.info(f"We ({self.user_id}) are not a server admin, inviting puppets is required.")
         except Exception:
-            logging.exception()
             logging.info("Seems we are not connected to Synapse, inviting puppets is required.")
 
         # load config from HS

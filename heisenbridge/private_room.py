@@ -335,21 +335,23 @@ class PrivateRoom(Room):
         ret = {}
         ignore = list(map(lambda x: x.lower(), self.network.pills_ignore))
 
+        # FIXME: accessing directly
+        members = self.az.state_store.members[self.id]
+
         # push our own name first
         lnick = self.network.conn.real_nickname.lower()
-        if self.user_id in self.displaynames and len(lnick) >= self.network.pills_length and lnick not in ignore:
-            ret[lnick] = (self.user_id, self.displaynames[self.user_id])
+        if self.user_id in members and members[self.user_id].displayname is not None and len(lnick) >= self.network.pills_length and lnick not in ignore:
+            ret[lnick] = (self.user_id, members[self.user_id].displayname)
 
         # assuming displayname of a puppet matches nick
-        for member in self.members:
-            if not member.startswith("@" + self.serv.puppet_prefix) or not member.endswith(":" + self.serv.server_name):
+        for user_id, member in members.items():
+            if not user_id.startswith("@" + self.serv.puppet_prefix) or not user_id.endswith(":" + self.serv.server_name):
                 continue
 
-            if member in self.displaynames:
-                nick = self.displaynames[member]
-                lnick = nick.lower()
-                if len(nick) >= self.network.pills_length and lnick not in ignore:
-                    ret[lnick] = (member, nick)
+            if member.displayname is not None:
+                nick = member.displayname.lower()
+                if len(member.displayname) >= self.network.pills_length and nick not in ignore:
+                    ret[nick] = (user_id, member.displayname)
 
         return ret
 
@@ -437,19 +439,20 @@ class PrivateRoom(Room):
 
     def _process_event_content(self, event, prefix, reply_to=None):
         content = event.content
+        members = self.az.state_store.members[self.id]
 
         if content.formatted_body:
             lines = str(
-                IRCMatrixParser.parse(content.formatted_body, IRCRecursionContext(displaynames=self.displaynames))
+                IRCMatrixParser.parse(content.formatted_body, IRCRecursionContext(displaynames=members))
             ).split("\n")
         elif content.body:
             body = content.body
 
-            for user_id, displayname in self.displaynames.items():
-                body = body.replace(user_id, displayname)
+            for user_id, member in members.items():
+                body = body.replace(user_id, member.displayname)
 
                 # FluffyChat prefixes mentions in fallback with @
-                body = body.replace("@" + displayname, displayname)
+                body = body.replace("@" + member.displayname, member.displayname)
 
             lines = body.split("\n")
         else:
@@ -463,8 +466,8 @@ class PrivateRoom(Room):
         if reply_to and reply_to.sender != event.sender:
             # resolve displayname
             sender = reply_to.sender
-            if sender in self.displaynames:
-                sender = self.displaynames[sender]
+            if sender in members:
+                sender = members[sender].displayname
 
             # prefix first line with nickname of the reply_to source
             first_line = sender + ": " + lines.pop(0)

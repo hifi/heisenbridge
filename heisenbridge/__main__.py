@@ -19,8 +19,6 @@ from mautrix.api import Method
 from mautrix.api import Path
 from mautrix.api import SynapseAdminPath
 from mautrix.appservice import AppService as MauService
-from mautrix.appservice.state_store import ASStateStore
-from mautrix.client.state_store.memory import MemoryStateStore
 from mautrix.errors import MatrixRequestError
 from mautrix.errors import MForbidden
 from mautrix.types import Membership
@@ -509,8 +507,6 @@ class BridgeAppService(AppService):
 
                 # add to room displayname
                 for user_id, member in joined.items():
-                    if member.displayname is not None:
-                        room.displaynames[user_id] = member.displayname
                     # add to global puppet cache if it's a puppet
                     if user_id.startswith("@" + self.puppet_prefix) and self.is_local(user_id):
                         self._users[user_id] = member.displayname

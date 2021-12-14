@@ -27,7 +27,6 @@ class Room(ABC):
     members: List[str]
     lazy_members: Dict[str, str]
     bans: List[str]
-    displaynames: Dict[str, str]
 
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
     _queue: EventQueue
@@ -39,7 +38,6 @@ class Room(ABC):
         self.members = list(members)
         self.bans = list(bans) if bans else []
         self.lazy_members = {}
-        self.displaynames = {}
         self.last_messages = defaultdict(str)
 
         self._mx_handlers = {}
@@ -109,8 +107,6 @@ class Room(ABC):
     async def _on_mx_room_member(self, event: dict) -> None:
         if event.content.membership in [Membership.LEAVE, Membership.BAN] and event.state_key in self.members:
             self.members.remove(event.state_key)
-            if event.state_key in self.displaynames:
-                del self.displaynames[event.state_key]
             if event.state_key in self.last_messages:
                 del self.last_messages[event.state_key]
 
@@ -136,17 +132,10 @@ class Room(ABC):
             if event.state_key not in self.members:
                 self.members.append(event.state_key)
 
-            if event.content.displayname is not None:
-                self.displaynames[event.state_key] = str(event.content.displayname)
-            elif event.state_key in self.displaynames:
-                del self.displaynames[event.state_key]
-
     async def _join(self, user_id, nick=None):
         await self.az.intent.user(user_id).ensure_joined(self.id, ignore_cache=True)
 
         self.members.append(user_id)
-        if nick is not None:
-            self.displaynames[user_id] = nick
 
         if user_id in self.lazy_members:
             del self.lazy_members[user_id]
@@ -172,8 +161,6 @@ class Room(ABC):
                         else:
                             await self.az.intent.user(event["user_id"]).leave_room(self.id)
                         self.members.remove(event["user_id"])
-                        if event["user_id"] in self.displaynames:
-                            del self.displaynames[event["user_id"]]
                 elif event["type"] == "_rename":
                     old_irc_user_id = self.serv.irc_user_id(self.network.name, event["old_nick"])
                     new_irc_user_id = self.serv.irc_user_id(self.network.name, event["new_nick"])
@@ -198,8 +185,6 @@ class Room(ABC):
                             self.id, old_irc_user_id, f"Changing nick to {event['new_nick']}"
                         )
                         self.members.remove(old_irc_user_id)
-                        if old_irc_user_id in self.displaynames:
-                            del self.displaynames[old_irc_user_id]
 
                         # new puppet in
                         if new_irc_user_id not in self.members:
@@ -209,8 +194,6 @@ class Room(ABC):
                     if event["user_id"] in self.members:
                         await self.az.intent.kick_user(self.id, event["user_id"], event["reason"])
                         self.members.remove(event["user_id"])
-                        if event["user_id"] in self.displaynames:
-                            del self.displaynames[event["user_id"]]
                 elif event["type"] == "_ensure_irc_user_id":
                     await self.serv.ensure_irc_user_id(event["network"], event["nick"])
                 elif "state_key" in event:

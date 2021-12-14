@@ -115,7 +115,7 @@ class IRCMatrixParser(MatrixParser):
     def user_pill_to_fstring(cls, msg: T, user_id: UserID, ctx: RecursionContext) -> Optional[T]:
         displayname = None
         if user_id in ctx.displaynames:
-            displayname = ctx.displaynames[user_id]
+            displayname = ctx.displaynames[user_id].displayname
         return msg.format(cls.e.USER_MENTION, user_id=user_id, displayname=displayname)
 
     @classmethod

@@ -209,13 +209,15 @@ class PlumbedRoom(ChannelRoom):
         if self.use_zwsp:
             sender = f"{name[:2]}\u200B{name[2:]}:{server[:1]}\u200B{server[1:]}"
 
-        if self.use_displaynames and event.sender in self.displaynames:
-            sender_displayname = self.displaynames[event.sender]
+        members = await self.az.state_store.get_member_profiles(self.id, (Membership.JOIN,))
+
+        if self.use_displaynames and str(event.sender) in members:
+            sender_displayname = members[sender].displayname
 
             # ensure displayname is unique
             if self.use_disambiguation:
-                for user_id, displayname in self.displaynames.items():
-                    if user_id != event.sender and displayname == sender_displayname:
+                for user_id, member in members.items():
+                    if user_id != str(event.sender) and member.displayname == sender_displayname:
                         sender_displayname += f" ({sender})"
                         break
 

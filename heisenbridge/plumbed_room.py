@@ -6,6 +6,8 @@ from typing import Optional
 from irc.modes import parse_channel_modes
 from mautrix.errors import MatrixRequestError
 from mautrix.types import Membership
+from mautrix.types import MessageEvent
+from mautrix.types import TextMessageEventContent
 
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.command_parse import CommandParser
@@ -231,7 +233,14 @@ class PlumbedRoom(ChannelRoom):
         if str(event.content.msgtype) in ["m.image", "m.file", "m.audio", "m.video"]:
 
             # process media event like it was a text message
-            media_event = {"content": {"body": self.serv.mxc_to_url(event.content.url, event.content.body)}}
+            media_event = MessageEvent(
+                sender=event.sender,
+                type=None,
+                room_id=None,
+                event_id=None,
+                timestamp=None,
+                content=TextMessageEventContent(body=self.serv.mxc_to_url(event.content.url, event.content.body)),
+            )
             messages = self._process_event_content(media_event, prefix=f"<{sender}> ")
             self.network.conn.privmsg(self.name, messages[0])
 

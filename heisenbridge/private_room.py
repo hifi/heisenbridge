@@ -497,11 +497,11 @@ class PrivateRoom(Room):
             rel_event = event
 
             # traverse back all edits
-            while rel_event.get_edit():
+            while rel_event.content.get_edit():
                 rel_event = await self.az.intent.get_event(self.id, rel_event.content.get_edit())
 
             # see if the original is a reply
-            if rel_event.get_reply_to():
+            if rel_event.content.get_reply_to():
                 reply_to = await self.az.intent.get_event(self.id, rel_event.content.get_reply_to())
 
         if event.content.get_edit():

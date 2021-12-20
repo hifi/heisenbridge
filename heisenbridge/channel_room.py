@@ -383,15 +383,18 @@ class ChannelRoom(PrivateRoom):
         # show modes from top to bottom
         for mode, name in modenames.items():
             if mode in modes:
-                self.send_notice(f"Users with {name} ({mode}): {', '.join(modes[mode])}")
+                nicks = sorted(modes[mode], key=str.casefold)
+                self.send_notice(f"Users with {name} ({mode}): {', '.join(nicks)}")
                 del modes[mode]
 
         # show unknown modes
         for mode, nicks in modes.items():
+            nicks = sorted(nicks, key=str.casefold)
             self.send_notice(f"Users with '{mode}': {', '.join(nicks)}")
 
         # show everyone else
         if len(others) > 0:
+            others = sorted(others, key=str.casefold)
             self.send_notice(f"Users: {', '.join(others)}")
 
         # always reset lazy list because it can be toggled on-the-fly

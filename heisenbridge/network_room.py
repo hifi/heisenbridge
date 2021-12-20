@@ -1272,7 +1272,7 @@ class NetworkRoom(Room):
 
     def on_server_message(self, conn, event) -> None:
         # test if the first argument is an ongoing whois target
-        if event.arguments[0].lower() in self.whois_data:
+        if len(event.arguments) > 0 and event.arguments[0].lower() in self.whois_data:
             data = self.whois_data[event.arguments[0].lower()]
             if "extra" not in data:
                 data["extra"] = []

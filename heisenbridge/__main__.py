@@ -350,7 +350,7 @@ class BridgeAppService(AppService):
         asyncio.ensure_future(put_presence())
         asyncio.get_event_loop().call_later(60, self._keepalive)
 
-    async def run(self, listen_address, listen_port, homeserver_url, owner):
+    async def run(self, listen_address, listen_port, homeserver_url, owner, safe_mode):
 
         if "sender_localpart" not in self.registration:
             print("Missing sender_localpart from registration file.")
@@ -383,6 +383,8 @@ class BridgeAppService(AppService):
         self.puppet_prefix = m.group(1) + self.puppet_separator
 
         print(f"Heisenbridge v{__version__}", flush=True)
+        if safe_mode:
+            print("Safe mode is enabled.", flush=True)
 
         # mautrix migration requires us to call whoami manually at this point
         self.api = HTTPAPI(base_url=homeserver_url, token=self.registration["as_token"])
@@ -471,8 +473,12 @@ class BridgeAppService(AppService):
             self.config["owner"] = owner
             await self.save()
 
+        print("Fetching joined rooms...", flush=True)
+
         joined_rooms = await self.az.intent.get_joined_rooms()
         logging.debug(f"Appservice rooms: {joined_rooms}")
+
+        print(f"Bridge is in {len(joined_rooms)} rooms, initializing them...", flush=True)
 
         Room.init_class(self.az)
 
@@ -523,10 +529,15 @@ class BridgeAppService(AppService):
             except Exception:
                 logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")
 
+                # regardless of same mode, we ignore this room
                 self.unregister_room(room_id)
-                # await self.leave_room(room_id, joined.keys())
 
-        logging.info("Connecting network rooms...")
+                if safe_mode:
+                    print("Safe mode enabled, not leaving room.", flush=True)
+                else:
+                    await self.leave_room(room_id, joined.keys())
+
+        print("All valid rooms initialized, connecting network rooms...", flush=True)
 
         # connect network rooms one by one, this may take a while
         wait = 1
@@ -539,7 +550,7 @@ class BridgeAppService(AppService):
                 asyncio.get_event_loop().call_later(wait, sync_connect, room)
                 wait += 1
 
-        logging.info("Init done, bridge is now running!")
+        print(f"Init done with {wait-1} networks connecting, bridge is now running!", flush=True)
 
         await asyncio.Event().wait()
 
@@ -588,6 +599,11 @@ def main():
         action="store_true",
         help="reset ALL bridge configuration from homeserver and exit",
         default=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--safe-mode",
+        action="store_true",
+        help="prevent appservice from leaving invalid rooms on startup (for debugging)",
     )
     parser.add_argument(
         "-o",
@@ -670,7 +686,9 @@ def main():
 
         os.umask(0o077)
 
-        loop.run_until_complete(service.run(args.listen_address, args.listen_port, args.homeserver, args.owner))
+        loop.run_until_complete(
+            service.run(args.listen_address, args.listen_port, args.homeserver, args.owner, args.safe_mode)
+        )
         loop.close()
 
 

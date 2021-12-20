@@ -108,7 +108,7 @@ usage: python -m heisenbridge [-h] [-v] (-c CONFIG | --version)
                               [-l LISTEN_ADDRESS] [-p LISTEN_PORT] [-u UID]
                               [-g GID] [-i] [--identd-port IDENTD_PORT]
                               [--generate] [--generate-compat] [--reset]
-                              [-o OWNER]
+                              [--safe-mode] [-o OWNER]
                               [homeserver]
 
 a bouncer-style Matrix IRC bridge
@@ -140,6 +140,8 @@ optional arguments:
                         (Dendrite and Conduit)
   --reset               reset ALL bridge configuration from homeserver and
                         exit
+  --safe-mode           prevent appservice from leaving invalid rooms on
+                        startup (for debugging) (default: False)
   -o OWNER, --owner OWNER
                         set owner MXID (eg: @user:homeserver) or first talking
                         local user will claim the bridge (default: None)

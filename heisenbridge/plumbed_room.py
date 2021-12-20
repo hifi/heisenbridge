@@ -114,8 +114,8 @@ class PlumbedRoom(ChannelRoom):
             network.send_notice(f"Failed to join room: {str(e)}")
             return
 
-        network.send_notice(f"Joined room {room_id}, refreshing state...")
-        await network.az.intent.get_state(room_id)
+        network.send_notice(f"Joined room {room_id}, refreshing member state...")
+        await network.az.intent.get_room_members(room_id)
         network.send_notice(f"Got state for room {room_id}, plumbing...")
 
         joined = await network.az.state_store.get_member_profiles(room_id, (Membership.JOIN,))

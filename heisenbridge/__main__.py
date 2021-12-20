@@ -503,8 +503,8 @@ class BridgeAppService(AppService):
                 if not cls:
                     raise Exception("Unknown room type")
 
-                # refresh state store
-                await self.az.intent.get_state(room_id)
+                # refresh room members state
+                await self.az.intent.get_room_members(room_id)
 
                 joined = await self.az.state_store.get_member_profiles(room_id, (Membership.JOIN,))
                 banned = await self.az.state_store.get_members(room_id, (Membership.BAN,))

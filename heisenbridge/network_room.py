@@ -359,6 +359,13 @@ class NetworkRoom(Room):
         cmd.add_argument("key", nargs="?", help="channel key")
         self.commands.register(cmd, self.cmd_plumb)
 
+        cmd = CommandParser(
+            prog="UNPLUMB",
+            description="unplumb a room",
+        )
+        cmd.add_argument("channel", help="target channel")
+        self.commands.register(cmd, self.cmd_unplumb)
+
         cmd = CommandParser(prog="UMODE", description="set user modes")
         cmd.add_argument("flags", help="user mode flags")
         self.commands.register(cmd, self.cmd_umode)
@@ -665,8 +672,24 @@ class NetworkRoom(Room):
             self.send_notice("Plumbing is currently reserved for admins only.")
             return
 
+        if channel.lower() in self.rooms:
+            self.send_notice(f"You are already on {channel}")
+            return
+
         room = await PlumbedRoom.create(id=args.room, network=self, channel=channel, key=args.key)
         self.conn.join(room.name, room.key)
+
+    async def cmd_unplumb(self, args) -> None:
+        channel = args.channel.lower()
+
+        if channel not in self.rooms or type(self.rooms[channel]) != PlumbedRoom:
+            self.send_notice(f"{args.channel} is not plumbed")
+            return
+
+        room = self.rooms[channel]
+
+        self.send_notice(f"Leaving {room.id} to unplumb.")
+        await self.az.intent.leave_room(room.id)
 
     @connected
     async def cmd_umode(self, args) -> None:

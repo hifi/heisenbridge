@@ -131,9 +131,9 @@ class PlumbedRoom(ChannelRoom):
         # stamp global member sync setting at room creation time
         room.member_sync = network.serv.config["member_sync"]
 
-        for user_id, displayname in joined.items():
-            if displayname is not None:
-                room.displaynames[user_id] = displayname
+        for user_id, member in joined.items():
+            if member.displayname is not None:
+                room.displaynames[user_id] = member.displayname
 
         network.serv.register_room(room)
         network.rooms[room.name] = room

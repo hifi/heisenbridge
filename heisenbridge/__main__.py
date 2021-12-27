@@ -541,8 +541,19 @@ class BridgeAppService(AppService):
         print("All valid rooms initialized, connecting network rooms...", flush=True)
 
         wait = 1
-        for room in self._rooms.values():
+        for room in list(self._rooms.values()):
             await room.post_init()
+
+            # check again if we're still valid
+            if not room.is_valid():
+                logging.debug(f"Room {room.id} failed validation after post init, leaving.")
+
+                self.unregister_room(room.id)
+
+                if not safe_mode:
+                    await self.leave_room(room.id, room.members)
+
+                continue
 
             # connect network rooms one by one, this may take a while
             if type(room) == NetworkRoom and room.connected:

@@ -121,7 +121,7 @@ class SpaceRoom(Room):
             else:
                 logging.debug(f"Space room cleaned up as a duplicate for network {network.id}, probably fine.")
         except KeyError:
-            logging.debug(f"Space room cleaned up with missing network {network.id}, probably fine.")
+            logging.debug(f"Space room cleaned up with missing network {self.network_id}, probably fine.")
 
         super().cleanup()
 
@@ -162,4 +162,5 @@ class SpaceRoom(Room):
             network.space = self
             logging.debug(f"Space {self.id} attached to network {network.id}")
         except KeyError:
-            logging.warn(f"Network room {self.network_id} was not found for space {self.id}, we are dangling.")
+            logging.debug(f"Network room {self.network_id} was not found for space {self.id}, we are dangling.")
+            self.network_id = None

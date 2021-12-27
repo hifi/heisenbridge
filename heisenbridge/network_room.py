@@ -110,6 +110,7 @@ class NetworkRoom(Room):
     next_server: int
     connected_at: int
     space: SpaceRoom
+    post_init_done: bool
 
     def init(self):
         self.name = None
@@ -145,6 +146,7 @@ class NetworkRoom(Room):
         self.whois_data = defaultdict(dict)  # buffer for keeping partial whois replies
         self.pending_kickbans = defaultdict(list)
         self.space = None
+        self.post_init_done = False
 
         cmd = CommandParser(
             prog="NICK",
@@ -529,11 +531,42 @@ class NetworkRoom(Room):
         if self.name is None:
             return False
 
-        # if user leaves network room and it's not connected we can clean it up
-        if not self.in_room(self.user_id) and not self.connected:
-            return False
+        # we require user to be in network room or be connected with channels or PMs
+        if not self.in_room(self.user_id):
+
+            # if not connected (or trying to) we can clean up
+            if not self.connected:
+                return False
+
+            # only if post_init has been done and we're connected with no rooms clean up
+            if self.post_init_done and self.connected and len(self.rooms) == 0:
+                return False
 
         return True
+
+    def cleanup(self) -> None:
+        logging.debug(f"Network {self.id} cleaning up")
+
+        # prevent reconnecting ever again
+        self.connected = False
+        self.disconnect = True
+
+        if self.backoff_task:
+            self.backoff_task.cancel()
+            self.backoff_task = None
+            logging.debug("... cancelled backoff task")
+
+        if self.conn:
+            self.conn.disconnect()
+            logging.debug("... disconnected from IRC network")
+
+        if self.space:
+            self.serv.unregister_room(self.space.id)
+            self.space.cleanup()
+            asyncio.ensure_future(self.serv.leave_room(self.space.id, self.space.members))
+            logging.debug("... cleaned up space")
+
+        super().cleanup()
 
     async def show_help(self):
         self.send_notice_html(f"Welcome to the network room for <b>{html.escape(self.name)}</b>!")
@@ -1024,6 +1057,10 @@ class NetworkRoom(Room):
         self.conn.kick(channel, user_data["nick"], reason)
 
     async def connect(self) -> None:
+        if not self.is_valid():
+            logging.warning("Trying to connect an invalid network {self.id}, this is likely a dangling network.")
+            return
+
         if self.connlock.locked():
             self.send_notice("Already connecting.")
             return
@@ -1052,6 +1089,8 @@ class NetworkRoom(Room):
                     else:
                         logging.debug(f"{self.id} attaching {room.id}")
                     self.rooms[room.name] = room
+
+        self.post_init_done = True
 
     async def _connect(self) -> None:
         # force cleanup

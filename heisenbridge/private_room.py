@@ -306,13 +306,23 @@ class PrivateRoom(Room):
         return True
 
     def cleanup(self) -> None:
-        # cleanup us from network rooms
-        if self.network and self.name in self.network.rooms:
-            del self.network.rooms[self.name]
+        logging.debug(f"Cleaning up network connected room {self.id}.")
 
         # cleanup us from network space if we have it
         if self.network and self.network.space:
             asyncio.ensure_future(self.network.space.detach(self.id))
+
+        # cleanup us from network rooms
+        if self.network and self.name in self.network.rooms:
+            logging.debug(f"... and we are attached to network {self.network.id}, detaching.")
+            del self.network.rooms[self.name]
+
+            # if leaving this room invalidated the network, clean it up
+            if not self.network.is_valid():
+                logging.debug(f"... and we invalidated network {self.network.id} while cleaning up.")
+                self.network.serv.unregister_room(self.network.id)
+                self.network.cleanup()
+                asyncio.ensure_future(self.network.serv.leave_room(self.network.id, self.network.members))
 
         super().cleanup()
 

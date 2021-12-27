@@ -36,6 +36,7 @@ from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
+from heisenbridge.space_room import SpaceRoom
 
 
 class MemoryBridgeStateStore(ASStateStore, MemoryStateStore):
@@ -483,7 +484,7 @@ class BridgeAppService(AppService):
         Room.init_class(self.az)
 
         # room types and their init order, network must be before chat and group
-        room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom]
+        room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom, SpaceRoom]
 
         room_type_map = {}
         for room_type in room_types:
@@ -539,9 +540,11 @@ class BridgeAppService(AppService):
 
         print("All valid rooms initialized, connecting network rooms...", flush=True)
 
-        # connect network rooms one by one, this may take a while
         wait = 1
         for room in self._rooms.values():
+            await room.post_init()
+
+            # connect network rooms one by one, this may take a while
             if type(room) == NetworkRoom and room.connected:
 
                 def sync_connect(room):

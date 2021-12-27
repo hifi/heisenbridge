@@ -10,6 +10,7 @@ import heisenbridge.parser  # noqa: F401
 import heisenbridge.plumbed_room  # noqa: F401
 import heisenbridge.private_room  # noqa: F401
 import heisenbridge.room  # noqa: F401
+import heisenbridge.space_room  # noqa: F401
 import heisenbridge.version  # noqa: F401
 
 

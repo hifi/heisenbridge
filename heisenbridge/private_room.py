@@ -286,6 +286,10 @@ class PrivateRoom(Room):
             # start event queue now that we have an id
             self._queue.start()
 
+            # attach to network space
+            if self.network.space:
+                await self.network.space.attach(self.id)
+
     def is_valid(self) -> bool:
         if self.network_id is None and self.network_name is None:
             return False
@@ -305,6 +309,10 @@ class PrivateRoom(Room):
         # cleanup us from network rooms
         if self.network and self.name in self.network.rooms:
             del self.network.rooms[self.name]
+
+        # cleanup us from network space if we have it
+        if self.network and self.network.space:
+            asyncio.ensure_future(self.network.space.detach(self.id))
 
         super().cleanup()
 

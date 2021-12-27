@@ -34,6 +34,7 @@ from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.private_room import PrivateRoom
 from heisenbridge.private_room import unix_to_local
 from heisenbridge.room import Room
+from heisenbridge.space_room import SpaceRoom
 
 
 def connected(f):
@@ -108,6 +109,7 @@ class NetworkRoom(Room):
     backoff_task: Any
     next_server: int
     connected_at: int
+    space: SpaceRoom
 
     def init(self):
         self.name = None
@@ -142,6 +144,7 @@ class NetworkRoom(Room):
         self.keepnick_task = None  # async task
         self.whois_data = defaultdict(dict)  # buffer for keeping partial whois replies
         self.pending_kickbans = defaultdict(list)
+        self.space = None
 
         cmd = CommandParser(
             prog="NICK",
@@ -436,6 +439,9 @@ class NetworkRoom(Room):
 
         cmd = CommandParser(prog="STATUS", description="show current network status")
         self.commands.register(cmd, self.cmd_status)
+
+        cmd = CommandParser(prog="SPACE", description="create a managed Matrix space for this network")
+        self.commands.register(cmd, self.cmd_space)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -996,6 +1002,19 @@ class NetworkRoom(Room):
         if len(pms) > 0:
             self.send_notice(f"PMs: {', '.join(pms)}")
 
+    async def cmd_space(self, args) -> None:
+        if self.space is None:
+            # sync create to prevent race conditions
+            self.space = SpaceRoom.create(
+                self, [room.id for room in self.rooms.values() if type(room) is not PlumbedRoom]
+            )
+
+            # calls the api and attaches rooms
+            self.send_notice("Creating space and inviting you to it.")
+            await self.space.create_finalize()
+        else:
+            self.send_notice(f"Space already exists ({self.space.id}).")
+
     def kickban(self, channel: str, nick: str, reason: str) -> None:
         self.pending_kickbans[nick].append((channel, reason))
         self.conn.whois(f"{nick}")
@@ -1017,7 +1036,7 @@ class NetworkRoom(Room):
             self.disconnect = False
             await self._connect()
 
-    async def _connect(self) -> None:
+    async def post_init(self) -> None:
         # attach loose sub-rooms to us
         for type in [PrivateRoom, ChannelRoom, PlumbedRoom]:
             for room in self.serv.find_rooms(type, self.user_id):
@@ -1034,6 +1053,7 @@ class NetworkRoom(Room):
                         logging.debug(f"{self.id} attaching {room.id}")
                     self.rooms[room.name] = room
 
+    async def _connect(self) -> None:
         # force cleanup
         if self.conn:
             self.conn.close()

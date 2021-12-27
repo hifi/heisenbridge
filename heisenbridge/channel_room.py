@@ -196,6 +196,10 @@ class ChannelRoom(PrivateRoom):
         # start event queue now that we have an id
         self._queue.start()
 
+        # attach to network space
+        if self.network.space:
+            await self.network.space.attach(self.id)
+
     def is_valid(self) -> bool:
         if not self.in_room(self.user_id):
             return False

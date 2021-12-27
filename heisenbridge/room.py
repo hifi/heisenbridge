@@ -58,6 +58,9 @@ class Room(ABC):
     def init_class(cls, az: MauService):
         cls.az = az
 
+    async def post_init(self):
+        pass
+
     def from_config(self, config: dict) -> None:
         pass
 

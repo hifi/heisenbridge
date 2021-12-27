@@ -72,6 +72,7 @@ class SpaceRoom(Room):
                     }
                 ],
                 "power_level_content_override": {
+                    "events_default": 100,
                     "users_default": 0,
                     "invite": 100,
                     "kick": 100,

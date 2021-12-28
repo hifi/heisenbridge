@@ -102,6 +102,30 @@ class BridgeAppService(AppService):
         else:
             raise TypeError(f"Input nick is not valid: '{nick}'")
 
+    def split_irc_user_id(self, user_id):
+        (name, server) = user_id.split(":")
+
+        network = None
+        nick = None
+
+        if server != self.server_name:
+            return None, None
+
+        print(name, self.puppet_prefix)
+
+        if not name.startswith("@" + self.puppet_prefix):
+            return None, None
+
+        network_nick = name[len(self.puppet_prefix) + 1 :]
+
+        m = re.match(r"([^" + self.puppet_separator + r"]+).(.+)$", network_nick)
+
+        if m:
+            network = re.sub(r"=([0-9a-z]{2})", lambda m: bytes.fromhex(m.group(1)).decode("utf-8"), m.group(1)).lower()
+            nick = re.sub(r"=([0-9a-z]{2})", lambda m: bytes.fromhex(m.group(1)).decode("utf-8"), m.group(2)).lower()
+
+        return network, nick
+
     def nick_from_irc_user_id(self, network, user_id):
         (name, server) = user_id.split(":")
 
@@ -187,15 +211,19 @@ class BridgeAppService(AppService):
             and event.sender != self.user_id
             and event.content.membership == Membership.INVITE
         ):
+            if not self.is_user(event.sender):
+                logging.info(f"Non-whitelisted user {event.sender} tried to invite us, ignoring.")
+                return
+            else:
+                logging.info(f"Got an invite from {event.sender}")
+
             if not event.content.is_direct:
                 logging.debug("Got an invite to non-direct room, ignoring")
                 return
 
-            logging.info(f"Got an invite from {event.sender}")
-
-            # only respond to an invite
+            # only respond to invites unknown new rooms
             if event.room_id in self._rooms:
-                logging.debug("Control room already open, uhh")
+                logging.debug("Got an invite to room we're already in, ignoring")
                 return
 
             # handle invites against puppets
@@ -206,10 +234,21 @@ class BridgeAppService(AppService):
                     await self.az.intent.user(event.state_key).kick_user(
                         event.room_id,
                         event.state_key,
-                        "Inviting puppets is not supported",
+                        "Will invite YOU instead",
                     )
                 except Exception:
                     logging.exception("Failed to reject invitation.")
+
+                (network, nick) = self.split_irc_user_id(event.state_key)
+
+                if network is not None and nick is not None:
+                    for room in self.find_rooms(NetworkRoom, event.sender):
+                        if room.name.lower() == network.lower():
+                            logging.debug(
+                                "Found matching network room ({network}) for {event.sender}, emulating query command for {nick}"
+                            )
+                            await room.cmd_query(argparse.Namespace(nick=nick, message=[]))
+                            break
 
                 return
 
@@ -218,10 +257,6 @@ class BridgeAppService(AppService):
                 logging.info(f"We have an owner now, let us rejoice, {event.sender}!")
                 self.config["owner"] = event.sender
                 await self.save()
-
-            if not self.is_user(event.sender):
-                logging.info(f"Non-whitelisted user {event.sender} tried to invite us, ignoring.")
-                return
 
             logging.info(f"Whitelisted user {event.sender} invited us, going to accept.")
 

@@ -482,6 +482,7 @@ class BridgeAppService(AppService):
             "idents": {},
             "member_sync": "half",
             "media_url": None,
+            "namespace": self.puppet_prefix,
         }
         logging.debug(f"Default config: {self.config}")
         self.synapse_admin = False
@@ -522,11 +523,20 @@ class BridgeAppService(AppService):
 
         logging.debug(f"Merged configuration from HS: {self.config}")
 
+        # prevent starting bridge with changed namespace
+        if self.config["namespace"] != self.puppet_prefix:
+            logging.error(
+                f"Previously used namespace '{self.config['namespace']}' does not match current '{self.puppet_prefix}'."
+            )
+            sys.exit(1)
+
         # honor command line owner
         if owner is not None and self.config["owner"] != owner:
             logging.info(f"Overriding loaded owner with '{owner}'")
             self.config["owner"] = owner
-            await self.save()
+
+        # always ensure our merged and migrated configuration is up-to-date
+        await self.save()
 
         print("Fetching joined rooms...", flush=True)
 

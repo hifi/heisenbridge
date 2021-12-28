@@ -23,6 +23,7 @@ from mautrix.appservice.state_store import ASStateStore
 from mautrix.client.state_store.memory import MemoryStateStore
 from mautrix.errors import MatrixRequestError
 from mautrix.errors import MForbidden
+from mautrix.errors import MUserInUse
 from mautrix.types import Membership
 from mautrix.util.config import yaml
 
@@ -387,8 +388,26 @@ class BridgeAppService(AppService):
         if safe_mode:
             print("Safe mode is enabled.", flush=True)
 
-        # mautrix migration requires us to call whoami manually at this point
         self.api = HTTPAPI(base_url=homeserver_url, token=self.registration["as_token"])
+
+        # conduit requires that the appservice user is registered before whoami
+        try:
+            await self.api.request(
+                Method.POST,
+                Path.register,
+                {
+                    "type": "m.login.application_service",
+                    "username": self.registration["sender_localpart"],
+                },
+            )
+            logging.debug("Appservice user registration succeeded.")
+        except MUserInUse:
+            logging.debug("Appservice user is already registered.")
+        except Exception:
+            logging.exception("Unexpected failure when registering appservice user.")
+            return
+
+        # mautrix migration requires us to call whoami manually at this point
         whoami = await self.api.request(Method.GET, Path.account.whoami)
 
         logging.info("We are " + whoami["user_id"])

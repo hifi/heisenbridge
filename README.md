@@ -38,6 +38,7 @@ Features
 * CertFP authentication
 * CTCP support
 * SOCKS proxy configuration per server
+* bridge managed spaces to organize your channels and PMs within a network
 
 Comparison
 ----------

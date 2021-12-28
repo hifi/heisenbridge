@@ -1295,9 +1295,10 @@ class NetworkRoom(Room):
         self.send_notice("Connection aborted.")
 
     def on_disconnect(self, conn, event) -> None:
-        self.conn.disconnect()
-        self.conn.close()
-        self.conn = None
+        if self.conn:
+            self.conn.disconnect()
+            self.conn.close()
+            self.conn = None
 
         # if we were connected for a while, consider the server working
         if self.connected_at > 0 and asyncio.get_event_loop().time() - self.connected_at > 300:

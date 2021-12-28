@@ -87,6 +87,7 @@ class NetworkRoom(Room):
     username: str
     ircname: str
     password: str
+    sasl_mechanism: str
     sasl_username: str
     sasl_password: str
     autocmd: str
@@ -119,6 +120,7 @@ class NetworkRoom(Room):
         self.username = None
         self.ircname = None
         self.password = None
+        self.sasl_mechanism = None
         self.sasl_username = None
         self.sasl_password = None
         self.autocmd = None
@@ -205,6 +207,9 @@ class NetworkRoom(Room):
                 "Note: Bridge administrators can trivially see the stored password if they want to.\n"
             ),
         )
+        cmd.add_argument(
+            "--mechanism", choices=["auto", "none", "plain", "external"], help="SASL authentication mechanism"
+        )
         cmd.add_argument("--username", help="SASL username")
         cmd.add_argument("--password", help="SASL password")
         cmd.add_argument("--remove", action="store_true", help="remove stored credentials")
@@ -217,6 +222,8 @@ class NetworkRoom(Room):
                 "Using the set command requires you to paste a bundled PEM certificate (cert + key) on the next line"
                 " after the command within the same message. The certificate needs to include both the certificate and"
                 " the private key for it to be accepted.\n"
+                "\n"
+                "Some networks (OFTC) may require you to disable the SASL mechanism, see 'SASL -h' how to change it manually.\n"
                 "\n"
                 "OpenSSL generation example (from Libera.Chat guides):\n"
                 "$ openssl req -x509 -new -newkey rsa:4096 -sha256 -days 1096 -nodes -out libera.pem -keyout libera.pem"
@@ -478,6 +485,9 @@ class NetworkRoom(Room):
         if "password" in config:
             self.password = config["password"]
 
+        if "sasl_mechanism" in config:
+            self.sasl_mechanism = config["sasl_mechanism"]
+
         if "sasl_username" in config:
             self.sasl_username = config["sasl_username"]
 
@@ -516,6 +526,7 @@ class NetworkRoom(Room):
             "username": self.username,
             "ircname": self.ircname,
             "password": self.password,
+            "sasl_mechanism": self.sasl_mechanism,
             "sasl_username": self.sasl_username,
             "sasl_password": self.sasl_password,
             "autocmd": self.autocmd,
@@ -842,10 +853,14 @@ class NetworkRoom(Room):
             self.send_notice("SASL credentials removed.")
             return
 
-        if args.username is None and args.password is None:
+        if args.mechanism is None and args.username is None and args.password is None:
+            self.send_notice(f"SASL mechanism: {self.sasl_mechanism if self.sasl_mechanism else 'auto'}")
             self.send_notice(f"SASL username: {self.sasl_username}")
             self.send_notice(f"SASL password: {self.sasl_password}")
             return
+
+        if args.mechanism:
+            self.sasl_mechanism = args.mechanism if args.mechanism != "auto" else None
 
         if args.username:
             self.sasl_username = args.username
@@ -1162,8 +1177,21 @@ class NetworkRoom(Room):
                 if proxy:
                     sock = await proxy.connect(dest_host=server["address"], dest_port=server["port"])
 
+                sasl_mechanism = None
                 if self.sasl_username and self.sasl_password:
                     self.send_notice(f"Using SASL credentials for username {self.sasl_username}")
+                    sasl_mechanism = "plain"
+                elif self.tls_cert:
+                    sasl_mechanism = "external"
+
+                if sasl_mechanism:
+                    # if sasl mechanism is overridden, respect that
+                    if self.sasl_mechanism == "none":
+                        sasl_mechanism = None
+                    elif self.sasl_mechanism in ["plain", "external"]:
+                        sasl_mechanism = self.sasl_mechanism
+
+                    self.send_notice(f"SASL mechanism set to '{sasl_mechanism if sasl_mechanism else 'none'}'")
 
                 reactor = HeisenReactor(loop=asyncio.get_event_loop())
                 irc_server = reactor.server()
@@ -1177,9 +1205,9 @@ class NetworkRoom(Room):
                     username=self.get_ident() if self.username is None else self.username,
                     ircname=self.ircname,
                     connect_factory=factory,
+                    sasl_mechanism=sasl_mechanism,
                     sasl_username=self.sasl_username,
                     sasl_password=self.sasl_password,
-                    sasl_external=self.tls_cert is not None,
                 )
 
                 self.conn.add_global_handler("disconnect", self.on_disconnect)

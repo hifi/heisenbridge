@@ -141,9 +141,9 @@ class HeisenConnection(AioConnection):
         username=None,
         ircname=None,
         connect_factory=AioFactory(),
+        sasl_mechanism=None,
         sasl_username=None,
         sasl_password=None,
-        sasl_external=False,
     ):
         if self.connected:
             self.disconnect("Changing servers")
@@ -159,9 +159,9 @@ class HeisenConnection(AioConnection):
         self.username = username or nickname
         self.ircname = ircname or nickname
         self.password = password
+        self.sasl_mechanism = sasl_mechanism
         self.sasl_username = sasl_username
         self.sasl_password = sasl_password
-        self.sasl_external = sasl_external
         self.connect_factory = connect_factory
 
         protocol_instance = self.protocol_class(self, self.reactor.loop)
@@ -178,8 +178,8 @@ class HeisenConnection(AioConnection):
 
     async def register(self):
         # SASL stuff
-        sasl_plain = self.sasl_username is not None and self.sasl_password is not None
-        if sasl_plain or self.sasl_external:
+        sasl_creds = self.sasl_username is not None and self.sasl_password is not None
+        if (self.sasl_mechanism == "plain" and sasl_creds) or self.sasl_mechanism == "external":
             self.cap("REQ", "sasl")
 
             try:
@@ -187,7 +187,7 @@ class HeisenConnection(AioConnection):
                 if not event.arguments or event.arguments[0] != "ACK":
                     raise ServerConnectionError("SASL requested but not supported by server.")
 
-                if sasl_plain:
+                if self.sasl_mechanism == "plain":
                     self.send_items("AUTHENTICATE PLAIN")
                 else:
                     self.send_items("AUTHENTICATE EXTERNAL")
@@ -196,7 +196,7 @@ class HeisenConnection(AioConnection):
                 if event.target != "+":
                     raise ServerConnectionError("SASL AUTHENTICATE was rejected.")
 
-                if sasl_plain:
+                if self.sasl_mechanism == "plain":
                     sasl = f"{self.sasl_username}\0{self.sasl_username}\0{self.sasl_password}"
                     self.send_items("AUTHENTICATE", base64.b64encode(sasl.encode("utf8")).decode("utf8"))
                 else:

@@ -25,7 +25,7 @@ class Room(ABC):
     user_id: str
     serv: AppService
     members: List[str]
-    lazy_members: Dict[str, str]
+    lazy_members: Optional[Dict[str, str]]
     bans: List[str]
     displaynames: Dict[str, str]
 
@@ -38,7 +38,7 @@ class Room(ABC):
         self.serv = serv
         self.members = list(members)
         self.bans = list(bans) if bans else []
-        self.lazy_members = {}
+        self.lazy_members = None
         self.displaynames = {}
         self.last_messages = defaultdict(str)
 
@@ -151,20 +151,18 @@ class Room(ABC):
         if nick is not None:
             self.displaynames[user_id] = nick
 
-        if user_id in self.lazy_members:
-            del self.lazy_members[user_id]
-
     async def _flush_events(self, events):
         for event in events:
             try:
                 if event["type"] == "_join":
+                    if self.lazy_members is not None:
+                        self.lazy_members[event["user_id"]] = event["nick"]
+
                     if event["user_id"] not in self.members:
-                        if event["lazy"]:
-                            self.lazy_members[event["user_id"]] = event["nick"]
-                        else:
+                        if not event["lazy"]:
                             await self._join(event["user_id"], event["nick"])
                 elif event["type"] == "_leave":
-                    if event["user_id"] in self.lazy_members:
+                    if self.lazy_members is not None and event["user_id"] in self.lazy_members:
                         del self.lazy_members[event["user_id"]]
 
                     if event["user_id"] in self.members:
@@ -182,7 +180,11 @@ class Room(ABC):
                     new_irc_user_id = self.serv.irc_user_id(self.network.name, event["new_nick"])
 
                     # if we are lazy loading and this user has never spoken, update that
-                    if old_irc_user_id in self.lazy_members:
+                    if (
+                        self.lazy_members is not None
+                        and old_irc_user_id in self.lazy_members
+                        and old_irc_user_id not in self.members
+                    ):
                         del self.lazy_members[old_irc_user_id]
                         self.lazy_members[new_irc_user_id] = event["new_nick"]
                         continue
@@ -190,6 +192,10 @@ class Room(ABC):
                     # this event is created for all rooms, skip if irrelevant
                     if old_irc_user_id not in self.members:
                         continue
+
+                    # always ensure new irc user id is in lazy list
+                    if self.lazy_members is not None:
+                        self.lazy_members[new_irc_user_id] = event["new_nick"]
 
                     # check if we can just update the displayname
                     if old_irc_user_id != new_irc_user_id:
@@ -227,7 +233,11 @@ class Room(ABC):
                     )
                 else:
                     # invite puppet *now* if we are lazy loading and it should be here
-                    if event["user_id"] in self.lazy_members and event["user_id"] not in self.members:
+                    if (
+                        self.lazy_members is not None
+                        and event["user_id"] in self.lazy_members
+                        and event["user_id"] not in self.members
+                    ):
                         await self.serv.ensure_irc_user_id(self.network.name, self.lazy_members[event["user_id"]])
                         await self._join(event["user_id"], self.lazy_members[event["user_id"]])
 

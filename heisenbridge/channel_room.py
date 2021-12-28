@@ -156,6 +156,13 @@ class ChannelRoom(PrivateRoom):
         if "autocmd" in config:
             self.autocmd = config["autocmd"]
 
+        # initialize lazy members dict if sync is not off
+        if self.member_sync != "off":
+            if self.lazy_members is None:
+                self.lazy_members = {}
+        else:
+            self.lazy_members = None
+
     def to_config(self) -> dict:
         return {**(super().to_config()), "key": self.key, "member_sync": self.member_sync, "autocmd": self.autocmd}
 
@@ -243,7 +250,7 @@ class ChannelRoom(PrivateRoom):
         elif args.off:
             self.member_sync = "off"
             # prevent anyone already in lazy list to be invited
-            self.lazy_members = {}
+            self.lazy_members = None
             await self.save()
 
         self.send_notice(f"Member sync is set to {self.member_sync}", forward=args._forward)
@@ -321,6 +328,9 @@ class ChannelRoom(PrivateRoom):
         others = []
         on_channel = []
 
+        # always reset lazy list because it can be toggled on-the-fly
+        self.lazy_members = {} if self.member_sync != "off" else None
+
         # build to_remove list from our own puppets
         for member in self.members:
             (name, server) = member.split(":")
@@ -362,6 +372,10 @@ class ChannelRoom(PrivateRoom):
             if not self.in_room(irc_user_id):
                 to_add.append((irc_user_id, nick))
 
+            # always put everyone in the room to lazy list if we have any member sync
+            if self.lazy_members is not None:
+                self.lazy_members[irc_user_id] = nick
+
         # never remove us or appservice
         if self.serv.user_id in to_remove:
             to_remove.remove(self.serv.user_id)
@@ -401,17 +415,11 @@ class ChannelRoom(PrivateRoom):
             others = sorted(others, key=str.casefold)
             self.send_notice(f"Users: {', '.join(others)}")
 
-        # always reset lazy list because it can be toggled on-the-fly
-        self.lazy_members = {}
-
         if self.member_sync == "full":
             for (irc_user_id, nick) in to_add:
                 self._add_puppet(nick)
         else:
             self.send_notice(f"Member sync is set to {self.member_sync}, skipping invites.")
-            if self.member_sync != "off":
-                for (irc_user_id, nick) in to_add:
-                    self.lazy_members[irc_user_id] = nick
 
         for irc_user_id in to_remove:
             self._remove_puppet(irc_user_id)

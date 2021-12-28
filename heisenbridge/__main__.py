@@ -110,7 +110,7 @@ class BridgeAppService(AppService):
         prefix = "@" + re.sub(
             r"[^0-9a-z\-\.=\_/]",
             lambda m: "=" + m.group(0).encode("utf-8").hex(),
-            f"{self.puppet_prefix}{network}_".lower(),
+            f"{self.puppet_prefix}{network}{self.puppet_separator}".lower(),
         )
 
         if not name.startswith(prefix):

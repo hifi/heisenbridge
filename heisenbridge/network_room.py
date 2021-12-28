@@ -1179,6 +1179,7 @@ class NetworkRoom(Room):
                     connect_factory=factory,
                     sasl_username=self.sasl_username,
                     sasl_password=self.sasl_password,
+                    sasl_external=self.tls_cert is not None,
                 )
 
                 self.conn.add_global_handler("disconnect", self.on_disconnect)

@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import base64
 import datetime
 import hashlib
 import html
@@ -97,6 +98,7 @@ class NetworkRoom(Room):
     tls_cert: str
     rejoin_invite: bool
     rejoin_kick: bool
+    caps: list
 
     # state
     commands: CommandManager
@@ -112,6 +114,8 @@ class NetworkRoom(Room):
     connected_at: int
     space: SpaceRoom
     post_init_done: bool
+    caps_supported: list
+    caps_enabled: list
 
     def init(self):
         self.name = None
@@ -131,6 +135,7 @@ class NetworkRoom(Room):
         self.tls_cert = None
         self.rejoin_invite = True
         self.rejoin_kick = False
+        self.caps = ["chghost"]
         self.backoff = 0
         self.backoff_task = None
         self.next_server = 0
@@ -149,6 +154,8 @@ class NetworkRoom(Room):
         self.pending_kickbans = defaultdict(list)
         self.space = None
         self.post_init_done = False
+        self.caps_supported = []
+        self.caps_enabled = []
 
         cmd = CommandParser(
             prog="NICK",
@@ -452,6 +459,16 @@ class NetworkRoom(Room):
         cmd = CommandParser(prog="SPACE", description="create a managed Matrix space for this network")
         self.commands.register(cmd, self.cmd_space)
 
+        cmd = CommandParser(
+            prog="CAPS",
+            description="request server capabilities on connect",
+            epilog="Only bridge supported capabilities can be requested.",
+        )
+        cmd.add_argument("--add", nargs=1, choices=["chghost"], help="Add to CAP request")
+        cmd.add_argument("--remove", nargs=1, help="Remove from CAP request")
+        cmd.set_defaults(add=None, remove=None)
+        self.commands.register(cmd, self.cmd_caps)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -518,6 +535,9 @@ class NetworkRoom(Room):
         if "rejoin_kick" in config:
             self.rejoin_kick = config["rejoin_kick"]
 
+        if "caps" in config:
+            self.caps = config["caps"]
+
     def to_config(self) -> dict:
         return {
             "name": self.name,
@@ -536,6 +556,7 @@ class NetworkRoom(Room):
             "pills_ignore": self.pills_ignore,
             "rejoin_invite": self.rejoin_invite,
             "rejoin_kick": self.rejoin_kick,
+            "caps": self.caps,
         }
 
     def is_valid(self) -> bool:
@@ -1063,6 +1084,20 @@ class NetworkRoom(Room):
         else:
             self.send_notice(f"Space already exists ({self.space.id}).")
 
+    async def cmd_caps(self, args) -> None:
+        if args.add and args.add[0] not in self.caps:
+            self.caps += args.add
+            await self.save()
+        if args.remove and args.remove[0] in self.caps:
+            self.caps.remove(args.remove[0])
+            await self.save()
+
+        self.send_notice(f"Capabilities to request: {', '.join(self.caps)}")
+
+        if self.conn and self.conn.connected:
+            self.send_notice(f"Capabilities supported: {', '.join(self.caps_supported)}")
+            self.send_notice(f"Capabilities enabled: {', '.join(self.caps_enabled)}")
+
     def kickban(self, channel: str, nick: str, reason: str) -> None:
         self.pending_kickbans[nick].append((channel, reason))
         self.conn.whois(f"{nick}")
@@ -1205,9 +1240,6 @@ class NetworkRoom(Room):
                     username=self.get_ident() if self.username is None else self.username,
                     ircname=self.ircname,
                     connect_factory=factory,
-                    sasl_mechanism=sasl_mechanism,
-                    sasl_username=self.sasl_username,
-                    sasl_password=self.sasl_password,
                 )
 
                 self.conn.add_global_handler("disconnect", self.on_disconnect)
@@ -1262,6 +1294,7 @@ class NetworkRoom(Room):
                 self.conn.add_global_handler("quit", self.on_quit)
                 self.conn.add_global_handler("invite", self.on_invite)
                 self.conn.add_global_handler("wallops", self.on_wallops)
+                self.conn.add_global_handler("chghost", self.on_chghost)
                 # FIXME: action
                 self.conn.add_global_handler("topic", self.on_pass)
                 self.conn.add_global_handler("nick", self.on_nick)
@@ -1296,6 +1329,73 @@ class NetworkRoom(Room):
                 self.disconnect = False
                 self.connected_at = asyncio.get_event_loop().time()
 
+                # request CAPs
+                caps_req = list(self.caps)
+                if sasl_mechanism in ["plain", "external"]:
+                    caps_req += ["sasl"]
+
+                self.caps_supported = []
+                self.caps_enabled = []
+                if caps_req:
+                    self.send_notice(f"Capabilities wanted: {', '.join(caps_req)}")
+
+                    try:
+                        self.conn.cap("LS")
+                        (connection, event) = await self.conn.expect("cap", 10)
+                        if len(event.arguments) > 1 and event.arguments[0] == "LS":
+                            self.caps_supported = event.arguments[1].split()
+                            self.send_notice(f"Capabilities supported by server: {', '.join(self.caps_supported)}")
+
+                            # filter all unsupported caps away
+                            caps_req = [cap for cap in caps_req if cap in self.caps_supported]
+
+                        if caps_req:
+                            self.send_notice(f"Capabilities requested: {', '.join(caps_req)}")
+                            self.conn.cap("REQ", *caps_req)
+
+                            (connection, event) = await self.conn.expect("cap", 10)
+                            if len(event.arguments) > 1:
+                                if event.arguments[0] == "ACK":
+                                    self.caps_enabled = event.arguments[1].split()
+                                    self.send_notice(
+                                        f"Capabilities negotiated with server: {', '.join(self.caps_enabled)}"
+                                    )
+                                elif event.arguments[0] == "NAK":
+                                    self.send_notice("Capabilities request was rejected.")
+                        else:
+                            self.send_notice("No capabilities requested.")
+                    except asyncio.TimeoutError:
+                        self.send_notice("Capabilities request timed out, assuming RFC.")
+
+                    self.conn.cap("END")
+
+                # SASL stuff
+                sasl_creds = self.sasl_username is not None and self.sasl_password is not None
+                if (sasl_mechanism == "plain" and sasl_creds) or sasl_mechanism == "external":
+                    if "sasl" not in self.caps_enabled:
+                        raise irc.client.ServerConnectionError("SASL requested but server does not support it.")
+                    try:
+                        if sasl_mechanism == "plain":
+                            self.conn.send_items("AUTHENTICATE PLAIN")
+                        else:
+                            self.conn.send_items("AUTHENTICATE EXTERNAL")
+
+                        (connection, event) = await self.conn.expect("authenticate")
+                        if event.target != "+":
+                            raise irc.client.ServerConnectionError("SASL AUTHENTICATE was rejected.")
+
+                        if sasl_mechanism == "plain":
+                            sasl = f"{self.sasl_username}\0{self.sasl_username}\0{self.sasl_password}"
+                            self.conn.send_items("AUTHENTICATE", base64.b64encode(sasl.encode("utf8")).decode("utf8"))
+                        else:
+                            self.conn.send_items("AUTHENTICATE", "+")
+                        (connection, event) = await self.conn.expect(["903", "904", "908"])
+                        if event.type != "903":
+                            raise irc.client.ServerConnectionError(event.arguments[0])
+
+                    except asyncio.TimeoutError:
+                        raise irc.client.ServerConnectionError("SASL authentication timed out.")
+
                 # run connection registration (SASL, user, nick)
                 await self.conn.register()
 
@@ -1305,6 +1405,11 @@ class NetworkRoom(Room):
             except irc.client.ServerConnectionError as e:
                 self.send_notice(str(e))
                 self.send_notice(f"Failed to connect: {str(e)}")
+                # for SASL failures
+                if self.conn:
+                    if self.conn.connected:
+                        self.conn.disconnect()
+                    self.conn = None
             except Exception as e:
                 self.send_notice(f"Failed to connect: {str(e)}")
 
@@ -1633,6 +1738,18 @@ class NetworkRoom(Room):
     def on_wallops(self, conn, event) -> None:
         plain, formatted = parse_irc_formatting(event.target)
         self.send_notice_html(f"<b>WALLOPS {event.source.nick}</b>: {formatted if formatted else html.escape(plain)}")
+
+    def on_chghost(self, conn, event) -> None:
+        # update for split long, ignored for all other users as we don't track their username or host
+        # we also allow overriding our own hostname before 001 when our real_nickname is empty
+        if (
+            (event.source.nick == self.conn.real_nickname or self.conn.real_nickname == "")
+            and event.arguments
+            and (self.real_host != event.arguments[0] or self.real_user != event.target)
+        ):
+            self.real_host = event.arguments[0]
+            self.real_user = event.target
+            logging.debug(f"Self host updated to '{self.real_host}', user to '{self.real_user}'")
 
     @ircroom_event()
     def on_kill(self, conn, event) -> None:

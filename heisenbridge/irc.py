@@ -1,9 +1,7 @@
 import asyncio
-import base64
 import collections
 import logging
 
-from irc.client import ServerConnectionError
 from irc.client_aio import AioConnection
 from irc.client_aio import AioReactor
 from irc.client_aio import IrcProtocol
@@ -141,9 +139,6 @@ class HeisenConnection(AioConnection):
         username=None,
         ircname=None,
         connect_factory=AioFactory(),
-        sasl_mechanism=None,
-        sasl_username=None,
-        sasl_password=None,
     ):
         if self.connected:
             self.disconnect("Changing servers")
@@ -159,9 +154,6 @@ class HeisenConnection(AioConnection):
         self.username = username or nickname
         self.ircname = ircname or nickname
         self.password = password
-        self.sasl_mechanism = sasl_mechanism
-        self.sasl_username = sasl_username
-        self.sasl_password = sasl_password
         self.connect_factory = connect_factory
 
         protocol_instance = self.protocol_class(self, self.reactor.loop)
@@ -177,39 +169,6 @@ class HeisenConnection(AioConnection):
         return self
 
     async def register(self):
-        # SASL stuff
-        sasl_creds = self.sasl_username is not None and self.sasl_password is not None
-        if (self.sasl_mechanism == "plain" and sasl_creds) or self.sasl_mechanism == "external":
-            self.cap("REQ", "sasl")
-
-            try:
-                (connection, event) = await self.expect("cap")
-                if not event.arguments or event.arguments[0] != "ACK":
-                    raise ServerConnectionError("SASL requested but not supported by server.")
-
-                if self.sasl_mechanism == "plain":
-                    self.send_items("AUTHENTICATE PLAIN")
-                else:
-                    self.send_items("AUTHENTICATE EXTERNAL")
-
-                (connection, event) = await self.expect("authenticate")
-                if event.target != "+":
-                    raise ServerConnectionError("SASL AUTHENTICATE was rejected.")
-
-                if self.sasl_mechanism == "plain":
-                    sasl = f"{self.sasl_username}\0{self.sasl_username}\0{self.sasl_password}"
-                    self.send_items("AUTHENTICATE", base64.b64encode(sasl.encode("utf8")).decode("utf8"))
-                else:
-                    self.send_items("AUTHENTICATE", "+")
-                (connection, event) = await self.expect(["903", "904", "908"])
-                if event.type != "903":
-                    raise ServerConnectionError(event.arguments[0])
-
-            except asyncio.TimeoutError:
-                raise ServerConnectionError("SASL authentication timed out.")
-
-            self.cap("END")
-
         # Log on...
         if self.password:
             self.pass_(self.password)

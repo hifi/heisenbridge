@@ -7,6 +7,7 @@ from irc.modes import parse_channel_modes
 from mautrix.errors import MatrixRequestError
 from mautrix.types import Membership
 from mautrix.types import MessageEvent
+from mautrix.types import MessageType
 from mautrix.types import TextMessageEventContent
 
 from heisenbridge.channel_room import ChannelRoom
@@ -30,6 +31,18 @@ def connected(f):
     return wrapper
 
 
+def send_relaymsg(room, func, sender):
+    def wrapper(target, message):
+        message = f":\001ACTION {message}\001" if func == room.network.conn.action else f":{message}"
+        room.network.conn.send_items("RELAYMSG", target, f"{sanitize_irc_nick(sender)}/{room.relaytag}", message)
+
+    return wrapper
+
+
+def sanitize_irc_nick(nick):
+    return re.sub(r"[^A-Za-z0-9_\[\]|{}-]", "", nick)
+
+
 class PlumbedRoom(ChannelRoom):
     max_lines = 5
     use_pastebin = True
@@ -39,6 +52,7 @@ class PlumbedRoom(ChannelRoom):
     allow_notice = False
     force_forward = True
     topic_sync = None
+    relaytag = "m"
 
     def init(self) -> None:
         super().init()
@@ -93,6 +107,10 @@ class PlumbedRoom(ChannelRoom):
         cmd.add_argument("--sync", choices=["off", "irc", "matrix", "any"], help="Topic sync targets, defaults to off")
         cmd.add_argument("text", nargs="*", help="topic text if setting")
         self.commands.register(cmd, self.cmd_topic)
+
+        cmd = CommandParser(prog="RELAYTAG", description="set RELAYMSG tag if supported by server")
+        cmd.add_argument("tag", nargs="?", help="new tag")
+        self.commands.register(cmd, self.cmd_relaytag)
 
         self.mx_register("m.room.topic", self._on_mx_room_topic)
 
@@ -166,6 +184,9 @@ class PlumbedRoom(ChannelRoom):
         if "topic_sync" in config:
             self.topic_sync = config["topic_sync"]
 
+        if "relaytag" in config:
+            self.relaytag = config["relaytag"]
+
     def to_config(self) -> dict:
         return {
             **(super().to_config()),
@@ -176,6 +197,7 @@ class PlumbedRoom(ChannelRoom):
             "use_zwsp": self.use_zwsp,
             "allow_notice": self.allow_notice,
             "topic_sync": self.topic_sync,
+            "relaytag": self.relaytag,
         }
 
     # topic updates from channel state replies are ignored because formatting changes
@@ -230,8 +252,7 @@ class PlumbedRoom(ChannelRoom):
         # limit plumbed sender max length to 100 characters
         sender = sender[:100]
 
-        if str(event.content.msgtype) in ["m.image", "m.file", "m.audio", "m.video"]:
-
+        if event.content.msgtype.is_media:
             # process media event like it was a text message
             media_event = MessageEvent(
                 sender=event.sender,
@@ -241,20 +262,29 @@ class PlumbedRoom(ChannelRoom):
                 timestamp=None,
                 content=TextMessageEventContent(body=self.serv.mxc_to_url(event.content.url, event.content.body)),
             )
-            messages = self._process_event_content(media_event, prefix=f"<{sender}> ")
-            self.network.conn.privmsg(self.name, messages[0])
+            await self.relay_message(media_event, self.network.conn.privmsg, sender)
 
             self.react(event.event_id, "\U0001F517")  # link
             self.media.append([event.event_id, event.content.url])
             await self.save()
-        elif str(event.content.msgtype) == "m.emote":
-            await self._send_message(event, self.network.conn.action, prefix=f"{sender} ")
-        elif str(event.content.msgtype) == "m.text":
-            await self._send_message(event, self.network.conn.privmsg, prefix=f"<{sender}> ")
-        elif str(event.content.msgtype) == "m.notice" and self.allow_notice:
-            await self._send_message(event, self.network.conn.notice, prefix=f"<{sender}> ")
+        elif event.content.msgtype == MessageType.EMOTE:
+            await self.relay_message(event, self.network.conn.action, sender)
+        elif event.content.msgtype == MessageType.TEXT:
+            await self.relay_message(event, self.network.conn.privmsg, sender)
+        elif event.content.msgtype == MessageType.NOTICE and self.allow_notice:
+            await self.relay_message(event, self.network.conn.notice, sender)
 
         await self.az.intent.send_receipt(event.room_id, event.event_id)
+
+    async def relay_message(self, event, func, sender):
+        prefix = f"{sender} " if str(event.content.msgtype) == "m.emote" else f"<{sender}> "
+
+        # if we have relaymsg cap and it's not a notice, add more abstraction
+        if "draft/relaymsg" in self.network.caps_enabled and event.content.msgtype != MessageType.NOTICE:
+            func = send_relaymsg(self, func, sender)
+            prefix = None
+
+        await self._send_message(event, func, prefix)
 
     @connected
     async def on_mx_ban(self, user_id) -> None:
@@ -345,6 +375,13 @@ class PlumbedRoom(ChannelRoom):
         self.topic_sync = args.sync if args.sync != "off" else None
         self.send_notice(f"Topic sync is {self.topic_sync if self.topic_sync else 'off'}")
         await self.save()
+
+    async def cmd_relaytag(self, args) -> None:
+        if args.tag:
+            self.relaytag = sanitize_irc_nick(args.tag)
+            await self.save()
+
+        self.send_notice(f"Relay tag is '{self.relaytag}'")
 
     def on_mode(self, conn, event) -> None:
         super().on_mode(conn, event)

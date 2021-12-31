@@ -379,6 +379,12 @@ class PrivateRoom(Room):
 
         (plain, formatted) = parse_irc_formatting(event.arguments[0], self.pills())
 
+        # ignore relaymsgs by us
+        if event.tags:
+            for tag in event.tags:
+                if tag["key"] == "draft/relaymsg" and tag["value"] == self.network.conn.real_nickname:
+                    return
+
         if event.source.nick == self.network.conn.real_nickname:
             self.send_message(f"You said: {plain}", formatted=(f"You said: {formatted}" if formatted else None))
             return
@@ -427,6 +433,12 @@ class PrivateRoom(Room):
     def on_ctcp(self, conn, event) -> None:
         if self.network is None:
             return
+
+        # ignore relaymsgs by us
+        if event.tags:
+            for tag in event.tags:
+                if tag["key"] == "draft/relaymsg" and tag["value"] == self.network.conn.real_nickname:
+                    return
 
         irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
 

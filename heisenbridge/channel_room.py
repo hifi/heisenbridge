@@ -333,7 +333,7 @@ class ChannelRoom(PrivateRoom):
 
         # build to_remove list from our own puppets
         for member in self.members:
-            (name, server) = member.split(":")
+            (name, server) = member.split(":", 1)
 
             if name.startswith("@" + self.serv.puppet_prefix) and server == self.serv.server_name:
                 to_remove.append(member)

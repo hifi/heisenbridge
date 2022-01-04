@@ -103,7 +103,7 @@ class BridgeAppService(AppService):
             raise TypeError(f"Input nick is not valid: '{nick}'")
 
     def split_irc_user_id(self, user_id):
-        (name, server) = user_id.split(":")
+        (name, server) = user_id.split(":", 1)
 
         network = None
         nick = None
@@ -127,7 +127,7 @@ class BridgeAppService(AppService):
         return network, nick
 
     def nick_from_irc_user_id(self, network, user_id):
-        (name, server) = user_id.split(":")
+        (name, server) = user_id.split(":", 1)
 
         if server != self.server_name:
             return None
@@ -320,7 +320,7 @@ class BridgeAppService(AppService):
         api = HTTPAPI(base_url=homeserver_url, token=registration["as_token"])
         whoami = await api.request(Method.GET, Path.account.whoami)
         self.user_id = whoami["user_id"]
-        self.server_name = self.user_id.split(":")[1]
+        self.server_name = self.user_id.split(":", 1)[1]
         print("We are " + whoami["user_id"])
 
         self.az = MauService(
@@ -360,7 +360,7 @@ class BridgeAppService(AppService):
         members = members if members else []
 
         for member in members:
-            (name, server) = member.split(":")
+            (name, server) = member.split(":", 1)
 
             if name.startswith("@" + self.puppet_prefix) and server == self.server_name:
                 try:
@@ -448,7 +448,7 @@ class BridgeAppService(AppService):
         logging.info("We are " + whoami["user_id"])
 
         self.user_id = whoami["user_id"]
-        self.server_name = self.user_id.split(":")[1]
+        self.server_name = self.user_id.split(":", 1)[1]
 
         self.az = MauService(
             id=self.registration["id"],

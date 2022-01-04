@@ -197,7 +197,7 @@ class PlumbedRoom(ChannelRoom):
     @connected
     async def on_mx_message(self, event) -> None:
         sender = str(event.sender)
-        (name, server) = sender.split(":")
+        (name, server) = sender.split(":", 1)
 
         # ignore self messages
         if sender == self.serv.user_id:

@@ -780,7 +780,7 @@ class NetworkRoom(Room):
         if self.nick:
             return self.nick
 
-        return self.user_id.split(":")[0][1:]
+        return self.user_id.split(":", 1)[0][1:]
 
     async def cmd_nick(self, args) -> None:
         if args.nick is None:

@@ -111,8 +111,6 @@ class BridgeAppService(AppService):
         if server != self.server_name:
             return None, None
 
-        print(name, self.puppet_prefix)
-
         if not name.startswith("@" + self.puppet_prefix):
             return None, None
 

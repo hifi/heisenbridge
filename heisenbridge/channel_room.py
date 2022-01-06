@@ -356,16 +356,16 @@ class ChannelRoom(PrivateRoom):
                 else:
                     others.append(nick)
 
-            # ignore us
-            if nick == conn.real_nickname:
-                continue
-
             # convert to mx id, check if we already have them
             irc_user_id = self.serv.irc_user_id(self.network.name, nick)
 
             # make sure this user is not removed from room
             if irc_user_id in to_remove:
                 to_remove.remove(irc_user_id)
+                continue
+
+            # ignore adding us here, only lazy join on echo allowed
+            if nick == conn.real_nickname:
                 continue
 
             # if this user is not in room, add to invite list

@@ -136,7 +136,7 @@ class NetworkRoom(Room):
         self.tls_cert = None
         self.rejoin_invite = True
         self.rejoin_kick = False
-        self.caps = ["message-tags", "chghost"]
+        self.caps = ["message-tags", "chghost", "znc.in/self-message"]
         self.forward = False
         self.backoff = 0
         self.backoff_task = None
@@ -467,7 +467,10 @@ class NetworkRoom(Room):
             epilog="Only bridge supported capabilities can be requested.",
         )
         cmd.add_argument(
-            "--add", nargs=1, choices=["message-tags", "chghost", "draft/relaymsg"], help="Add to CAP request"
+            "--add",
+            nargs=1,
+            choices=["message-tags", "chghost", "draft/relaymsg", "znc.in/self-message"],
+            help="Add to CAP request",
         )
         cmd.add_argument("--remove", nargs=1, help="Remove from CAP request")
         cmd.set_defaults(add=None, remove=None)

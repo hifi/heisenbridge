@@ -222,6 +222,7 @@ class PrivateRoom(Room):
         self.network_id = None
         self.network_name = None  # deprecated
         self.media = []
+        self.lazy_members = {}  # allow lazy joining your own ghost for echo
 
         self.commands = CommandManager()
 
@@ -386,8 +387,24 @@ class PrivateRoom(Room):
                     return
 
         if event.source.nick == self.network.conn.real_nickname:
-            self.send_message(f"You said: {plain}", formatted=(f"You said: {formatted}" if formatted else None))
-            return
+            source_irc_user_id = self.serv.irc_user_id(self.network.name, event.source.nick)
+
+            if self.lazy_members is None:
+                self.send_message(f"You said: {plain}", formatted=(f"You said: {formatted}" if formatted else None))
+                return
+            elif source_irc_user_id not in self.lazy_members:
+                # if we are a PM room, remove all other IRC users than the target
+                if type(self) == PrivateRoom:
+                    target_irc_user_id = self.serv.irc_user_id(self.network.name, self.name)
+
+                    for user_id in self.members:
+                        if user_id.startswith("@" + self.serv.puppet_prefix) and user_id != target_irc_user_id:
+                            if user_id in self.lazy_members:
+                                del self.lazy_members[user_id]
+                            self.leave(user_id)
+
+                # add self to lazy members list so it'll echo
+                self.lazy_members[source_irc_user_id] = event.source.nick
 
         self.send_message(
             plain,

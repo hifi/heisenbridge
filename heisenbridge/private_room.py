@@ -334,13 +334,13 @@ class PrivateRoom(Room):
         fallback_html: Optional[str] = None,
         forward=False,
     ):
-        if (self.force_forward or forward) and user_id is None:
+        if (self.force_forward or forward or self.network.forward) and user_id is None:
             self.network.send_notice(text=f"{self.name}: {text}", formatted=formatted, fallback_html=fallback_html)
         else:
             super().send_notice(text=text, user_id=user_id, formatted=formatted, fallback_html=fallback_html)
 
     def send_notice_html(self, text: str, user_id: Optional[str] = None, forward=False) -> None:
-        if (self.force_forward or forward) and user_id is None:
+        if (self.force_forward or forward or self.network.forward) and user_id is None:
             self.network.send_notice_html(text=f"{self.name}: {text}")
         else:
             super().send_notice_html(text=text, user_id=user_id)

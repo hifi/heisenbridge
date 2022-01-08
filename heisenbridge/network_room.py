@@ -99,6 +99,7 @@ class NetworkRoom(Room):
     rejoin_invite: bool
     rejoin_kick: bool
     caps: list
+    forward: bool
 
     # state
     commands: CommandManager
@@ -136,6 +137,7 @@ class NetworkRoom(Room):
         self.rejoin_invite = True
         self.rejoin_kick = False
         self.caps = ["chghost"]
+        self.forward = False
         self.backoff = 0
         self.backoff_task = None
         self.next_server = 0
@@ -468,6 +470,16 @@ class NetworkRoom(Room):
         cmd.add_argument("--remove", nargs=1, help="Remove from CAP request")
         cmd.set_defaults(add=None, remove=None)
         self.commands.register(cmd, self.cmd_caps)
+
+        cmd = CommandParser(
+            prog="FORWARD",
+            description="configure channel IRC events forwarding",
+            epilog="Enabling this will move all IRC noise from channel rooms into network room.",
+        )
+        cmd.add_argument("--enable", dest="forward", action="store_true", help="Enable forwarding")
+        cmd.add_argument("--disable", dest="forward", action="store_false", help="Disable forwarding")
+        cmd.set_defaults(forward=None)
+        self.commands.register(cmd, self.cmd_forward)
 
         self.mx_register("m.room.message", self.on_mx_message)
 
@@ -1097,6 +1109,13 @@ class NetworkRoom(Room):
         if self.conn and self.conn.connected:
             self.send_notice(f"Capabilities supported: {', '.join(self.caps_supported)}")
             self.send_notice(f"Capabilities enabled: {', '.join(self.caps_enabled)}")
+
+    async def cmd_forward(self, args) -> None:
+        if args.forward is not None:
+            self.forward = args.forward
+            await self.save()
+
+        self.send_notice(f"IRC event forwarding is {'enabled' if self.forward else 'disabled'}")
 
     def kickban(self, channel: str, nick: str, reason: str) -> None:
         self.pending_kickbans[nick].append((channel, reason))

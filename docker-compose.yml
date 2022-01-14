@@ -9,7 +9,9 @@ services:
       UID: 1000
       GID: 1000
     volumes:
+      - ./docker-compose/init/synapse-init.sh:/synapse-init.sh:ro
       - './synapse-data:/data'
+    entrypoint: /synapse-init.sh
   inspircd:
     image: inspircd/inspircd-docker:latest
     network_mode: host

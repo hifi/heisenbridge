@@ -117,6 +117,7 @@ class NetworkRoom(Room):
     post_init_done: bool
     caps_supported: list
     caps_enabled: list
+    caps_task: Any
 
     def init(self):
         self.name = None
@@ -158,6 +159,7 @@ class NetworkRoom(Room):
         self.post_init_done = False
         self.caps_supported = []
         self.caps_enabled = []
+        self.caps_task = None
 
         cmd = CommandParser(
             prog="NICK",
@@ -600,6 +602,11 @@ class NetworkRoom(Room):
         self.connected = False
         self.disconnect = True
 
+        if self.caps_task:
+            self.caps_task.cancel()
+            self.caps_task = None
+            logging.debug("... cancelled caps task")
+
         if self.backoff_task:
             self.backoff_task.cancel()
             self.backoff_task = None
@@ -654,6 +661,11 @@ class NetworkRoom(Room):
 
         if self.backoff_task:
             self.backoff_task.cancel()
+            self.backoff_task = None
+
+        if self.caps_task:
+            self.caps_task.cancel()
+            self.caps_task = None
 
         self.backoff = 0
         self.next_server = 0
@@ -1360,12 +1372,15 @@ class NetworkRoom(Room):
 
                 self.caps_supported = []
                 self.caps_enabled = []
+                self.caps_task = None
                 if caps_req:
                     self.send_notice(f"Capabilities wanted: {', '.join(caps_req)}")
 
                     try:
                         self.conn.cap("LS")
-                        (connection, event) = await self.conn.expect("cap", 10)
+                        self.caps_task = asyncio.ensure_future(self.conn.expect("cap", 10))
+                        (connection, event) = await self.caps_task
+                        self.caps_task = None
                         if len(event.arguments) > 1 and event.arguments[0] == "LS":
                             self.caps_supported = event.arguments[1].split()
                             self.send_notice(f"Capabilities supported by server: {', '.join(self.caps_supported)}")
@@ -1377,7 +1392,9 @@ class NetworkRoom(Room):
                             self.send_notice(f"Capabilities requested: {', '.join(caps_req)}")
                             self.conn.cap("REQ", *caps_req)
 
-                            (connection, event) = await self.conn.expect("cap", 10)
+                            self.caps_task = asyncio.ensure_future(self.conn.expect("cap", 10))
+                            (connection, event) = await self.caps_task
+                            self.caps_task = None
                             if len(event.arguments) > 1:
                                 if event.arguments[0] == "ACK":
                                     self.caps_enabled = event.arguments[1].split()
@@ -1388,8 +1405,17 @@ class NetworkRoom(Room):
                                     self.send_notice("Capabilities request was rejected.")
                         else:
                             self.send_notice("No capabilities requested.")
+                    except asyncio.CancelledError:
+                        logging.debug("Caps request cancelled.")
+                        # if we got cancelled just leave quietly
+                        return
                     except asyncio.TimeoutError:
-                        self.send_notice("Capabilities request timed out, assuming RFC.")
+                        if self.conn:
+                            self.send_notice("Capabilities request timed out, assuming RFC.")
+                        else:
+                            # if we got disconnected before we timed out just leave
+                            logging.debug("Caps request timed out and returned.")
+                            return
 
                     self.conn.cap("END")
 
@@ -1437,6 +1463,11 @@ class NetworkRoom(Room):
             except Exception as e:
                 self.send_notice(f"Failed to connect: {str(e)}")
 
+            # cancel any pending caps REQ
+            if self.caps_task:
+                self.caps_task.cancel()
+                self.caps_task = None
+
             if self.backoff < 1800:
                 self.backoff += 5
 
@@ -1453,6 +1484,10 @@ class NetworkRoom(Room):
         self.send_notice("Connection aborted.")
 
     def on_disconnect(self, conn, event) -> None:
+        if self.caps_task:
+            self.caps_task.cancel()
+            self.caps_task = None
+
         if self.conn:
             self.conn.disconnect()
             self.conn.close()

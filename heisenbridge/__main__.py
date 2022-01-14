@@ -209,6 +209,12 @@ class BridgeAppService(AppService):
             and event.sender != self.user_id
             and event.content.membership == Membership.INVITE
         ):
+            # set owner if we have none and the user is from the same HS
+            if self.config.get("owner", None) is None and event.sender.endswith(":" + self.server_name):
+                logging.info(f"We have an owner now, let us rejoice, {event.sender}!")
+                self.config["owner"] = event.sender
+                await self.save()
+
             if not self.is_user(event.sender):
                 logging.info(f"Non-whitelisted user {event.sender} tried to invite us, ignoring.")
                 return
@@ -249,12 +255,6 @@ class BridgeAppService(AppService):
                             break
 
                 return
-
-            # set owner if we have none and the user is from the same HS
-            if self.config.get("owner", None) is None and event.sender.endswith(":" + self.server_name):
-                logging.info(f"We have an owner now, let us rejoice, {event.sender}!")
-                self.config["owner"] = event.sender
-                await self.save()
 
             logging.info(f"Whitelisted user {event.sender} invited us, going to accept.")
 

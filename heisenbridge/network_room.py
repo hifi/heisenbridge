@@ -557,6 +557,9 @@ class NetworkRoom(Room):
         if "caps" in config:
             self.caps = config["caps"]
 
+        if "forward" in config:
+            self.forward = config["forward"]
+
     def to_config(self) -> dict:
         return {
             "name": self.name,
@@ -576,6 +579,7 @@ class NetworkRoom(Room):
             "rejoin_invite": self.rejoin_invite,
             "rejoin_kick": self.rejoin_kick,
             "caps": self.caps,
+            "forward": self.forward,
         }
 
     def is_valid(self) -> bool:

@@ -608,6 +608,9 @@ class BridgeAppService(AppService):
             room_type.init_class(self.az)
             room_type_map[room_type.__name__] = room_type
 
+        # we always auto-open control room for owner
+        owner_control_open = False
+
         # import all rooms
         for room_id in joined_rooms:
             joined = {}
@@ -652,6 +655,9 @@ class BridgeAppService(AppService):
 
                 if cls is HiddenRoom:
                     self.hidden_room = room
+
+                if cls == ControlRoom and room.user_id == self.config["owner"]:
+                    owner_control_open = True
             except Exception:
                 logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")
 
@@ -695,6 +701,22 @@ class BridgeAppService(AppService):
                 wait += 1
 
         print(f"Init done with {wait-1} networks connecting, bridge is now running!", flush=True)
+
+        if self.config["owner"] and not owner_control_open:
+            print(f"Opening control room for owner {self.config['owner']}")
+            try:
+                room_id = await self.az.intent.create_room(invitees=[self.config["owner"]])
+
+                room = ControlRoom(id=room_id, user_id=self.config["owner"], serv=self, members=[self.config["owner"]], bans=[])
+                await room.save()
+                self.register_room(room)
+
+                await self.az.intent.join_room(room.id)
+
+                # show help on open
+                await room.show_help()
+            except:
+                print("Failed to create control room, huh")
 
         await asyncio.Event().wait()
 

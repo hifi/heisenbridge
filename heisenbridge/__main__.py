@@ -29,6 +29,7 @@ from mautrix.types import EventType
 from mautrix.types import JoinRule
 from mautrix.types import Membership
 from mautrix.util.config import yaml
+from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 
 from heisenbridge import __version__
 from heisenbridge.appservice import AppService
@@ -55,6 +56,32 @@ class BridgeAppService(AppService):
     _api: HTTPAPI
     _rooms: Dict[str, Room]
     _users: Dict[str, str]
+
+    async def push_bridge_state(
+        self,
+        state_event: BridgeStateEvent,
+        error = None,
+        message = None,
+        ttl = None,
+        remote_id = None,
+    ) -> None:
+
+        if "heisenbridge" not in self.registration or "status_endpoint" not in self.registration["heisenbridge"]:
+            return
+
+        state = BridgeState(
+            state_event=state_event,
+            error=error,
+            message=message,
+            ttl=ttl,
+            remote_id=remote_id,
+        )
+
+        logging.debug(f"Updating bridge state {state}")
+
+        await state.send(
+            self.registration["heisenbridge"]["status_endpoint"], self.az.as_token, log=logging
+        )
 
     def register_room(self, room: Room):
         self._rooms[room.id] = room
@@ -514,6 +541,13 @@ class BridgeAppService(AppService):
             logging.exception("Unexpected failure when registering appservice user.")
             sys.exit(1)
 
+        if "heisenbridge" in self.registration and "displayname" in self.registration["heisenbridge"]:
+            try:
+                logging.debug(f"Overriding displayname from registration file to {self.registration['heisenbridge']['displayname']}")
+                await self.az.intent.set_displayname(self.registration["heisenbridge"]["displayname"])
+            except MatrixRequestError as e:
+                logging.warning(f"Failed to set displayname: {str(e)}")
+
         self._rooms = {}
         self._users = {}
         self.config = {
@@ -551,7 +585,10 @@ class BridgeAppService(AppService):
             print("Homeserver is publicly available at " + self.endpoint, flush=True)
 
         # use configured media_url for endpoint if we have it
-        if self.config["media_url"]:
+        if "heisenbridge" in self.registration and "media_url" in self.registration["heisenbridge"]:
+            logging.debug(f"Overriding media URL from regirstation file to {self.registration['heisenbridge']['media_url']}")
+            self.endpoint = self.registration["heisenbridge"]["media_url"]
+        elif self.config["media_url"]:
             self.endpoint = self.config["media_url"]
         else:
             print("Trying to detect homeserver public endpoint, this might take a while...", flush=True)
@@ -701,6 +738,8 @@ class BridgeAppService(AppService):
                 wait += 1
 
         print(f"Init done with {wait-1} networks connecting, bridge is now running!", flush=True)
+
+        await self.push_bridge_state(BridgeStateEvent.UNCONFIGURED)
 
         if self.config["owner"] and not owner_control_open:
             print(f"Opening control room for owner {self.config['owner']}")

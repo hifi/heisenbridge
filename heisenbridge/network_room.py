@@ -22,6 +22,7 @@ import irc.client_aio
 import irc.connection
 from jaraco.stream import buffer
 from python_socks.async_.asyncio import Proxy
+from mautrix.util.bridge_state import BridgeStateEvent
 
 from heisenbridge import __version__
 from heisenbridge.channel_room import ChannelRoom
@@ -1231,6 +1232,8 @@ class NetworkRoom(Room):
             self.next_server += 1
 
             try:
+                asyncio.ensure_future(self.serv.push_bridge_state(BridgeStateEvent.CONNECTING, remote_id=self.name))
+
                 with_tls = ""
                 ssl_ctx = False
                 server_hostname = None
@@ -1490,6 +1493,8 @@ class NetworkRoom(Room):
                 # run connection registration (SASL, user, nick)
                 await self.conn.register()
 
+                asyncio.ensure_future(self.serv.push_bridge_state(BridgeStateEvent.CONNECTED, remote_id=self.name))
+
                 return
             except TimeoutError:
                 self.send_notice("Connection timed out.")
@@ -1557,8 +1562,10 @@ class NetworkRoom(Room):
                     self.backoff_task = None
 
             asyncio.ensure_future(later(self))
+            asyncio.ensure_future(self.serv.push_bridge_state(BridgeStateEvent.TRANSIENT_DISCONNECT, remote_id=self.name))
         else:
             self.send_notice("Disconnected.")
+            asyncio.ensure_future(self.serv.push_bridge_state(BridgeStateEvent.LOGGED_OUT, remote_id=self.name))
 
     @ircroom_event()
     def on_pass(self, conn, event) -> None:

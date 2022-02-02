@@ -471,7 +471,7 @@ class NetworkRoom(Room):
         cmd.add_argument(
             "--add",
             nargs=1,
-            choices=["message-tags", "chghost", "draft/relaymsg", "znc.in/self-message"],
+            choices=["message-tags", "chghost", "draft/relaymsg", "znc.in/self-message", "twitch.tv/membership"],
             help="Add to CAP request",
         )
         cmd.add_argument("--remove", nargs=1, help="Remove from CAP request")

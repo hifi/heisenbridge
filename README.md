@@ -196,7 +196,7 @@ Install
 
 7. Start a DM with `@heisenbridge:your.homeserver` to get online usage help. Example commands to join a new network:
 
-   ```bash
+   ```
    ADDNETWORK freenode
    ADDSERVER freenode chat.freenode.net 7000 --tls
    OPEN freenode

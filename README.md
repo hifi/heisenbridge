@@ -194,7 +194,15 @@ Install
    python -m heisenbridge -c /path/to/synapse/config/heisenbridge.yaml
    ```
 
-7. Start a DM with `@heisenbridge:your.homeserver` to get online usage help
+7. Start a DM with `@heisenbridge:your.homeserver` to get online usage help. Example commands to join a new network:
+
+   ```bash
+   ADDNETWORK freenode
+   ADDSERVER freenode chat.freenode.net 7000 --tls
+   OPEN freenode
+   ```
+
+   You will be invited to a room where you can `CONNECT` and `JOIN #some-channel`
 
 To update your installation, run `pip install --upgrade heisenbridge`
 

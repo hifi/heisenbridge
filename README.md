@@ -197,9 +197,9 @@ Install
 7. Start a DM with `@heisenbridge:your.homeserver` to get online usage help. Example commands to join a new network:
 
    ```
-   ADDNETWORK freenode
-   ADDSERVER freenode chat.freenode.net 7000 --tls
-   OPEN freenode
+   ADDNETWORK IRCnet
+   ADDSERVER IRCnet ssl.ircnet.io 6697 --tls
+   OPEN IRCnet
    ```
 
    You will be invited to a room where you can `CONNECT` and `JOIN #some-channel`

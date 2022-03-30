@@ -1354,6 +1354,9 @@ class NetworkRoom(Room):
                 self.conn.add_global_handler("away", self.on_away)
                 self.conn.add_global_handler("endofwhois", self.on_endofwhois)
 
+                # tags
+                self.conn.add_global_handler("tagmsg", self.on_pass_or_ignore)
+
                 # generated
                 self.conn.add_global_handler("ctcp", self.on_ctcp)
                 self.conn.add_global_handler("ctcpreply", self.on_ctcpreply)

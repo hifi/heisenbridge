@@ -21,6 +21,7 @@ from mautrix.api import SynapseAdminPath
 from mautrix.appservice import AppService as MauService
 from mautrix.appservice.state_store import ASStateStore
 from mautrix.client.state_store.memory import MemoryStateStore
+from mautrix.errors import MatrixConnectionError
 from mautrix.errors import MatrixRequestError
 from mautrix.errors import MForbidden
 from mautrix.errors import MUserInUse
@@ -424,21 +425,30 @@ class BridgeAppService(AppService):
         self.api = HTTPAPI(base_url=homeserver_url, token=self.registration["as_token"])
 
         # conduit requires that the appservice user is registered before whoami
-        try:
-            await self.api.request(
-                Method.POST,
-                Path.register,
-                {
-                    "type": "m.login.application_service",
-                    "username": self.registration["sender_localpart"],
-                },
-            )
-            logging.debug("Appservice user registration succeeded.")
-        except MUserInUse:
-            logging.debug("Appservice user is already registered.")
-        except Exception:
-            logging.exception("Unexpected failure when registering appservice user.")
-            return
+        wait = 0
+        while True:
+            try:
+                await self.api.request(
+                    Method.POST,
+                    Path.register,
+                    {
+                        "type": "m.login.application_service",
+                        "username": self.registration["sender_localpart"],
+                    },
+                )
+                logging.debug("Appservice user registration succeeded.")
+                break
+            except MUserInUse:
+                logging.debug("Appservice user is already registered.")
+                break
+            except MatrixConnectionError as e:
+                if wait < 30:
+                    wait += 5
+                logging.warning(f"Failed to connect to HS: {e}, retrying in {wait} seconds...")
+                await asyncio.sleep(wait)
+            except Exception:
+                logging.exception("Unexpected failure when registering appservice user.")
+                sys.exit(1)
 
         # mautrix migration requires us to call whoami manually at this point
         whoami = await self.api.request(Method.GET, Path.account.whoami)
@@ -463,13 +473,14 @@ class BridgeAppService(AppService):
             await self.az.start(host=listen_address, port=listen_port)
         except Exception:
             logging.exception("Failed to listen.")
-            return
+            sys.exit(1)
 
         try:
             await self.az.intent.ensure_registered()
             logging.debug("Appservice user exists at least now.")
         except Exception:
             logging.exception("Unexpected failure when registering appservice user.")
+            sys.exit(1)
 
         self._rooms = {}
         self._users = {}

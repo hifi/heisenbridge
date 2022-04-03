@@ -54,7 +54,7 @@ class SpaceRoom(Room):
     async def create_finalize(self) -> None:
         resp = await self.az.intent.api.request(
             Method.POST,
-            Path.createRoom,
+            Path.v3.createRoom,
             {
                 "creation_content": {
                     "type": "m.space",

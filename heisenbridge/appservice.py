@@ -28,7 +28,7 @@ class AppService(ABC):
     async def create_room(self, name: str, topic: str, invite: List[str]) -> str:
         resp = await self.az.intent.api.request(
             Method.POST,
-            Path.createRoom,
+            Path.v3.createRoom,
             {
                 "visibility": "private",
                 "name": name,

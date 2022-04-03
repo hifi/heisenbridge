@@ -317,7 +317,7 @@ class BridgeAppService(AppService):
             registration = yaml.load(f)
 
         api = HTTPAPI(base_url=homeserver_url, token=registration["as_token"])
-        whoami = await api.request(Method.GET, Path.account.whoami)
+        whoami = await api.request(Method.GET, Path.v3.account.whoami)
         self.user_id = whoami["user_id"]
         self.server_name = self.user_id.split(":", 1)[1]
         print("We are " + whoami["user_id"])
@@ -430,7 +430,7 @@ class BridgeAppService(AppService):
             try:
                 await self.api.request(
                     Method.POST,
-                    Path.register,
+                    Path.v3.register,
                     {
                         "type": "m.login.application_service",
                         "username": self.registration["sender_localpart"],
@@ -451,7 +451,7 @@ class BridgeAppService(AppService):
                 sys.exit(1)
 
         # mautrix migration requires us to call whoami manually at this point
-        whoami = await self.api.request(Method.GET, Path.account.whoami)
+        whoami = await self.api.request(Method.GET, Path.v3.account.whoami)
 
         logging.info("We are " + whoami["user_id"])
 

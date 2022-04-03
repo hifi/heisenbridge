@@ -13,6 +13,7 @@ from mautrix.types.event.type import EventType
 
 from heisenbridge.appservice import AppService
 from heisenbridge.event_queue import EventQueue
+from heisenbridge.parser import IRCMatrixParser
 
 
 class RoomInvalidError(Exception):
@@ -28,6 +29,7 @@ class Room(ABC):
     lazy_members: Optional[Dict[str, str]]
     bans: List[str]
     displaynames: Dict[str, str]
+    parser: IRCMatrixParser
 
     _mx_handlers: Dict[str, List[Callable[[dict], bool]]]
     _queue: EventQueue
@@ -41,6 +43,7 @@ class Room(ABC):
         self.lazy_members = None
         self.displaynames = {}
         self.last_messages = defaultdict(str)
+        self.parser = IRCMatrixParser(self.displaynames)
 
         self._mx_handlers = {}
         self._queue = EventQueue(self._flush_events)

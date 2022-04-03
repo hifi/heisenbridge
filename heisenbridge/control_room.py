@@ -10,7 +10,6 @@ from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.network_room import NetworkRoom
-from heisenbridge.parser import IRCMatrixParser
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
 
@@ -193,7 +192,7 @@ class ControlRoom(Room):
 
         try:
             if event.content.formatted_body:
-                lines = str(IRCMatrixParser.parse(event.content.formatted_body)).split("\n")
+                lines = str(await self.parser.parse(event.content.formatted_body)).split("\n")
             else:
                 lines = event.content.body.split("\n")
 

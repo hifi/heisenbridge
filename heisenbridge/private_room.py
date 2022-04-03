@@ -17,7 +17,6 @@ from mautrix.api import SynapseAdminPath
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
-from heisenbridge.parser import IRCMatrixParser
 from heisenbridge.room import Room
 
 
@@ -214,7 +213,6 @@ class PrivateRoom(Room):
     force_forward = False
 
     commands: CommandManager
-    parser: IRCMatrixParser
 
     def init(self) -> None:
         self.name = None
@@ -223,7 +221,6 @@ class PrivateRoom(Room):
         self.network_name = None  # deprecated
         self.media = []
         self.lazy_members = {}  # allow lazy joining your own ghost for echo
-        self.parser = IRCMatrixParser(self.displaynames)
 
         self.commands = CommandManager()
 

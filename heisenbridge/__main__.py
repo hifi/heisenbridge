@@ -739,10 +739,13 @@ def main():
             print("Registration file already exists, not overwriting.")
             sys.exit(1)
 
-        with open(args.config, "w") as f:
-            yaml.dump(registration, f)
+        if args.config == "-":
+            yaml.dump(registration, sys.stdout)
+        else:
+            with open(args.config, "w") as f:
+                yaml.dump(registration, f)
 
-        print(f"Registration file generated and saved to {args.config}")
+            print(f"Registration file generated and saved to {args.config}")
     elif "reset" in args:
         service = BridgeAppService()
         loop = asyncio.get_event_loop()

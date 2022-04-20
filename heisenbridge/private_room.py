@@ -295,6 +295,10 @@ class PrivateRoom(Room):
         room.network = network
         room.network_id = network.id
         room.network_name = network.name
+
+        room.max_lines = network.serv.config["max_lines"]
+        room.use_pastebin = network.serv.config["use_pastebin"]
+
         asyncio.ensure_future(room._create_mx(name))
         return room
 

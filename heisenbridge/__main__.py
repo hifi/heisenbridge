@@ -490,6 +490,8 @@ class BridgeAppService(AppService):
             "allow": {},
             "idents": {},
             "member_sync": "half",
+            "max_lines": 0,
+            "use_pastebin": True,
             "media_url": None,
             "namespace": self.puppet_prefix,
         }

@@ -184,6 +184,9 @@ class ChannelRoom(PrivateRoom):
         # stamp global member sync setting at room creation time
         room.member_sync = network.serv.config["member_sync"]
 
+        room.max_lines = network.serv.config["max_lines"]
+        room.use_pastebin = network.serv.config["use_pastebin"]
+
         asyncio.ensure_future(room._create_mx(name))
         return room
 

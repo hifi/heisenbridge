@@ -153,6 +153,26 @@ class ControlRoom(Room):
             group.add_argument("--full", help="set full sync, members are fully synchronized", action="store_true")
             self.commands.register(cmd, self.cmd_sync)
 
+            cmd = CommandParser(
+                prog="MAXLINES",
+                description="set default maximum number of lines per message until truncation or pastebin",
+                epilog="Note: Users can override this per room.",
+            )
+            cmd.add_argument("lines", type=int, nargs="?", help="Number of lines")
+            self.commands.register(cmd, self.cmd_maxlines)
+
+            cmd = CommandParser(
+                prog="PASTEBIN",
+                description="enable or disable automatic pastebin of long messages by default",
+                epilog="Note: Users can override this per room.",
+            )
+            cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable pastebin")
+            cmd.add_argument(
+                "--disable", dest="enabled", action="store_false", help="Disable pastebin (messages will be truncated)"
+            )
+            cmd.set_defaults(enabled=None)
+            self.commands.register(cmd, self.cmd_pastebin)
+
             cmd = CommandParser(prog="MEDIAURL", description="configure media URL for links")
             cmd.add_argument("url", nargs="?", help="new URL override")
             cmd.add_argument("--remove", help="remove URL override (will retry auto-detection)", action="store_true")
@@ -495,6 +515,20 @@ class ControlRoom(Room):
 
         self.send_notice(f"Media URL override is set to {self.serv.config['media_url']}")
         self.send_notice(f"Current active media URL: {self.serv.endpoint}")
+
+    async def cmd_maxlines(self, args):
+        if args.lines is not None:
+            self.serv.config["max_lines"] = args.lines
+            await self.serv.save()
+
+        self.send_notice(f"Max lines default is {self.serv.config['max_lines']}")
+
+    async def cmd_pastebin(self, args):
+        if args.enabled is not None:
+            self.serv.config["use_pastebin"] = args.enabled
+            await self.serv.save()
+
+        self.send_notice(f"Pastebin is {'enabled' if self.serv.config['use_pastebin'] else 'disabled'} by default")
 
     async def cmd_open(self, args):
         networks = self.networks()

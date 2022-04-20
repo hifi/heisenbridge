@@ -135,6 +135,9 @@ class PlumbedRoom(ChannelRoom):
         # stamp global member sync setting at room creation time
         room.member_sync = network.serv.config["member_sync"]
 
+        room.max_lines = network.serv.config["max_lines"]
+        room.use_pastebin = network.serv.config["use_pastebin"]
+
         for user_id, member in joined.items():
             if member.displayname is not None:
                 room.displaynames[user_id] = member.displayname

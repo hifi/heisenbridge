@@ -58,20 +58,6 @@ class PlumbedRoom(ChannelRoom):
         super().init()
 
         cmd = CommandParser(
-            prog="MAXLINES", description="set maximum number of lines per message until truncation or pastebin"
-        )
-        cmd.add_argument("lines", type=int, nargs="?", help="Number of lines")
-        self.commands.register(cmd, self.cmd_maxlines)
-
-        cmd = CommandParser(prog="PASTEBIN", description="enable or disable automatic pastebin of long messages")
-        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable pastebin")
-        cmd.add_argument(
-            "--disable", dest="enabled", action="store_false", help="Disable pastebin (messages will be truncated)"
-        )
-        cmd.set_defaults(enabled=None)
-        self.commands.register(cmd, self.cmd_pastebin)
-
-        cmd = CommandParser(
             prog="DISPLAYNAMES", description="enable or disable use of displaynames in relayed messages"
         )
         cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable displaynames")
@@ -163,12 +149,6 @@ class PlumbedRoom(ChannelRoom):
     def from_config(self, config: dict) -> None:
         super().from_config(config)
 
-        if "max_lines" in config:
-            self.max_lines = config["max_lines"]
-
-        if "use_pastebin" in config:
-            self.use_pastebin = config["use_pastebin"]
-
         if "use_displaynames" in config:
             self.use_displaynames = config["use_displaynames"]
 
@@ -190,8 +170,6 @@ class PlumbedRoom(ChannelRoom):
     def to_config(self) -> dict:
         return {
             **(super().to_config()),
-            "max_lines": self.max_lines,
-            "use_pastebin": self.use_pastebin,
             "use_displaynames": self.use_displaynames,
             "use_disambiguation": self.use_disambiguation,
             "use_zwsp": self.use_zwsp,
@@ -324,20 +302,6 @@ class PlumbedRoom(ChannelRoom):
             del ret[nick]
 
         return ret
-
-    async def cmd_maxlines(self, args) -> None:
-        if args.lines is not None:
-            self.max_lines = args.lines
-            await self.save()
-
-        self.send_notice(f"Max lines is {self.max_lines}")
-
-    async def cmd_pastebin(self, args) -> None:
-        if args.enabled is not None:
-            self.use_pastebin = args.enabled
-            await self.save()
-
-        self.send_notice(f"Pastebin is {'enabled' if self.use_pastebin else 'disabled'}")
 
     async def cmd_displaynames(self, args) -> None:
         if args.enabled is not None:

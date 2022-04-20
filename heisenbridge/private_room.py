@@ -208,8 +208,8 @@ class PrivateRoom(Room):
     network_name: Optional[str]
     media: List[List[str]]
 
-    # for compatibility with plumbed rooms
     max_lines = 0
+    use_pastebin = True
     force_forward = False
 
     commands: CommandManager
@@ -228,10 +228,30 @@ class PrivateRoom(Room):
             cmd = CommandParser(prog="WHOIS", description="WHOIS the other user")
             self.commands.register(cmd, self.cmd_whois)
 
+        cmd = CommandParser(
+            prog="MAXLINES", description="set maximum number of lines per message until truncation or pastebin"
+        )
+        cmd.add_argument("lines", type=int, nargs="?", help="Number of lines")
+        self.commands.register(cmd, self.cmd_maxlines)
+
+        cmd = CommandParser(prog="PASTEBIN", description="enable or disable automatic pastebin of long messages")
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable pastebin")
+        cmd.add_argument(
+            "--disable", dest="enabled", action="store_false", help="Disable pastebin (messages will be truncated)"
+        )
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_pastebin)
+
         self.mx_register("m.room.message", self.on_mx_message)
         self.mx_register("m.room.redaction", self.on_mx_redaction)
 
     def from_config(self, config: dict) -> None:
+        if "max_lines" in config:
+            self.max_lines = config["max_lines"]
+
+        if "use_pastebin" in config:
+            self.use_pastebin = config["use_pastebin"]
+
         if "name" not in config:
             raise Exception("No name key in config for ChatRoom")
 
@@ -251,7 +271,14 @@ class PrivateRoom(Room):
             raise Exception("No network or network_id key in config for PrivateRoom")
 
     def to_config(self) -> dict:
-        return {"name": self.name, "network": self.network_name, "network_id": self.network_id, "media": self.media[:5]}
+        return {
+            "name": self.name,
+            "network": self.network_name,
+            "network_id": self.network_id,
+            "media": self.media[:5],
+            "max_lines": self.max_lines,
+            "use_pastebin": self.use_pastebin,
+        }
 
     @staticmethod
     def create(network: NetworkRoom, name: str) -> "PrivateRoom":
@@ -681,3 +708,17 @@ class PrivateRoom(Room):
     @connected
     async def cmd_whois(self, args) -> None:
         self.network.conn.whois(f"{self.name} {self.name}")
+
+    async def cmd_maxlines(self, args) -> None:
+        if args.lines is not None:
+            self.max_lines = args.lines
+            await self.save()
+
+        self.send_notice(f"Max lines is {self.max_lines}")
+
+    async def cmd_pastebin(self, args) -> None:
+        if args.enabled is not None:
+            self.use_pastebin = args.enabled
+            await self.save()
+
+        self.send_notice(f"Pastebin is {'enabled' if self.use_pastebin else 'disabled'}")

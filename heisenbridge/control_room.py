@@ -60,6 +60,15 @@ class ControlRoom(Room):
             self.commands.register(cmd, self.cmd_masks)
 
             cmd = CommandParser(
+                prog="HIDDENROOM",
+                description="Use a hidden room to offload invites into. Keeps room history clean.",
+            )
+            group = cmd.add_mutually_exclusive_group()
+            group.add_argument("--enable", help="Enable use of hidden room", action="store_true")
+            group.add_argument("--disable", help="Disable use of hidden room", action="store_true")
+            self.commands.register(cmd, self.cmd_hidden_room)
+
+            cmd = CommandParser(
                 prog="ADDMASK",
                 description="add new allow mask",
                 epilog=(
@@ -240,6 +249,20 @@ class ControlRoom(Room):
             networks[network.lower()] = config
 
         return networks
+
+    async def cmd_hidden_room(self, args):
+        if args.enable:
+            self.serv.config["use_hidden_room"] = True
+            await self.serv.save()
+        elif args.disable:
+            self.serv.config["use_hidden_room"] = False
+            await self.serv.save()
+
+        try:
+            is_enabled = await self.serv.ensure_hidden_room()
+            self.send_notice(f"Hidden room is {'enabled' if is_enabled else 'disabled'}.")
+        except Exception as e:
+            self.send_notice(f"Failed setting up hidden room: {e}")
 
     async def cmd_masks(self, args):
         msg = "Configured masks:\n"

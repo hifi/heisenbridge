@@ -665,8 +665,17 @@ def main():
         help="show bridge version",
         default=argparse.SUPPRESS,
     )
-    parser.add_argument("-l", "--listen-address", help="bridge listen address", default="127.0.0.1")
-    parser.add_argument("-p", "--listen-port", help="bridge listen port", type=int, default="9898")
+    parser.add_argument(
+        "-l",
+        "--listen-address",
+        help="bridge listen address (default: as specified in url in config, 127.0.0.1 otherwise)",
+    )
+    parser.add_argument(
+        "-p",
+        "--listen-port",
+        help="bridge listen port (default: as specified in url in config, 9898 otherwise)",
+        type=int,
+    )
     parser.add_argument("-u", "--uid", help="user id to run as", default=None)
     parser.add_argument("-g", "--gid", help="group id to run as", default=None)
     parser.add_argument("-i", "--identd", action="store_true", help="enable identd service")
@@ -722,7 +731,7 @@ def main():
 
         registration = {
             "id": "heisenbridge",
-            "url": "http://{}:{}".format(args.listen_address, args.listen_port),
+            "url": "http://{}:{}".format(args.listen_address or "127.0.0.1", args.listen_port or 9898),
             "as_token": "".join(random.choice(letters) for i in range(64)),
             "hs_token": "".join(random.choice(letters) for i in range(64)),
             "rate_limited": False,
@@ -778,9 +787,24 @@ def main():
 
         os.umask(0o077)
 
-        loop.run_until_complete(
-            service.run(args.listen_address, args.listen_port, args.homeserver, args.owner, args.safe_mode)
-        )
+        listen_address = args.listen_address
+        listen_port = args.listen_port
+
+        if not listen_address:
+            try:
+                url = urllib.parse.urlparse(service.registration["url"])
+                listen_address = url.hostname
+            except Exception:
+                listen_address = "127.0.0.1"
+
+        if not listen_port:
+            try:
+                url = urllib.parse.urlparse(service.registration["url"])
+                listen_port = url.port
+            except Exception:
+                listen_port = 9898
+
+        loop.run_until_complete(service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode))
         loop.close()
 
 

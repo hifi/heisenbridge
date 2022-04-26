@@ -25,6 +25,8 @@ from mautrix.errors import MatrixConnectionError
 from mautrix.errors import MatrixRequestError
 from mautrix.errors import MForbidden
 from mautrix.errors import MUserInUse
+from mautrix.types import EventType
+from mautrix.types import JoinRule
 from mautrix.types import Membership
 from mautrix.util.config import yaml
 
@@ -32,6 +34,7 @@ from heisenbridge import __version__
 from heisenbridge.appservice import AppService
 from heisenbridge.channel_room import ChannelRoom
 from heisenbridge.control_room import ControlRoom
+from heisenbridge.hidden_room import HiddenRoom
 from heisenbridge.identd import Identd
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.plumbed_room import PlumbedRoom
@@ -386,6 +389,36 @@ class BridgeAppService(AppService):
         asyncio.ensure_future(put_presence())
         asyncio.get_running_loop().call_later(60, self._keepalive)
 
+    async def ensure_hidden_room(self):
+        use_hidden_room = self.config.get("use_hidden_room", False)
+
+        if not self.hidden_room and use_hidden_room:
+            try:
+                resp = await self.az.intent.api.request(Method.GET, Path.v3.capabilities)
+                if resp["capabilities"]["m.room_versions"]["available"].get("9", None) == "stable":
+                    self.hidden_room = await HiddenRoom.create(self)
+                else:
+                    m = "No stable version 9 rooms available, hidden room disabled."
+                    logging.info(m)
+                    raise Exception(m)
+            except KeyError:
+                m = "Unexpected capabilities response from server."
+                logging.debug(m)
+                raise Exception(m)
+        elif self.hidden_room and not use_hidden_room:
+            joined = await self.az.state_store.get_member_profiles(self.hidden_room.id, (Membership.JOIN,))
+
+            self.unregister_room(self.hidden_room.id)
+            await self.leave_room(self.hidden_room.id, joined.keys())
+            self.hidden_room = None
+
+            for room in self._rooms.values():
+                if room.hidden_room_id:
+                    # Re-Run post init if room has a hidden room set
+                    await room.post_init()
+
+        return use_hidden_room
+
     async def run(self, listen_address, listen_port, homeserver_url, owner, safe_mode):
 
         if "sender_localpart" not in self.registration:
@@ -557,9 +590,10 @@ class BridgeAppService(AppService):
         print(f"Bridge is in {len(joined_rooms)} rooms, initializing them...", flush=True)
 
         Room.init_class(self.az)
+        self.hidden_room = None
 
         # room types and their init order, network must be before chat and group
-        room_types = [ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom, SpaceRoom]
+        room_types = [HiddenRoom, ControlRoom, NetworkRoom, PrivateRoom, ChannelRoom, PlumbedRoom, SpaceRoom]
 
         room_type_map = {}
         for room_type in room_types:
@@ -588,6 +622,10 @@ class BridgeAppService(AppService):
                 room = cls(id=room_id, user_id=config["user_id"], serv=self, members=joined.keys(), bans=banned)
                 room.from_config(config)
 
+                join_rules = await self.az.intent.get_state_event(room_id, EventType.ROOM_JOIN_RULES)
+                if join_rules.join_rule == JoinRule.RESTRICTED and join_rules.allow:
+                    room.hidden_room_id = join_rules.allow[0].room_id
+
                 # add to room displayname
                 for user_id, member in joined.items():
                     if member.displayname is not None:
@@ -602,6 +640,9 @@ class BridgeAppService(AppService):
                 else:
                     room.cleanup()
                     raise Exception("Room validation failed after init")
+
+                if cls is HiddenRoom:
+                    self.hidden_room = room
             except Exception:
                 logging.exception(f"Failed to reconfigure room {room_id} during init, leaving.")
 
@@ -612,6 +653,11 @@ class BridgeAppService(AppService):
                     print("Safe mode enabled, not leaving room.", flush=True)
                 else:
                     await self.leave_room(room_id, joined.keys())
+
+        try:
+            await self.ensure_hidden_room()
+        except Exception as e:
+            logging.debug(f"Failed setting up hidden room: {e}")
 
         print("All valid rooms initialized, connecting network rooms...", flush=True)
 

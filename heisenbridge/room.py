@@ -27,6 +27,7 @@ class Room(ABC):
     serv: AppService
     members: List[str]
     lazy_members: Optional[Dict[str, str]]
+    hidden_room_id: Optional[str]
     bans: List[str]
     displaynames: Dict[str, str]
     parser: IRCMatrixParser
@@ -41,6 +42,7 @@ class Room(ABC):
         self.members = list(members)
         self.bans = list(bans) if bans else []
         self.lazy_members = None
+        self.hidden_room_id = None
         self.displaynames = {}
         self.last_messages = defaultdict(str)
         self.parser = IRCMatrixParser(self.displaynames)
@@ -148,6 +150,9 @@ class Room(ABC):
                 del self.displaynames[event.state_key]
 
     async def _join(self, user_id, nick=None):
+        if self.hidden_room_id:
+            await self.az.intent.user(user_id).ensure_joined(self.hidden_room_id)
+
         await self.az.intent.user(user_id).ensure_joined(self.id, ignore_cache=True)
 
         self.members.append(user_id)

@@ -14,6 +14,12 @@ from urllib.parse import urlparse
 
 from mautrix.api import Method
 from mautrix.api import SynapseAdminPath
+from mautrix.errors import MatrixStandardRequestError
+from mautrix.types.event.state import JoinRestriction
+from mautrix.types.event.state import JoinRestrictionType
+from mautrix.types.event.state import JoinRule
+from mautrix.types.event.state import JoinRulesStateEventContent
+from mautrix.types.event.type import EventType
 
 from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
@@ -880,3 +886,80 @@ class PrivateRoom(Room):
             await self.save()
 
         self.send_notice(f"Pastebin is {'enabled' if self.use_pastebin else 'disabled'}")
+
+    async def _attach_hidden_room_internal(self) -> None:
+        await self.az.intent.send_state_event(
+            self.id,
+            EventType.ROOM_JOIN_RULES,
+            content=JoinRulesStateEventContent(
+                join_rule=JoinRule.RESTRICTED,
+                allow=[
+                    JoinRestriction(type=JoinRestrictionType.ROOM_MEMBERSHIP, room_id=self.serv.hidden_room.id),
+                ],
+            ),
+        )
+        self.hidden_room_id = self.serv.hidden_room.id
+
+    async def _detach_hidden_room_internal(self) -> None:
+        await self.az.intent.send_state_event(
+            self.id,
+            EventType.ROOM_JOIN_RULES,
+            content=JoinRulesStateEventContent(join_rule=JoinRule.INVITE),
+        )
+        self.hidden_room_id = None
+
+    async def _attach_hidden_room(self) -> None:
+        if self.hidden_room_id:
+            self.send_notice("Room already has a hidden room attached.")
+            return
+        if not self.serv.hidden_room:
+            self.send_notice("Server has no hidden room!")
+            return
+
+        logging.debug(f"Attaching room {self.id} to servers hidden room {self.serv.hidden_room.id}.")
+        try:
+            room_create = await self.az.intent.get_state_event(self.id, EventType.ROOM_CREATE)
+            if room_create.room_version in [str(v) for v in range(1, 9)]:
+                self.send_notice("Only rooms of version 9 or greater can be attached to a hidden room.")
+                self.send_notice("Leave and re-create the room to ensure the correct version.")
+                return
+
+            await self._attach_hidden_room_internal()
+            self.send_notice("Hidden room attached, invites should now be gone.")
+        except MatrixStandardRequestError as e:
+            logging.debug("Setting join_rules for hidden room failed.", exc_info=True)
+            self.send_notice(f"Failed attaching hidden room: {e.message}")
+            self.send_notice("Make sure the room is at least version 9.")
+        except Exception:
+            logging.exception(f"Failed to attach {self.id} to hidden room {self.serv.hidden_room.id}.")
+
+    async def _detach_hidden_room(self) -> None:
+        if not self.hidden_room_id:
+            self.send_notice("Room already detached from hidden room.")
+            return
+
+        logging.debug(f"Detaching room {self.id} from hidden room {self.hidden_room_id}.")
+        try:
+            await self._detach_hidden_room_internal()
+            self.send_notice("Hidden room detached.")
+        except MatrixStandardRequestError as e:
+            logging.debug("Setting join_rules for hidden room failed.", exc_info=True)
+            self.send_notice(f"Failed detaching hidden room: {e.message}")
+        except Exception:
+            logging.exception(f"Failed to detach {self.id} from hidden room {self.hidden_room_id}.")
+
+    async def cmd_upgrade(self, args) -> None:
+        if args.undo:
+            await self._detach_hidden_room()
+        else:
+            await self._attach_hidden_room()
+
+    async def post_init(self) -> None:
+        if self.hidden_room_id and not self.serv.hidden_room:
+            logging.debug(
+                f"Server has no hidden room, detaching room {self.id} from hidden room {self.hidden_room_id}."
+            )
+            await self._detach_hidden_room_internal()
+        elif self.hidden_room_id and self.hidden_room_id != self.serv.hidden_room.id:
+            logging.debug(f"Server has different hidden room, reattaching room {self.id}.")
+            await self._attach_hidden_room_internal()

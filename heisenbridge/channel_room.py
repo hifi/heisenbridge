@@ -140,6 +140,13 @@ class ChannelRoom(PrivateRoom):
         )
         self.commands.register(cmd, self.cmd_stop, ["STOP!", "STAHP", "STAHP!"])
 
+        cmd = CommandParser(
+            prog="UPGRADE",
+            description="Perform any potential bridge-side upgrades of the room",
+        )
+        cmd.add_argument("--undo", action="store_true", help="undo previously performed upgrade")
+        self.commands.register(cmd, self.cmd_upgrade)
+
         self.names_buffer = []
         self.bans_buffer = []
         self.on_channel = []
@@ -196,10 +203,14 @@ class ChannelRoom(PrivateRoom):
         if visible_name.startswith("!"):
             visible_name = "!" + visible_name[6:]
 
+        if self.serv.hidden_room:
+            self.hidden_room_id = self.serv.hidden_room.id
+
         self.id = await self.network.serv.create_room(
             f"{visible_name} ({self.network.name})",
             "",
             [self.network.user_id],
+            self.hidden_room_id,
         )
         self.serv.register_room(self)
         await self.save()

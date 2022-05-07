@@ -575,6 +575,7 @@ class NetworkRoom(Room):
             "tls_cert": self.tls_cert,
             "pills_length": self.pills_length,
             "pills_ignore": self.pills_ignore,
+            "autoquery": self.autoquery,
             "rejoin_invite": self.rejoin_invite,
             "rejoin_kick": self.rejoin_kick,
             "caps": self.caps,

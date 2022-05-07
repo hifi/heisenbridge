@@ -1618,7 +1618,37 @@ class NetworkRoom(Room):
                 f"<b>{source}</b> requested CTCP <b>{html.escape(event.arguments[0])}</b> -> {html.escape(reply)}"
             )
         else:
-            self.send_notice_html(f"<b>{source}</b> requested CTCP <b>{html.escape(event.arguments[0])}</b> (ignored)")
+            if event.arguments[0] == "ACTION":
+                # slightly backwards
+                target = event.source.nick.lower()
+
+                if target not in self.rooms:
+
+                    if self.autoquery:
+
+                        async def later():
+                            # reuse query command to create a room
+                            await self.cmd_query(Namespace(nick=event.source.nick, message=[]))
+
+                            # push the message
+                            room = self.rooms[target]
+                            await self.serv.ensure_irc_user_id(self.name, event.source.nick)
+                            room.on_ctcp(conn, event)
+
+                        asyncio.ensure_future(later())
+                    else:
+                        source = self.source_text(conn, event)
+                        self.send_notice_html(
+                            f"Emote from <b>{source}:</b> {html.escape(event.source.nick)} {html.escape(event.arguments[1])}"
+                        )
+                else:
+                    room = self.rooms[target]
+                    if not room.in_room(self.user_id):
+                        asyncio.ensure_future(self.az.intent.invite_user(self.rooms[target].id, self.user_id))
+            else:
+                self.send_notice_html(
+                    f"<b>{source}</b> requested CTCP <b>{html.escape(event.arguments[0])}</b> (ignored)"
+                )
 
     @ircroom_event()
     def on_ctcpreply(self, conn, event) -> None:
@@ -1685,6 +1715,7 @@ class NetworkRoom(Room):
 
                     # push the message
                     room = self.rooms[target]
+                    await self.serv.ensure_irc_user_id(self.name, event.source.nick)
                     room.on_privmsg(conn, event)
 
                 asyncio.ensure_future(later())

@@ -1,6 +1,7 @@
 import asyncio
 import re
 from argparse import Namespace
+from html import escape
 from urllib.parse import urlparse
 
 from mautrix.errors import MatrixRequestError
@@ -12,6 +13,10 @@ from heisenbridge.command_parse import CommandParserError
 from heisenbridge.network_room import NetworkRoom
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
+
+
+def indent(n):
+    return "&nbsp;" * n * 8
 
 
 class ControlRoom(Room):
@@ -31,6 +36,13 @@ class ControlRoom(Room):
         cmd.add_argument("name", help="network name (see NETWORKS)")
         cmd.add_argument("--new", action="store_true", help="force open a new network connection")
         self.commands.register(cmd, self.cmd_open)
+
+        cmd = CommandParser(
+            prog="STATUS",
+            description="show bridge status",
+            epilog="Note: admins see all users but only their own rooms",
+        )
+        self.commands.register(cmd, self.cmd_status)
 
         cmd = CommandParser(
             prog="QUIT",
@@ -99,9 +111,6 @@ class ControlRoom(Room):
             cmd.add_argument("address", help="server address")
             cmd.add_argument("port", nargs="?", type=int, help="server port", default=6667)
             self.commands.register(cmd, self.cmd_delserver)
-
-            cmd = CommandParser(prog="STATUS", description="list active users")
-            self.commands.register(cmd, self.cmd_status)
 
             cmd = CommandParser(
                 prog="FORGET",
@@ -372,19 +381,22 @@ class ControlRoom(Room):
     async def cmd_status(self, args):
         users = set()
 
-        for room in self.serv.find_rooms():
-            users.add(room.user_id)
+        if self.serv.is_admin(self.user_id):
+            for room in self.serv.find_rooms():
+                users.add(room.user_id)
 
-        users = list(users)
-        users.sort()
+            users = list(users)
+            users.sort()
+        else:
+            users.add(self.user_id)
 
-        self.send_notice(f"I have {len(users)} known users:")
-        for user in users:
-            ncontrol = len(self.serv.find_rooms("ControlRoom", user))
+        self.send_notice_html(f"I have {len(users)} known users:")
+        for user_id in users:
+            ncontrol = len(self.serv.find_rooms("ControlRoom", user_id))
 
-            self.send_notice(f"\t{user} ({ncontrol} open control rooms):")
+            self.send_notice_html(f"{indent(1)}{user_id} ({ncontrol} open control rooms):")
 
-            for network in self.serv.find_rooms("NetworkRoom", user):
+            for network in self.serv.find_rooms("NetworkRoom", user_id):
                 connected = "not connected"
                 channels = "not in channels"
                 privates = "not in PMs"
@@ -416,7 +428,18 @@ class ControlRoom(Room):
                 if nplumbs > 0:
                     plumbs = f"in {nplumbs} plumbs"
 
-                self.send_notice(f"\t\t{network.name}, {connected}, {channels}, {privates}, {plumbs}")
+                self.send_notice_html(f"{indent(2)}{network.name}, {connected}, {channels}, {privates}, {plumbs}")
+
+                if self.user_id == user_id:
+                    for room in network.rooms.values():
+                        join = ""
+                        if not room.in_room(user_id):
+                            join = " (you have not joined this room)"
+                            # ensure the user invite is valid
+                            await self.az.intent.invite_user(room.id, self.user_id)
+                        self.send_notice_html(
+                            f'{indent(3)}<a href="https://matrix.to/#/{escape(room.id)}">{escape(room.name)}</a>{join}'
+                        )
 
     async def cmd_forget(self, args):
         if args.user == self.user_id:

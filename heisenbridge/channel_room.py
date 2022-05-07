@@ -170,7 +170,7 @@ class ChannelRoom(PrivateRoom):
     def create(network: NetworkRoom, name: str) -> "ChannelRoom":
         logging.debug(f"ChannelRoom.create(network='{network.name}', name='{name}'")
 
-        room = ChannelRoom(None, network.user_id, network.serv, [network.serv.user_id, network.user_id], [])
+        room = ChannelRoom(None, network.user_id, network.serv, [network.serv.user_id], [])
         room.name = name.lower()
         room.network = network
         room.network_id = network.id

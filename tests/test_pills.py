@@ -30,7 +30,7 @@ def test_pills():
     assert fmt("foo bar") == pill("foo") + " bar"
     assert fmt("bar foo.") == "bar " + pill("foo") + "."
     assert fmt("foo. bar") == pill("foo") + ". bar"
-    assert fmt("foo?bar") == pill("foo") + "?bar"
+    assert fmt("foo? bar") == pill("foo") + "? bar"
     assert fmt("^foo^:") == pill("^foo^") + ":"
     assert fmt("[foo],") == pill("[foo]") + ","
     assert fmt("{foo}?") == pill("{foo}") + "?"
@@ -40,7 +40,7 @@ def test_pills():
     assert fmt("https://foo.bar/foo?foo=foo&foo=foo#foo") == "https://foo.bar/foo?foo=foo&foo=foo#foo"
 
     # must never create a pill
-    assert fmt("foobar") == "foobar"
+    assert fmt("ba.rfoo") == "ba.rfoo"
     assert fmt("barfoo") == "barfoo"
     assert fmt("foo/") == "foo/"
     assert fmt("/foo") == "/foo"

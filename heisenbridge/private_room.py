@@ -112,18 +112,26 @@ def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
 
             # create pills
             if pills:
+                punct = "?!:;,."
 
-                def replace_pill(m):
-                    word = m.group(0).lower()
+                words = []
+                for word in text.split(" "):
+                    wlen = len(word)
+                    while wlen > 0 and word[wlen - 1] in punct:
+                        wlen -= 1
 
-                    if word in pills:
-                        mxid, displayname = pills[word]
-                        return f'<a href="https://matrix.to/#/{escape(mxid)}">{escape(displayname)}</a>'
+                    word_start = word[:wlen]
+                    word_end = word[wlen:]
 
-                    return m.group(0)
+                    if word_start in pills:
+                        mxid, displayname = pills[word_start]
+                        words.append(
+                            f'<a href="https://matrix.to/#/{escape(mxid)}">{escape(displayname)}</a>{word_end}'
+                        )
+                    else:
+                        words.append(word)
 
-                # this will also match some non-nick characters so pillify fails on purpose
-                text = re.sub(r"[^\s\?!:;,\.]+(\.[A-Za-z0-9])?", replace_pill, text)
+                text = " ".join(words)
 
             # if the formatted version has a link, we took some pills
             if "<a href" in text:

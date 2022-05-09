@@ -120,7 +120,7 @@ def parse_irc_formatting(input: str, pills=None) -> Tuple[str, Optional[str]]:
                     while wlen > 0 and word[wlen - 1] in punct:
                         wlen -= 1
 
-                    word_start = word[:wlen]
+                    word_start = word[:wlen].lower()
                     word_end = word[wlen:]
 
                     if word_start in pills:

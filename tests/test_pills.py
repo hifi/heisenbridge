@@ -9,6 +9,7 @@ def test_pills():
     def fmt(input):
         pills = {
             "foo": ("foo", "foo"),
+            "fo0": ("Fo0", "Fo0"),
             "^foo^": ("^foo^", "^foo^"),
             "[foo]": ("[foo]", "[foo]"),
             "{foo}": ("{foo}", "{foo}"),
@@ -19,6 +20,7 @@ def test_pills():
 
     # must always create a pill
     assert fmt("foo") == pill("foo")
+    assert fmt("Fo0") == pill("Fo0")
     assert fmt("foo!") == pill("foo") + "!"
     assert fmt("foo?") == pill("foo") + "?"
     assert fmt("foo bar") == pill("foo") + " bar"

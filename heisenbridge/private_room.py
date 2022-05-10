@@ -559,8 +559,8 @@ class PrivateRoom(Room):
             if i == 0 and prefix and len(prefix) > 0:
                 line = prefix + line
 
-            # filter control characters except ZWSP
-            line = "".join(c for c in line if unicodedata.category(c)[0] != "C" or c == "\u200B")
+                # filter control characters except ZWSP
+                line = "".join(c for c in line if unicodedata.category(c)[0] != "C" or c == "\u200B")
 
             messages += split_long(
                 self.network.conn.real_nickname,

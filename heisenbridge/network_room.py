@@ -94,6 +94,7 @@ class NetworkRoom(Room):
     pills_length: int
     pills_ignore: list
     autoquery: bool
+    color: bool
     tls_cert: str
     rejoin_invite: bool
     rejoin_kick: bool
@@ -132,6 +133,7 @@ class NetworkRoom(Room):
         self.pills_length = 2
         self.pills_ignore = []
         self.autoquery = True
+        self.color = True
         self.allow_ctcp = False
         self.tls_cert = None
         self.rejoin_invite = True
@@ -487,6 +489,15 @@ class NetworkRoom(Room):
         cmd.set_defaults(forward=None)
         self.commands.register(cmd, self.cmd_forward)
 
+        cmd = CommandParser(
+            prog="COLOR",
+            description="enable or disable color formatting from IRC",
+        )
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable color")
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable color")
+        cmd.set_defaults(enabled=True)
+        self.commands.register(cmd, self.cmd_color)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -541,6 +552,9 @@ class NetworkRoom(Room):
         if "autoquery" in config:
             self.autoquery = config["autoquery"]
 
+        if "color" in config:
+            self.autoquery = config["color"]
+
         if "allow_ctcp" in config:
             self.allow_ctcp = config["allow_ctcp"]
 
@@ -576,6 +590,7 @@ class NetworkRoom(Room):
             "pills_length": self.pills_length,
             "pills_ignore": self.pills_ignore,
             "autoquery": self.autoquery,
+            "color": self.color,
             "rejoin_invite": self.rejoin_invite,
             "rejoin_kick": self.rejoin_kick,
             "caps": self.caps,
@@ -1137,6 +1152,13 @@ class NetworkRoom(Room):
             await self.save()
 
         self.send_notice(f"IRC event forwarding is {'enabled' if self.forward else 'disabled'}")
+
+    async def cmd_color(self, args) -> None:
+        if args.enabled is not None:
+            self.color = args.enabled
+            await self.save()
+
+        self.send_notice(f"Color is {'enabled' if self.color else 'disabled'}")
 
     def kickban(self, channel: str, nick: str, reason: str) -> None:
         self.pending_kickbans[nick].append((channel, reason))

@@ -384,7 +384,7 @@ class BridgeAppService(AppService):
                 pass
 
         asyncio.ensure_future(put_presence())
-        asyncio.get_event_loop().call_later(60, self._keepalive)
+        asyncio.get_running_loop().call_later(60, self._keepalive)
 
     async def run(self, listen_address, listen_port, homeserver_url, owner, safe_mode):
 
@@ -636,7 +636,7 @@ class BridgeAppService(AppService):
                 def sync_connect(room):
                     asyncio.ensure_future(room.connect())
 
-                asyncio.get_event_loop().call_later(wait, sync_connect, room)
+                asyncio.get_running_loop().call_later(wait, sync_connect, room)
                 wait += 1
 
         print(f"Init done with {wait-1} networks connecting, bridge is now running!", flush=True)
@@ -644,7 +644,7 @@ class BridgeAppService(AppService):
         await asyncio.Event().wait()
 
 
-def main():
+async def main():
     parser = argparse.ArgumentParser(
         prog=os.path.basename(sys.executable) + " -m " + __package__,
         description=f"a bouncer-style Matrix IRC bridge (v{__version__})",
@@ -759,13 +759,10 @@ def main():
             print(f"Registration file generated and saved to {args.config}")
     elif "reset" in args:
         service = BridgeAppService()
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(service.reset(args.config, args.homeserver))
-        loop.close()
+        await service.reset(args.config, args.homeserver)
     elif "version" in args:
         print(__version__)
     else:
-        loop = asyncio.get_event_loop()
         service = BridgeAppService()
         identd = None
 
@@ -773,7 +770,7 @@ def main():
 
         if args.identd:
             identd = Identd()
-            loop.run_until_complete(identd.start_listening(service, args.identd_port))
+            await identd.start_listening(service, args.identd_port)
 
         if os.getuid() == 0:
             if args.gid:
@@ -804,9 +801,8 @@ def main():
             except Exception:
                 listen_port = 9898
 
-        loop.run_until_complete(service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode))
-        loop.close()
+        await service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

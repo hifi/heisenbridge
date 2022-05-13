@@ -10,7 +10,7 @@ class EventQueue:
     def __init__(self, callback):
         self._callback = callback
         self._events = []
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         self._timer = None
         self._start = 0
         self._chain = asyncio.Queue()

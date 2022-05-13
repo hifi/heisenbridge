@@ -67,6 +67,6 @@ class Identd:
         if socket.has_ipv6:
             sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
             sock.bind(("::", port))
-            self.server = await asyncio.start_server(self.handle, sock=sock, loop=asyncio.get_event_loop(), limit=128)
+            self.server = await asyncio.start_server(self.handle, sock=sock, limit=128)
         else:
             self.server = await asyncio.start_server(self.handle, "0.0.0.0", port, limit=128)

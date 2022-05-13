@@ -181,7 +181,7 @@ class HeisenConnection(AioConnection):
         super().close()
 
     async def _run(self):
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         last = loop.time()
         penalty = 0
 

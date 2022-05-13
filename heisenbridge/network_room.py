@@ -1087,7 +1087,7 @@ class NetworkRoom(Room):
 
     async def cmd_status(self, args) -> None:
         if self.connected_at > 0:
-            conntime = asyncio.get_event_loop().time() - self.connected_at
+            conntime = asyncio.get_running_loop().time() - self.connected_at
             conntime = str(datetime.timedelta(seconds=int(conntime)))
             self.send_notice(f"Connected for {conntime}")
 
@@ -1290,7 +1290,7 @@ class NetworkRoom(Room):
 
                     self.send_notice(f"SASL mechanism set to '{sasl_mechanism if sasl_mechanism else 'none'}'")
 
-                reactor = HeisenReactor(loop=asyncio.get_event_loop())
+                reactor = HeisenReactor(loop=asyncio.get_running_loop())
                 irc_server = reactor.server()
                 irc_server.buffer_class = buffer.LenientDecodingLineBuffer
                 factory = irc.connection.AioFactory(ssl=ssl_ctx, sock=sock, server_hostname=server_hostname)
@@ -1396,7 +1396,7 @@ class NetworkRoom(Room):
                     return
 
                 self.disconnect = False
-                self.connected_at = asyncio.get_event_loop().time()
+                self.connected_at = asyncio.get_running_loop().time()
 
                 # request CAPs
                 caps_req = list(self.caps)
@@ -1535,7 +1535,7 @@ class NetworkRoom(Room):
             self.conn = None
 
         # if we were connected for a while, consider the server working
-        if self.connected_at > 0 and asyncio.get_event_loop().time() - self.connected_at > 300:
+        if self.connected_at > 0 and asyncio.get_running_loop().time() - self.connected_at > 300:
             self.backoff = 0
             self.next_server = 0
             self.connected_at = 0
@@ -1852,7 +1852,7 @@ class NetworkRoom(Room):
 
             self.conn.nick(self.get_nick())
 
-        self.keepnick_task = asyncio.get_event_loop().call_later(300, try_keepnick)
+        self.keepnick_task = asyncio.get_running_loop().call_later(300, try_keepnick)
 
     def on_invite(self, conn, event) -> None:
         rejoin = ""

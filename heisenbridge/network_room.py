@@ -1391,6 +1391,10 @@ class NetworkRoom(Room):
                     self.connected = True
                     await self.save()
 
+                # awaiting above allows disconnect to happen in-between
+                if self.conn is None:
+                    return
+
                 self.disconnect = False
                 self.connected_at = asyncio.get_event_loop().time()
 
@@ -1410,6 +1414,10 @@ class NetworkRoom(Room):
                         self.caps_task = asyncio.ensure_future(self.conn.expect("cap", 10))
                         (connection, event) = await self.caps_task
                         self.caps_task = None
+
+                        if self.conn is None:
+                            return
+
                         if len(event.arguments) > 1 and event.arguments[0] == "LS":
                             self.caps_supported = event.arguments[1].split()
                             self.send_notice(f"Capabilities supported by server: {', '.join(self.caps_supported)}")
@@ -1424,6 +1432,10 @@ class NetworkRoom(Room):
                             self.caps_task = asyncio.ensure_future(self.conn.expect("cap", 10))
                             (connection, event) = await self.caps_task
                             self.caps_task = None
+
+                            if self.conn is None:
+                                return
+
                             if len(event.arguments) > 1:
                                 if event.arguments[0] == "ACK":
                                     self.caps_enabled = event.arguments[1].split()

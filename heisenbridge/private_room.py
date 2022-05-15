@@ -595,6 +595,13 @@ class PrivateRoom(Room):
                 # add self to lazy members list so it'll echo
                 self.lazy_members[source_irc_user_id] = event.source.nick
 
+        if (
+            'twitch.tv/membership' in self.network.caps
+            and irc_user_id not in self.members
+            and irc_user_id not in self.lazy_members
+        ):
+            self.lazy_members[irc_user_id] = event.source.nick
+
         self.send_message(
             plain,
             irc_user_id,

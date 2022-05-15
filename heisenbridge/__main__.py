@@ -644,7 +644,7 @@ class BridgeAppService(AppService):
         await asyncio.Event().wait()
 
 
-async def main():
+async def async_main():
     parser = argparse.ArgumentParser(
         prog=os.path.basename(sys.executable) + " -m " + __package__,
         description=f"a bouncer-style Matrix IRC bridge (v{__version__})",
@@ -804,5 +804,9 @@ async def main():
         await service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode)
 
 
+def main():
+    asyncio.run(async_main())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

@@ -8,6 +8,7 @@ if [ ! -f /data/homeserver.yaml ]; then
 app_service_config_files:
   - /data/heisenbridge.yaml
 enable_registration: true
+enable_registration_without_verification: true
 EOS
 fi
 

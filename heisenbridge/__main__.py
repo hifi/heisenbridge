@@ -524,7 +524,7 @@ class BridgeAppService(AppService):
             "idents": {},
             "member_sync": "half",
             "max_lines": 0,
-            "use_pastebin": True,
+            "use_pastebin": False,
             "media_url": None,
             "namespace": self.puppet_prefix,
         }

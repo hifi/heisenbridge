@@ -369,7 +369,7 @@ class PrivateRoom(Room):
     media: List[List[str]]
 
     max_lines = 0
-    use_pastebin = True
+    use_pastebin = False
     force_forward = False
 
     commands: CommandManager

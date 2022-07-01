@@ -596,7 +596,7 @@ class PrivateRoom(Room):
                 self.lazy_members[source_irc_user_id] = event.source.nick
 
         if (
-            'twitch.tv/membership' in self.network.caps
+            "twitch.tv/membership" in self.network.caps
             and irc_user_id not in self.members
             and irc_user_id not in self.lazy_members
         ):

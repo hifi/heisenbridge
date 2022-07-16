@@ -1,5 +1,4 @@
 import asyncio
-import ipaddress
 import logging
 import re
 import socket
@@ -15,11 +14,7 @@ class Identd:
 
             m = re.match(r"^(\d+)\s*,\s*(\d+)", query)
             if m:
-                _req_addr, req_port, *_ = writer.get_extra_info("peername")
-                req_addr = ipaddress.ip_address(_req_addr)
-
-                if isinstance(req_addr, ipaddress.IPv4Address):
-                    req_addr = ipaddress.ip_address("::ffff:" + _req_addr)
+                req_addr, req_port, *_ = writer.get_extra_info("peername")
 
                 src_port = int(m.group(1))
                 dst_port = int(m.group(2))
@@ -41,14 +36,10 @@ class Identd:
                     if not room.conn or not room.conn.connected:
                         continue
 
-                    _remote_addr, remote_port, *_ = room.conn.transport.get_extra_info("peername") or ("", "")
+                    remote_addr, remote_port, *_ = room.conn.transport.get_extra_info("peername") or ("", "")
                     local_addr, local_port, *_ = room.conn.transport.get_extra_info("sockname") or ("", "")
-                    remote_addr = ipaddress.ip_address(_remote_addr)
 
-                    if isinstance(remote_addr, ipaddress.IPv4Address):
-                        remote_addr = ipaddress.ip_address("::ffff:" + _remote_addr)
-
-                    if remote_addr == req_addr and remote_port == dst_port and local_port == src_port:
+                    if remote_port == dst_port and local_port == src_port:
                         response = f"{src_port}, {dst_port} : USERID : UNIX : {room.get_ident()}\r\n"
                         break
 

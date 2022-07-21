@@ -597,6 +597,7 @@ class BridgeAppService(AppService):
 
         room_type_map = {}
         for room_type in room_types:
+            room_type.init_class(self.az)
             room_type_map[room_type.__name__] = room_type
 
         # import all rooms

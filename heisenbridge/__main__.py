@@ -542,13 +542,22 @@ class BridgeAppService(AppService):
         # load config from HS
         await self.load()
 
+        async def _resolve_media_endpoint():
+            endpoint = await self.detect_public_endpoint()
+
+            # only rewrite it if it wasn't changed
+            if self.endpoint == str(self.api.base_url):
+                self.endpoint = endpoint
+
+            print("Homeserver is publicly available at " + self.endpoint, flush=True)
+
         # use configured media_url for endpoint if we have it
         if self.config["media_url"]:
             self.endpoint = self.config["media_url"]
         else:
-            self.endpoint = await self.detect_public_endpoint()
-
-        print("Homeserver is publicly available at " + self.endpoint, flush=True)
+            print("Trying to detect homeserver public endpoint, this might take a while...", flush=True)
+            self.endpoint = str(self.api.base_url)
+            asyncio.ensure_future(_resolve_media_endpoint())
 
         logging.info("Starting presence loop")
         self._keepalive()

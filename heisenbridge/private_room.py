@@ -684,15 +684,7 @@ class PrivateRoom(Room):
         if content.formatted_body:
             lines = str(await self.parser.parse(content.formatted_body)).split("\n")
         elif content.body:
-            body = content.body
-
-            for user_id, displayname in self.displaynames.items():
-                body = body.replace(user_id, displayname)
-
-                # FluffyChat prefixes mentions in fallback with @
-                body = body.replace("@" + displayname, displayname)
-
-            lines = body.split("\n")
+            lines = content.body.split("\n")
         else:
             logging.warning("_process_event_content called with no usable body")
             return

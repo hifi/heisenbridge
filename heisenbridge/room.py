@@ -180,7 +180,8 @@ class Room(ABC):
                             )
                         else:
                             await self.az.intent.user(event["user_id"]).leave_room(self.id)
-                        self.members.remove(event["user_id"])
+                        if event["user_id"] in self.members:
+                            self.members.remove(event["user_id"])
                         if event["user_id"] in self.displaynames:
                             del self.displaynames[event["user_id"]]
                 elif event["type"] == "_rename":

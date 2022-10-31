@@ -32,6 +32,7 @@ from heisenbridge.irc import HeisenReactor
 from heisenbridge.plumbed_room import PlumbedRoom
 from heisenbridge.private_room import parse_irc_formatting
 from heisenbridge.private_room import PrivateRoom
+from heisenbridge.private_room import ReplyMode
 from heisenbridge.private_room import unix_to_local
 from heisenbridge.room import Room
 from heisenbridge.space_room import SpaceRoom
@@ -100,6 +101,7 @@ class NetworkRoom(Room):
     rejoin_kick: bool
     caps: list
     forward: bool
+    reply_mode: ReplyMode
 
     # state
     commands: CommandManager
@@ -144,6 +146,7 @@ class NetworkRoom(Room):
         self.backoff_task = None
         self.next_server = 0
         self.connected_at = 0
+        self.reply_mode = ReplyMode.MENTION
 
         self.commands = CommandManager()
         self.conn = None
@@ -498,6 +501,27 @@ class NetworkRoom(Room):
         cmd.set_defaults(enabled=True)
         self.commands.register(cmd, self.cmd_color)
 
+        cmd = CommandParser(
+            prog="REPLYMODE",
+            description="Select a behavior when replying to a message in Matrix",
+        )
+        cmd.add_argument(
+            "--mention",
+            dest="reply_mode",
+            action="store_const",
+            const=ReplyMode.MENTION,
+            help="Mention only message authors",
+        )
+        cmd.add_argument(
+            "--quote",
+            dest="reply_mode",
+            action="store_const",
+            const=ReplyMode.QUOTE,
+            help="Quote full message",
+        )
+        cmd.set_defaults(reply_mode=None)
+        self.commands.register(cmd, self.cmd_reply_mode)
+
         self.mx_register("m.room.message", self.on_mx_message)
 
     @staticmethod
@@ -573,6 +597,9 @@ class NetworkRoom(Room):
         if "forward" in config:
             self.forward = config["forward"]
 
+        if "reply_mode" in config:
+            self.reply_mode = ReplyMode(config["reply_mode"])
+
     def to_config(self) -> dict:
         return {
             "name": self.name,
@@ -595,6 +622,7 @@ class NetworkRoom(Room):
             "rejoin_kick": self.rejoin_kick,
             "caps": self.caps,
             "forward": self.forward,
+            "reply_mode": self.reply_mode.value,
         }
 
     def is_valid(self) -> bool:
@@ -1159,6 +1187,15 @@ class NetworkRoom(Room):
             await self.save()
 
         self.send_notice(f"Color is {'enabled' if self.color else 'disabled'}")
+
+    async def cmd_reply_mode(self, args):
+        if args.reply_mode is not None:
+            self.reply_mode = args.reply_mode
+            await self.save()
+
+        self.send_notice(
+            f"{'Full messages' if self.reply_mode == ReplyMode.QUOTE else 'Only message authors'} are quoted in replies"
+        )
 
     def kickban(self, channel: str, nick: str, reason: str) -> None:
         self.pending_kickbans[nick].append((channel, reason))

@@ -7,7 +7,10 @@ WORKDIR /opt/heisenbridge
 COPY . .
 
 # install deps and run a sanity check
-RUN apk add --no-cache --virtual build-dependencies py3-setuptools py3-pip && \
+#
+# `python3-dev gcc musl-dev` are installed because building `multidict`
+# on armv7l fails otherwise. amd64 and aarch64 don't need this.
+RUN apk add --no-cache --virtual build-dependencies py3-setuptools py3-pip python3-dev gcc musl-dev && \
     python setup.py gen_version && \
     rm -rf .git && \
     pip install -e . && \

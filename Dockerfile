@@ -1,4 +1,6 @@
-FROM python:3.9 as build
+FROM docker.io/alpine:3.17.0
+
+RUN apk add --no-cache python3 py3-setuptools py3-pip py3-ruamel.yaml.clib
 
 WORKDIR /opt/heisenbridge
 COPY . .

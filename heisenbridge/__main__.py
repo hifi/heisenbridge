@@ -28,8 +28,9 @@ from mautrix.errors import MUserInUse
 from mautrix.types import EventType
 from mautrix.types import JoinRule
 from mautrix.types import Membership
+from mautrix.util.bridge_state import BridgeState
+from mautrix.util.bridge_state import BridgeStateEvent
 from mautrix.util.config import yaml
-from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 
 from heisenbridge import __version__
 from heisenbridge.appservice import AppService
@@ -60,10 +61,10 @@ class BridgeAppService(AppService):
     async def push_bridge_state(
         self,
         state_event: BridgeStateEvent,
-        error = None,
-        message = None,
-        ttl = None,
-        remote_id = None,
+        error=None,
+        message=None,
+        ttl=None,
+        remote_id=None,
     ) -> None:
 
         if "heisenbridge" not in self.registration or "status_endpoint" not in self.registration["heisenbridge"]:
@@ -79,9 +80,7 @@ class BridgeAppService(AppService):
 
         logging.debug(f"Updating bridge state {state}")
 
-        await state.send(
-            self.registration["heisenbridge"]["status_endpoint"], self.az.as_token, log=logging
-        )
+        await state.send(self.registration["heisenbridge"]["status_endpoint"], self.az.as_token, log=logging)
 
     def register_room(self, room: Room):
         self._rooms[room.id] = room
@@ -457,7 +456,11 @@ class BridgeAppService(AppService):
             sys.exit(1)
 
         # remove self namespace if exists
-        ns_users = [x for x in self.registration["namespaces"]["users"] if x["regex"].split(':')[0] != f"@{self.registration['sender_localpart']}"]
+        ns_users = [
+            x
+            for x in self.registration["namespaces"]["users"]
+            if x["regex"].split(":")[0] != f"@{self.registration['sender_localpart']}"
+        ]
 
         if len(ns_users) != 1:
             print("A single user namespace is required for puppets in the registration file.")
@@ -543,7 +546,9 @@ class BridgeAppService(AppService):
 
         if "heisenbridge" in self.registration and "displayname" in self.registration["heisenbridge"]:
             try:
-                logging.debug(f"Overriding displayname from registration file to {self.registration['heisenbridge']['displayname']}")
+                logging.debug(
+                    f"Overriding displayname from registration file to {self.registration['heisenbridge']['displayname']}"
+                )
                 await self.az.intent.set_displayname(self.registration["heisenbridge"]["displayname"])
             except MatrixRequestError as e:
                 logging.warning(f"Failed to set displayname: {str(e)}")
@@ -586,7 +591,9 @@ class BridgeAppService(AppService):
 
         # use configured media_url for endpoint if we have it
         if "heisenbridge" in self.registration and "media_url" in self.registration["heisenbridge"]:
-            logging.debug(f"Overriding media URL from regirstation file to {self.registration['heisenbridge']['media_url']}")
+            logging.debug(
+                f"Overriding media URL from regirstation file to {self.registration['heisenbridge']['media_url']}"
+            )
             self.endpoint = self.registration["heisenbridge"]["media_url"]
         elif self.config["media_url"]:
             self.endpoint = self.config["media_url"]
@@ -746,7 +753,9 @@ class BridgeAppService(AppService):
             try:
                 room_id = await self.az.intent.create_room(invitees=[self.config["owner"]])
 
-                room = ControlRoom(id=room_id, user_id=self.config["owner"], serv=self, members=[self.config["owner"]], bans=[])
+                room = ControlRoom(
+                    id=room_id, user_id=self.config["owner"], serv=self, members=[self.config["owner"]], bans=[]
+                )
                 await room.save()
                 self.register_room(room)
 
@@ -754,7 +763,7 @@ class BridgeAppService(AppService):
 
                 # show help on open
                 await room.show_help()
-            except:
+            except Exception:
                 print("Failed to create control room, huh")
 
         await asyncio.Event().wait()

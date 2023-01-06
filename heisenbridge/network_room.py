@@ -21,8 +21,8 @@ import irc.client
 import irc.client_aio
 import irc.connection
 from jaraco.stream import buffer
-from python_socks.async_.asyncio import Proxy
 from mautrix.util.bridge_state import BridgeStateEvent
+from python_socks.async_.asyncio import Proxy
 
 from heisenbridge import __version__
 from heisenbridge.channel_room import ChannelRoom
@@ -1562,7 +1562,9 @@ class NetworkRoom(Room):
                     self.backoff_task = None
 
             asyncio.ensure_future(later(self))
-            asyncio.ensure_future(self.serv.push_bridge_state(BridgeStateEvent.TRANSIENT_DISCONNECT, remote_id=self.name))
+            asyncio.ensure_future(
+                self.serv.push_bridge_state(BridgeStateEvent.TRANSIENT_DISCONNECT, remote_id=self.name)
+            )
         else:
             self.send_notice("Disconnected.")
             asyncio.ensure_future(self.serv.push_bridge_state(BridgeStateEvent.LOGGED_OUT, remote_id=self.name))

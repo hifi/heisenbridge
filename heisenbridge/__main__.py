@@ -430,8 +430,7 @@ class BridgeAppService(AppService):
             sys.exit(1)
 
         # remove self namespace if exists
-        self_ns = f"@{self.registration['sender_localpart']}:.*"
-        ns_users = [x for x in self.registration["namespaces"]["users"] if x["regex"] != self_ns]
+        ns_users = [x for x in self.registration["namespaces"]["users"] if x["regex"].split(':')[0] != f"@{self.registration['sender_localpart']}"]
 
         if len(ns_users) != 1:
             print("A single user namespace is required for puppets in the registration file.")
@@ -441,7 +440,7 @@ class BridgeAppService(AppService):
             print("User namespace must be exclusive.")
             sys.exit(1)
 
-        m = re.match(r"^@(.+)([\_/])\.\*$", ns_users[0]["regex"])
+        m = re.match(r"^@(.+)([\_/])\.[\*\+]:", ns_users[0]["regex"])
         if not m:
             print(
                 "User namespace regex must be an exact prefix like '@irc_.*' that includes the separator character (_ or /)."

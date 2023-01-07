@@ -470,7 +470,7 @@ class BridgeAppService(AppService):
             print("User namespace must be exclusive.")
             sys.exit(1)
 
-        m = re.match(r"^@(.+)([\_/])\.[\*\+]:", ns_users[0]["regex"])
+        m = re.match(r"^@(.+)([\_/])\.[\*\+]:?", ns_users[0]["regex"])
         if not m:
             print(
                 "User namespace regex must be an exact prefix like '@irc_.*' that includes the separator character (_ or /)."

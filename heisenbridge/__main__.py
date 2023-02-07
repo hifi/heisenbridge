@@ -44,6 +44,7 @@ from heisenbridge.private_room import PrivateRoom
 from heisenbridge.room import Room
 from heisenbridge.room import RoomInvalidError
 from heisenbridge.space_room import SpaceRoom
+from heisenbridge.websocket import AppserviceWebsocket
 
 
 class MemoryBridgeStateStore(ASStateStore, MemoryStateStore):
@@ -484,6 +485,14 @@ class BridgeAppService(AppService):
         if safe_mode:
             print("Safe mode is enabled.", flush=True)
 
+        url = urllib.parse.urlparse(homeserver_url)
+        ws = None
+        if url.scheme in ["ws", "wss"]:
+            print("Using websockets to receive transactions. Listening is still enabled.")
+            ws = AppserviceWebsocket(homeserver_url, self.registration["as_token"], self._on_mx_event)
+            homeserver_url = url._replace(scheme=("https" if url.scheme == "wss" else "http")).geturl()
+            print(f"Connecting to HS at {homeserver_url}")
+
         self.api = HTTPAPI(base_url=homeserver_url, token=self.registration["as_token"])
 
         # conduit requires that the appservice user is registered before whoami
@@ -748,6 +757,10 @@ class BridgeAppService(AppService):
 
         await self.push_bridge_state(BridgeStateEvent.UNCONFIGURED)
 
+        # late start WS to avoid getting transactions too early
+        if ws:
+            await ws.start()
+
         if self.config["owner"] and not owner_control_open:
             print(f"Opening control room for owner {self.config['owner']}")
             try:
@@ -934,4 +947,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        pass

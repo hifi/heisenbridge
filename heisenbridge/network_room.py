@@ -971,7 +971,7 @@ class NetworkRoom(Room):
                 self.send_notice("Certificate section is missing.")
                 return
 
-            if "-----BEGIN PRIVATE KEY----" not in args._tail:
+            if "PRIVATE KEY----" not in args._tail:
                 self.send_notice("Private key section is missing.")
                 return
 

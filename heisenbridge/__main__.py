@@ -340,7 +340,10 @@ class BridgeAppService(AppService):
         else:
             filename = "/" + urllib.parse.quote(filename)
 
-        return "{}/_matrix/media/r0/download/{}{}{}".format(self.endpoint, mxc.netloc, mxc.path, filename)
+        return urllib.parse.urljoin(
+            self.endpoint,
+            "/_matrix/media/r0/download/{}{}{}".format(mxc.netloc, mxc.path, filename),
+        )
 
     async def reset(self, config_file, homeserver_url):
         with open(config_file) as f:

@@ -139,7 +139,7 @@ class NetworkRoom(Room):
         self.tls_cert = None
         self.rejoin_invite = True
         self.rejoin_kick = False
-        self.caps = ["message-tags", "chghost", "znc.in/self-message"]
+        self.caps = ["message-tags", "chghost", "znc.in/self-message", "away-notify"]
         self.forward = False
         self.backoff = 0
         self.backoff_task = None
@@ -1378,6 +1378,7 @@ class NetworkRoom(Room):
                 self.conn.add_global_handler("338", self.on_whoisrealhost)  # is actually using host
                 self.conn.add_global_handler("away", self.on_away)
                 self.conn.add_global_handler("endofwhois", self.on_endofwhois)
+                self.conn.add_global_handler("whoreply", self.on_whoreply)
 
                 # tags
                 self.conn.add_global_handler("tagmsg", self.on_pass_or_ignore)
@@ -1936,9 +1937,34 @@ class NetworkRoom(Room):
         data = self.whois_data[event.arguments[0].lower()]
         data["realhost"] = event.arguments[1]
 
+    def on_whoreply(self, conn, event) -> None:
+        data = self.whois_data[event.arguments[4].lower()]
+        data["nick"] = event.arguments[4]
+        data["user"] = event.arguments[1]
+        data["host"] = event.arguments[2]
+        if "G" in event.arguments[5]:
+            data["away"] = True
+        elif "H" in event.arguments[5]:
+            data["away"] = False
+        # data["realname"] = event.arguments[4]
+
+        nick, mode = self.serv.strip_nick(data["nick"])
+        irc_user_id = self.serv.irc_user_id(self.name, data["nick"])
+        self.serv.set_user_state(irc_user_id, data["away"])
+
     def on_away(self, conn, event) -> None:
+        nick, mode = self.serv.strip_nick(event.arguments[0])
+        irc_user_id = self.serv.irc_user_id(self.name, event.arguments[0])
+
         if event.arguments[0].lower() in self.whois_data:
-            self.whois_data[event.arguments[0].lower()]["away"] = event.arguments[1]
+            if len(event.arguments) > 1:
+                self.whois_data[event.arguments[0].lower()]["away"] = True
+                self.whois_data[event.arguments[0].lower()]["awaymsg"] = event.arguments[1]
+                self.serv.set_user_state(irc_user_id, True, event.arguments[1])
+            else:
+                self.whois_data[event.arguments[0].lower()]["away"] = False
+                self.whois_data[event.arguments[0].lower()]["awaymsg"] = ""
+                self.serv.set_user_state(irc_user_id, False)
         else:
             self.send_notice(f"{event.arguments[0]} is away: {event.arguments[1]}")
 

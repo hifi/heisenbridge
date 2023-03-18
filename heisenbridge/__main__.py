@@ -28,6 +28,7 @@ from mautrix.errors import MUserInUse
 from mautrix.types import EventType
 from mautrix.types import JoinRule
 from mautrix.types import Membership
+from mautrix.types import PresenceState
 from mautrix.util.bridge_state import BridgeState
 from mautrix.util.bridge_state import BridgeStateEvent
 from mautrix.util.config import yaml
@@ -191,6 +192,19 @@ class BridgeAppService(AppService):
             ret += ":" + self.server_name
 
         return ret
+
+    def set_user_state(self, user_id, away, status=None):
+        if user_id not in self._users:
+            return
+
+        presence = PresenceState.ONLINE
+        if away:
+            presence = PresenceState.UNAVAILABLE
+
+        async def later():
+            await self.az.intent.user(user_id).set_presence(presence=presence, status=status)
+
+        asyncio.ensure_future(later())
 
     async def cache_user(self, user_id, displayname):
         # start by caching that the user_id exists without a displayname

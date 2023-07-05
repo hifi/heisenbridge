@@ -127,7 +127,7 @@ class BridgeAppService(AppService):
         return mxid.endswith(":" + self.server_name)
 
     def strip_nick(self, nick: str) -> Tuple[str, str]:
-        m = re.match(r"^([~&@%\+]?)(.+)$", nick)
+        m = re.match(r"^([~&@%\+!]?)(.+)$", nick)
         if m:
             return (m.group(2), (m.group(1) if len(m.group(1)) > 0 else None))
         else:

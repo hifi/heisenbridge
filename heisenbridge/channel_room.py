@@ -478,6 +478,9 @@ class ChannelRoom(PrivateRoom):
 
                 asyncio.ensure_future(autocmd(self))
 
+            # Run a WHO on the channel to get initial away status
+            self.network.conn.who(target=event.target)
+
             return
 
         # ensure, append, invite and join

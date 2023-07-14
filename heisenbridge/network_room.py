@@ -473,7 +473,14 @@ class NetworkRoom(Room):
         cmd.add_argument(
             "--add",
             nargs=1,
-            choices=["message-tags", "chghost", "draft/relaymsg", "znc.in/self-message", "twitch.tv/membership"],
+            choices=[
+                "message-tags",
+                "chghost",
+                "draft/relaymsg",
+                "znc.in/self-message",
+                "twitch.tv/membership",
+                "away-notify",
+            ],
             help="Add to CAP request",
         )
         cmd.add_argument("--remove", nargs=1, help="Remove from CAP request")
@@ -1937,7 +1944,16 @@ class NetworkRoom(Room):
         data["realhost"] = event.arguments[1]
 
     def on_away(self, conn, event) -> None:
-        if event.arguments[0].lower() in self.whois_data:
+        if len(event.arguments) < 2:
+            target = self
+            if event.source.nick in self.rooms:
+                target = self.rooms[event.source.nick]
+
+            if event.target is None:
+                target.send_notice(f"{event.source.nick} is no longer away")
+            else:
+                target.send_notice(f"{event.source.nick} is now away: {event.target}")
+        elif event.arguments[0].lower() in self.whois_data:
             self.whois_data[event.arguments[0].lower()]["away"] = event.arguments[1]
         else:
             self.send_notice(f"{event.arguments[0]} is away: {event.arguments[1]}")

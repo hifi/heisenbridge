@@ -297,6 +297,10 @@ class PlumbedRoom(ChannelRoom):
             self.network.conn.kick(self.name, nick, "You have been kicked on Matrix")
 
     def pills(self):
+        # if pills are disabled, don't generate any
+        if self.network.pills_length < 1:
+            return None
+
         ret = super().pills()
 
         # remove the bot from pills as it may cause confusion

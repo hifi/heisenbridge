@@ -764,7 +764,9 @@ class BridgeAppService(AppService):
         if self.config["owner"] and not owner_control_open:
             print(f"Opening control room for owner {self.config['owner']}")
             try:
-                room_id = await self.az.intent.create_room(invitees=[self.config["owner"]])
+                room_id = await self.az.intent.create_room(
+                    invitees=[self.config["owner"]], custom_request_fields={"com.beeper.auto_join_invites": True}
+                )
 
                 room = ControlRoom(
                     id=room_id, user_id=self.config["owner"], serv=self, members=[self.config["owner"]], bans=[]

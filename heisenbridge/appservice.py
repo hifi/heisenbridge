@@ -45,6 +45,7 @@ class AppService(ABC):
                     "m.room.avatar": 0,  # these work as long as rooms are private
                 },
             },
+            "com.beeper.auto_join_invites": True,
         }
 
         if restricted is not None:

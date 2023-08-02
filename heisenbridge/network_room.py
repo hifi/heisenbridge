@@ -1266,6 +1266,10 @@ class NetworkRoom(Room):
 
                         cert_file.close()
 
+                    if "tls_ciphers" in server and server["tls_ciphers"]:
+                        with_tls += " using custom cipher list"
+                        ssl_ctx.set_ciphers(server["tls_ciphers"])
+
                     server_hostname = server["address"]
 
                 proxy = None

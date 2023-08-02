@@ -112,6 +112,11 @@ class ControlRoom(Room):
                 help="ignore TLS verification errors (hostname, self-signed, expired)",
                 default=False,
             )
+            cmd.add_argument(
+                "--tls-ciphers",
+                help="set TLS cipher string (in OpenSSL cipher list format)",
+                default=None,
+            )
             cmd.add_argument("--proxy", help="use a SOCKS proxy (socks5://...)", default=None)
             self.commands.register(cmd, self.cmd_addserver)
 
@@ -371,6 +376,7 @@ class ControlRoom(Room):
                 "port": args.port,
                 "tls": args.tls,
                 "tls_insecure": args.tls_insecure,
+                "tls_ciphers": args.tls_ciphers,
                 "proxy": args.proxy,
             }
         )

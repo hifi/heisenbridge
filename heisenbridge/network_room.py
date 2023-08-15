@@ -1494,8 +1494,10 @@ class NetworkRoom(Room):
                             self.conn.send_items("AUTHENTICATE", base64.b64encode(sasl.encode("utf8")).decode("utf8"))
                         else:
                             self.conn.send_items("AUTHENTICATE", "+")
-                        (connection, event) = await self.conn.expect(["903", "904", "908"])
-                        if event.type != "903":
+                        (connection, event) = await self.conn.expect(
+                            ["903", "904", "908", "saslsuccess", "saslfail", "saslmechs"]
+                        )
+                        if event.type not in ["903", "saslsuccess"]:
                             raise irc.client.ServerConnectionError(event.arguments[0])
 
                     except asyncio.TimeoutError:

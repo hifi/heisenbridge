@@ -162,6 +162,10 @@ If you are running Docker the homeserver is likely on a different hostname insid
 
 Please note that the URL for Heisenbridge in the registration file is used by the homeserver to connect to it so make sure it is correct and accessible from where the homeserver is running.
 
+You also need to make sure the configuration of your homeserver does not force all rooms to be created with encryption on, as Heisenbridge currently does not support encryption.
+If you force encryption, Heisenbridge will be unable to respond to your commands.
+For example, if you use Synapse, make sure `encryption_enabled_by_default_for_room_type` is set to `off`. You can still enable encryption in other rooms, it will just not be the default.
+
 If for whatever reason you run Heisenbridge over the internet and require HTTPS you need to put Heisenbridge behind a reverse proxy that does TLS termination as it doesn't itself support loading a TLS certificate.
 
 For [Synapse](https://github.com/matrix-org/synapse) see their [installation instructions](https://github.com/matrix-org/synapse/blob/develop/docs/application_services.md) for appservices.

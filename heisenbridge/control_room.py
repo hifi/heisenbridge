@@ -201,6 +201,11 @@ class ControlRoom(Room):
             cmd.add_argument("--remove", help="remove URL override (will retry auto-detection)", action="store_true")
             self.commands.register(cmd, self.cmd_media_url)
 
+            cmd = CommandParser(prog="MEDIAPATH", description="configure media path for links")
+            cmd.add_argument("path", nargs="?", help="new path override")
+            cmd.add_argument("--remove", help="remove path override", action="store_true")
+            self.commands.register(cmd, self.cmd_media_path)
+
             cmd = CommandParser(prog="VERSION", description="show bridge version")
             self.commands.register(cmd, self.cmd_version)
 
@@ -567,6 +572,19 @@ class ControlRoom(Room):
 
         self.send_notice(f"Media URL override is set to {self.serv.config['media_url']}")
         self.send_notice(f"Current active media URL: {self.serv.endpoint}")
+
+    async def cmd_media_path(self, args):
+        if args.remove:
+            self.serv.config["media_path"] = None
+            await self.serv.save()
+            self.serv.media_path = self.serv.DEFAULT_MEDIA_PATH
+        elif args.path:
+            self.serv.config["media_path"] = args.path
+            await self.serv.save()
+            self.serv.media_path = args.path
+
+        self.send_notice(f"Media Path override is set to {self.serv.config['media_path']}")
+        self.send_notice(f"Current active media path: {self.serv.media_path}")
 
     async def cmd_maxlines(self, args):
         if args.lines is not None:

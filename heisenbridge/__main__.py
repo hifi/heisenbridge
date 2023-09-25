@@ -59,6 +59,8 @@ class BridgeAppService(AppService):
     _rooms: Dict[str, Room]
     _users: Dict[str, str]
 
+    DEFAULT_MEDIA_PATH = "/_matrix/media/v3/download/{netloc}{path}{filename}"
+
     async def push_bridge_state(
         self,
         state_event: BridgeStateEvent,
@@ -67,7 +69,6 @@ class BridgeAppService(AppService):
         ttl=None,
         remote_id=None,
     ) -> None:
-
         if "heisenbridge" not in self.registration or "status_endpoint" not in self.registration["heisenbridge"]:
             return
 
@@ -222,7 +223,6 @@ class BridgeAppService(AppService):
         return user_id
 
     async def _on_mx_event(self, event):
-
         if event.room_id and event.room_id in self._rooms:
             try:
                 room = self._rooms[event.room_id]
@@ -340,7 +340,9 @@ class BridgeAppService(AppService):
         else:
             filename = "/" + urllib.parse.quote(filename)
 
-        return "{}/_matrix/media/r0/download/{}{}{}".format(self.endpoint, mxc.netloc, mxc.path, filename)
+        media_path = self.media_path.format(netloc=mxc.netloc, path=mxc.path, filename=filename)
+
+        return "{}{}".format(self.endpoint, media_path)
 
     async def reset(self, config_file, homeserver_url):
         with open(config_file) as f:
@@ -447,7 +449,6 @@ class BridgeAppService(AppService):
         return use_hidden_room
 
     async def run(self, listen_address, listen_port, homeserver_url, owner, safe_mode):
-
         if "sender_localpart" not in self.registration:
             print("Missing sender_localpart from registration file.")
             sys.exit(1)
@@ -573,6 +574,7 @@ class BridgeAppService(AppService):
             "max_lines": 0,
             "use_pastebin": False,
             "media_url": None,
+            "media_path": None,
             "namespace": self.puppet_prefix,
         }
         logging.debug(f"Default config: {self.config}")
@@ -601,7 +603,7 @@ class BridgeAppService(AppService):
         # use configured media_url for endpoint if we have it
         if "heisenbridge" in self.registration and "media_url" in self.registration["heisenbridge"]:
             logging.debug(
-                f"Overriding media URL from regirstation file to {self.registration['heisenbridge']['media_url']}"
+                f"Overriding media URL from registration file to {self.registration['heisenbridge']['media_url']}"
             )
             self.endpoint = self.registration["heisenbridge"]["media_url"]
         elif self.config["media_url"]:
@@ -610,6 +612,17 @@ class BridgeAppService(AppService):
             print("Trying to detect homeserver public endpoint, this might take a while...", flush=True)
             self.endpoint = str(self.api.base_url)
             asyncio.ensure_future(_resolve_media_endpoint())
+
+        # use configured media_path for media_path if we have it
+        if "heisenbridge" in self.registration and "media_path" in self.registration["heisenbridge"]:
+            logging.debug(
+                f"Overriding media path from registration file to {self.registration['heisenbridge']['media_path']}"
+            )
+            self.media_path = self.registration["heisenbridge"]["media_path"]
+        elif self.config["media_path"]:
+            self.media_path = self.config["media_path"]
+        else:
+            self.media_path = self.DEFAULT_MEDIA_PATH
 
         logging.info("Starting presence loop")
         self._keepalive()

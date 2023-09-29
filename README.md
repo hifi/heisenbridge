@@ -175,7 +175,7 @@ For [Conduit](https://gitlab.com/famedly/conduit) see their [installation instru
 Install
 -------
 
-1. Install Python 3.7 or newer
+1. Install Python 3.9 or newer
 2. Install dependencies in virtualenv
 
    ```bash
@@ -213,7 +213,7 @@ To update your installation, run `pip install --upgrade heisenbridge`
 Develop
 -------
 
-1. Install Python 3.7 or newer
+1. Install Python 3.9 or newer
 2. Install dependencies
 
    ```bash

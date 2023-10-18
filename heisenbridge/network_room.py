@@ -216,6 +216,8 @@ class NetworkRoom(Room):
             description="set SASL PLAIN credentials",
             epilog=(
                 "If the network supports SASL authentication you can configure them with this command.\n"
+                "If your password contains special characters, use shell escaping.\n"
+                "Example: SASL \"pass;word\"\n"
                 "\n"
                 "Note: Bridge administrators can trivially see the stored password if they want to.\n"
             ),
@@ -252,9 +254,12 @@ class NetworkRoom(Room):
             epilog=(
                 "If the network you are connecting to does not support server password to identify you automatically"
                 " can set this to send a command before joining channels.\n"
+                "If your password contains special characters, use shell escaping rules to escape the entire NICKSERV"
+                " command, and its argument within (see example).\n"
                 "\n"
                 'Example (QuakeNet): AUTOCMD "UMODE +x; MSG -s Q@CServe.quakenet.org auth foo bar"\n'
                 "Example (OFTC): AUTOCMD NICKSERV -s identify foo bar\n"
+                "Example (special characters): AUTOCMD \"NICKSERV -s \\\"identify special;'chars\\\"\"\n"
             ),
         )
         cmd.add_argument("command", nargs="*", help="commands separated with ';'")
@@ -344,7 +349,11 @@ class NetworkRoom(Room):
         cmd = CommandParser(
             prog="NICKSERV",
             description="send a message to NickServ (if supported by network)",
-            epilog="Alias: NS",
+            epilog=(
+                "If your password contains special characters, use shell escaping.\n"
+                "Example: NICKSERV \"identify pass;word\"\n"
+                "Alias: NS"
+            ),
         )
         cmd.add_argument("-s", "--sensitive", action="store_true", help="hide message content from network room")
         cmd.add_argument("message", nargs="+", help="message")

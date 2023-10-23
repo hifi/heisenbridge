@@ -151,6 +151,8 @@ optional arguments:
 Generate a registration file to use with your homeserver using the `--generate` switch.
 If you are using Dendrite or Conduit prefer `--generate-compat` as otherwise you can't talk with Heisenbridge.
 
+**With the amount of showstopper bugs in Dendrite it's not officially supported by Heisenbridge at this time. When they get fixed this notice will be removed. If you hit a bug on Dendrite, please reproduce it on Synapse or Conduit before reporting it against Heisenbridge. Thank you.**
+
 Both your homeserver and Heisenbridge use the same registration file to configure their shared secrets.
 With Heisenbridge you need to use the generated registration file with the `--config` switch on startup.
 If you are running Docker a shared volume mount is adviced for the registration file that both containers can access.

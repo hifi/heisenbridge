@@ -112,13 +112,13 @@ usage: python -m heisenbridge [-h] [-v] (-c CONFIG | --version)
                               [--safe-mode] [-o OWNER]
                               [homeserver]
 
-a bouncer-style Matrix IRC bridge
+a bouncer-style Matrix IRC bridge (v1.14.5.dev4+gb9c79bb)
 
 positional arguments:
   homeserver            URL of Matrix homeserver (default:
                         http://localhost:8008)
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -v, --verbose         logging verbosity level: once is info, twice is debug
                         (default: 0)
@@ -127,9 +127,11 @@ optional arguments:
                         generating (default: None)
   --version             show bridge version
   -l LISTEN_ADDRESS, --listen-address LISTEN_ADDRESS
-                        bridge listen address (default: 127.0.0.1)
+                        bridge listen address (default: as specified in url in
+                        config, 127.0.0.1 otherwise) (default: None)
   -p LISTEN_PORT, --listen-port LISTEN_PORT
-                        bridge listen port (default: 9898)
+                        bridge listen port (default: as specified in url in
+                        config, 9898 otherwise) (default: None)
   -u UID, --uid UID     user id to run as (default: None)
   -g GID, --gid GID     group id to run as (default: None)
   -i, --identd          enable identd service (default: False)

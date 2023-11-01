@@ -489,7 +489,9 @@ class BridgeAppService(AppService):
         url = urllib.parse.urlparse(homeserver_url)
         ws = None
         if url.scheme in ["ws", "wss"]:
-            print("Using websockets to receive transactions. Listening is still enabled.")
+            print(
+                f"Using websockets to receive transactions. Listening is still enabled on http://{listen_address}:{listen_port}"
+            )
             ws = AppserviceWebsocket(homeserver_url, self.registration["as_token"], self._on_mx_event)
             homeserver_url = url._replace(scheme=("https" if url.scheme == "wss" else "http")).geturl()
             print(f"Connecting to HS at {homeserver_url}")
@@ -941,18 +943,24 @@ async def async_main():
         listen_port = args.listen_port
 
         if not listen_address:
+            listen_address = "127.0.0.1"
+
             try:
                 url = urllib.parse.urlparse(service.registration["url"])
-                listen_address = url.hostname
+                if url.hostname:
+                    listen_address = url.hostname
             except Exception:
-                listen_address = "127.0.0.1"
+                pass
 
         if not listen_port:
+            listen_port = 9898
+
             try:
                 url = urllib.parse.urlparse(service.registration["url"])
-                listen_port = url.port
+                if url.port:
+                    listen_port = url.port
             except Exception:
-                listen_port = 9898
+                pass
 
         await service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode)
 

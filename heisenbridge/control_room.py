@@ -196,6 +196,16 @@ class ControlRoom(Room):
             cmd.set_defaults(enabled=None)
             self.commands.register(cmd, self.cmd_pastebin)
 
+            cmd = CommandParser(
+                prog="REACTS",
+                description="enable or disable reacting to messages on splits/linking",
+                epilog="Note: Users can override this per room.",
+            )
+            cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable reacts")
+            cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable reacts")
+            cmd.set_defaults(enabled=None)
+            self.commands.register(cmd, self.cmd_reacts)
+
             cmd = CommandParser(prog="MEDIAURL", description="configure media URL for links")
             cmd.add_argument("url", nargs="?", help="new URL override")
             cmd.add_argument("--remove", help="remove URL override (will retry auto-detection)", action="store_true")
@@ -599,6 +609,13 @@ class ControlRoom(Room):
             await self.serv.save()
 
         self.send_notice(f"Pastebin is {'enabled' if self.serv.config['use_pastebin'] else 'disabled'} by default")
+
+    async def cmd_reacts(self, args):
+        if args.enabled is not None:
+            self.serv.config["use_reacts"] = args.enabled
+            await self.serv.save()
+
+        self.send_notice(f"Reacts are {'enabled' if self.serv.config['use_reacts'] else 'disabled'} by default")
 
     async def cmd_open(self, args):
         networks = self.networks()

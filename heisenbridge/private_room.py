@@ -370,6 +370,7 @@ class PrivateRoom(Room):
 
     max_lines = 0
     use_pastebin = False
+    use_reacts = False
     force_forward = False
 
     commands: CommandManager
@@ -402,6 +403,12 @@ class PrivateRoom(Room):
         cmd.set_defaults(enabled=None)
         self.commands.register(cmd, self.cmd_pastebin)
 
+        cmd = CommandParser(prog="REACTS", description="enable or disable reacting to messages on splits/linking")
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable reacts")
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable reacts")
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_reacts)
+
         self.mx_register("m.room.message", self.on_mx_message)
         self.mx_register("m.room.redaction", self.on_mx_redaction)
 
@@ -412,6 +419,9 @@ class PrivateRoom(Room):
         if "use_pastebin" in config:
             self.use_pastebin = config["use_pastebin"]
 
+        if "use_reacts" in config:
+            self.use_reacts = config["use_reacts"]
+
         if "name" not in config:
             raise Exception("No name key in config for ChatRoom")
 
@@ -419,7 +429,6 @@ class PrivateRoom(Room):
 
         if "network_id" in config:
             self.network_id = config["network_id"]
-
         if "media" in config:
             self.media = config["media"]
 
@@ -438,6 +447,7 @@ class PrivateRoom(Room):
             "media": self.media[:5],
             "max_lines": self.max_lines,
             "use_pastebin": self.use_pastebin,
+            "use_reacts": self.use_reacts,
         }
 
     @staticmethod
@@ -458,6 +468,7 @@ class PrivateRoom(Room):
 
         room.max_lines = network.serv.config["max_lines"]
         room.use_pastebin = network.serv.config["use_pastebin"]
+        room.use_reacts = network.serv.config["use_reacts"]
 
         asyncio.ensure_future(room._create_mx(name))
         return room
@@ -776,7 +787,8 @@ class PrivateRoom(Room):
 
         for i, message in enumerate(messages):
             if self.max_lines > 0 and i == self.max_lines - 1 and len(messages) > self.max_lines:
-                self.react(event.event_id, "\u2702")  # scissors
+                if self.use_reacts:
+                    self.react(event.event_id, "\u2702")  # scissors
 
                 if self.use_pastebin:
                     content_uri = await self.az.intent.upload_media(
@@ -793,7 +805,8 @@ class PrivateRoom(Room):
                             self.name,
                             f"... long message truncated: {self.serv.mxc_to_url(str(content_uri))} ({len(messages)} lines)",
                         )
-                    self.react(event.event_id, "\U0001f4dd")  # memo
+                    if self.use_reacts:
+                        self.react(event.event_id, "\U0001f4dd")  # memo
 
                     self.media.append([event.event_id, str(content_uri)])
                     await self.save()
@@ -809,7 +822,7 @@ class PrivateRoom(Room):
             func(self.name, message)
 
         # show number of lines sent to IRC
-        if self.max_lines == 0 and len(messages) > 1:
+        if self.use_reacts and self.max_lines == 0 and len(messages) > 1:
             self.react(event.event_id, f"\u2702 {len(messages)} lines")
 
     async def on_mx_message(self, event) -> None:
@@ -824,7 +837,8 @@ class PrivateRoom(Room):
             await self._send_message(event, self.network.conn.action)
         elif str(event.content.msgtype) in ["m.image", "m.file", "m.audio", "m.video"]:
             self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event.content.url, event.content.body))
-            self.react(event.event_id, "\U0001F517")  # link
+            if self.use_reacts:
+                self.react(event.event_id, "\U0001F517")  # link
             self.media.append([event.event_id, event.content.url])
             await self.save()
         elif str(event.content.msgtype) == "m.text":
@@ -885,6 +899,13 @@ class PrivateRoom(Room):
             await self.save()
 
         self.send_notice(f"Pastebin is {'enabled' if self.use_pastebin else 'disabled'}")
+
+    async def cmd_reacts(self, args) -> None:
+        if args.enabled is not None:
+            self.use_reacts = args.enabled
+            await self.save()
+
+        self.send_notice(f"Reacts are {'enabled' if self.use_reacts else 'disabled'}")
 
     async def _attach_hidden_room_internal(self) -> None:
         await self.az.intent.send_state_event(

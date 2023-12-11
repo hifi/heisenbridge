@@ -46,6 +46,7 @@ def sanitize_irc_nick(nick):
 class PlumbedRoom(ChannelRoom):
     max_lines = 5
     use_pastebin = True
+    use_reacts = True
     use_displaynames = True
     use_disambiguation = True
     use_zwsp = False
@@ -137,6 +138,7 @@ class PlumbedRoom(ChannelRoom):
 
         room.max_lines = network.serv.config["max_lines"]
         room.use_pastebin = network.serv.config["use_pastebin"]
+        room.use_reacts = network.serv.config["use_reacts"]
 
         for user_id, member in joined.items():
             if member.displayname is not None:
@@ -245,7 +247,8 @@ class PlumbedRoom(ChannelRoom):
             )
             await self.relay_message(media_event, self.network.conn.privmsg, sender)
 
-            self.react(event.event_id, "\U0001F517")  # link
+            if self.use_reacts:
+                self.react(event.event_id, "\U0001F517")  # link
             self.media.append([event.event_id, event.content.url])
             await self.save()
         elif event.content.msgtype == MessageType.EMOTE:

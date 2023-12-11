@@ -575,6 +575,7 @@ class BridgeAppService(AppService):
             "member_sync": "half",
             "max_lines": 0,
             "use_pastebin": False,
+            "use_reacts": True,
             "media_url": None,
             "media_path": None,
             "namespace": self.puppet_prefix,

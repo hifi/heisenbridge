@@ -371,6 +371,7 @@ class PrivateRoom(Room):
     max_lines = 0
     use_pastebin = False
     force_forward = False
+    prefix_all = False
 
     commands: CommandManager
 
@@ -402,6 +403,12 @@ class PrivateRoom(Room):
         cmd.set_defaults(enabled=None)
         self.commands.register(cmd, self.cmd_pastebin)
 
+        cmd = CommandParser(prog="PREFIXALL", description="prefix all bridged IRC lines with the user's nick, instead of just the first")
+        cmd.add_argument("--enable", dest="enabled", action="store_true", help="Prefix all lines")
+        cmd.add_argument("--disable", dest="enabled", action="store_false", help="Only prefix first line")
+        cmd.set_defaults(enabled=None)
+        self.commands.register(cmd, self.cmd_prefix_all)
+
         self.mx_register("m.room.message", self.on_mx_message)
         self.mx_register("m.room.redaction", self.on_mx_redaction)
 
@@ -411,6 +418,9 @@ class PrivateRoom(Room):
 
         if "use_pastebin" in config:
             self.use_pastebin = config["use_pastebin"]
+
+        if "prefix_all" in config:
+            self.prefix_all = config["prefix_all"]
 
         if "name" not in config:
             raise Exception("No name key in config for ChatRoom")
@@ -438,6 +448,7 @@ class PrivateRoom(Room):
             "media": self.media[:5],
             "max_lines": self.max_lines,
             "use_pastebin": self.use_pastebin,
+            "prefix_all": self.prefix_all,
         }
 
     @staticmethod
@@ -706,8 +717,8 @@ class PrivateRoom(Room):
         messages = []
 
         for i, line in enumerate(lines):
-            # prefix first line if needed
-            if i == 0 and prefix and len(prefix) > 0:
+            # prefix line if needed
+            if (i == 0 or self.prefix_all) and prefix and len(prefix) > 0:
                 line = prefix + line
 
                 # filter control characters except ZWSP
@@ -885,6 +896,13 @@ class PrivateRoom(Room):
             await self.save()
 
         self.send_notice(f"Pastebin is {'enabled' if self.use_pastebin else 'disabled'}")
+
+    async def cmd_prefix_all(self, args) -> None:
+        if args.enabled is not None:
+            self.prefix_all = args.enabled
+            await self.save()
+
+        self.send_notice(f"Prefix all is {'enabled' if self.prefix_all else 'disabled'}")
 
     async def _attach_hidden_room_internal(self) -> None:
         await self.az.intent.send_state_event(

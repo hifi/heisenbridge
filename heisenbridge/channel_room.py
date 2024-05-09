@@ -193,6 +193,7 @@ class ChannelRoom(PrivateRoom):
 
         room.max_lines = network.serv.config["max_lines"]
         room.use_pastebin = network.serv.config["use_pastebin"]
+        room.use_reacts = network.serv.config["use_reacts"]
 
         asyncio.ensure_future(room._create_mx(name))
         return room

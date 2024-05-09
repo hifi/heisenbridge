@@ -417,7 +417,8 @@ class ControlRoom(Room):
 
         if self.serv.is_admin(self.user_id):
             for room in self.serv.find_rooms():
-                users.add(room.user_id)
+                if room.user_id is not None:  # ignore HiddenRoom
+                    users.add(room.user_id)
 
             users = list(users)
             users.sort()

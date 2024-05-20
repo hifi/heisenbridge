@@ -27,13 +27,13 @@ class AppService(ABC):
     async def save(self):
         await self.az.intent.set_account_data("irc", self.config)
 
-    async def create_room(self, name: str, topic: str, invite: List[str], restricted: str = None) -> str:
+    async def create_room(self, name: str, topic: str, invite: List[str], restricted: str = None, as_user: str = None, is_direct: bool = False) -> str:
         req = {
             "visibility": "private",
             "name": name,
             "topic": topic,
             "invite": invite,
-            "is_direct": False,
+            "is_direct": is_direct,
             "power_level_content_override": {
                 "users_default": 0,
                 "invite": 100,
@@ -71,7 +71,8 @@ class AppService(ABC):
                 }
             ]
 
-        resp = await self.az.intent.api.request(Method.POST, Path.v3.createRoom, req)
+        intent = self.az.intent.user(as_user) if as_user else self.az.intent
+        resp = await intent.api.request(Method.POST, Path.v3.createRoom, req)
 
         return resp["room_id"]
 

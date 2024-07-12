@@ -336,15 +336,16 @@ class BridgeAppService(AppService):
             logging.warning("Using internal URL for homeserver, media links are likely broken!")
             return str(self.api.base_url)
 
-    def mxc_checksum(self, mxc: str) -> str:
-        checksum_raw = hmac.new(self.media_key, mxc.encode("utf-8"), hashlib.sha256).digest()
+    def mxc_checksum(self, server: str, media_id: str) -> str:
+        # Add trailing slash to prevent length extension attacks
+        checksum_raw = hmac.new(self.media_key, f"mxc://{server}/{media_id}/".encode("utf-8"), hashlib.sha256).digest()
         return base64.urlsafe_b64encode(checksum_raw[:8]).decode("utf-8").rstrip("=")
 
     async def proxy_media(self, req: web.Request) -> web.StreamResponse | web.Response:
         server = req.match_info["server"]
         media_id = req.match_info["media_id"]
         checksum = req.match_info["checksum"]
-        if self.mxc_checksum(f"mxc://{server}/{media_id}") != checksum:
+        if self.mxc_checksum(server, media_id) != checksum:
             return web.Response(status=403, text="Invalid checksum")
         download_url = self.api.base_url / "_matrix/client/v1/media/download" / server / media_id
         filename = req.match_info.get("filename", "")
@@ -385,7 +386,6 @@ class BridgeAppService(AppService):
             return "<media unavailable>"
         try:
             server, media_id = self.api.parse_mxc_uri(mxc)
-            mxc = f"mxc://{server}/{media_id}"
         except ValueError:
             return "<invalid mxc URI>"
 
@@ -395,7 +395,7 @@ class BridgeAppService(AppService):
             filename = "/" + urllib.parse.quote(filename)
 
         media_path = self.media_path.format(
-            server=server, media_id=media_id, checksum=self.mxc_checksum(mxc), filename=filename
+            server=server, media_id=media_id, checksum=self.mxc_checksum(server, media_id), filename=filename
         )
 
         return "{}{}".format(self.media_endpoint, media_path)

@@ -368,7 +368,7 @@ class BridgeAppService(AppService):
                 resp.content_type = dl_resp.content_type
                 if "Content-Disposition" in dl_resp.headers:
                     resp.headers["Content-Disposition"] = dl_resp.headers["Content-Disposition"]
-                elif resp.content_type.startswith("application/json"):
+                elif resp.status >= 300:
                     del resp.headers["Content-Disposition"]
                 started_writing = True
                 await resp.prepare(req)

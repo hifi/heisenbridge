@@ -365,7 +365,8 @@ class BridgeAppService(AppService):
         try:
             async with self.api.session.get(download_url, params=query_params, headers=headers) as dl_resp:
                 resp = web.StreamResponse(status=dl_resp.status, headers=resp_headers)
-                resp.content_length = int(dl_resp.content_length)
+                if dl_resp.content_length:
+                    resp.content_length = dl_resp.content_length
                 resp.content_type = dl_resp.content_type
                 if "Content-Disposition" in dl_resp.headers:
                     resp.headers["Content-Disposition"] = dl_resp.headers["Content-Disposition"]

@@ -505,7 +505,7 @@ class BridgeAppService(AppService):
 
         return use_hidden_room
 
-    async def run(self, listen_address, listen_port, homeserver_url, owner, safe_mode):
+    async def run(self, listen_address, listen_port, homeserver_url, owner, safe_mode, media_proxy):
         if "sender_localpart" not in self.registration:
             print("Missing sender_localpart from registration file.")
             sys.exit(1)
@@ -542,6 +542,8 @@ class BridgeAppService(AppService):
         print(f"Heisenbridge v{__version__}", flush=True)
         if safe_mode:
             print("Safe mode is enabled.", flush=True)
+        if media_proxy:
+            print("Media proxy only mode.", flush=True)
 
         url = urllib.parse.urlparse(homeserver_url)
         ws = None
@@ -654,7 +656,9 @@ class BridgeAppService(AppService):
         # load config from HS
         await self.load()
 
-        if self.config["media_key"]:
+        if "heisenbridge" in self.registration and "media_key" in self.registration["heisenbridge"]:
+            self.media_key = self.registration["heisenbridge"]["media_key"].encode("utf-8")
+        elif self.config["media_key"]:
             self.media_key = self.config["media_key"].encode("utf-8")
         else:
             self.media_key = self.registration["hs_token"].encode("utf-8")
@@ -678,6 +682,11 @@ class BridgeAppService(AppService):
             self.media_path = self.config["media_path"]
         else:
             self.media_path = self.DEFAULT_MEDIA_PATH
+
+        if media_proxy:
+            logging.info("Media proxy mode startup complete")
+            await asyncio.Event().wait()
+            return
 
         logging.info("Starting presence loop")
         self._keepalive()
@@ -907,6 +916,12 @@ async def async_main():
         default=argparse.SUPPRESS,
     )
     parser.add_argument(
+        "--media-proxy",
+        action="store_true",
+        help="run in media proxy mode",
+        default=False,
+    )
+    parser.add_argument(
         "--safe-mode",
         action="store_true",
         help="prevent appservice from leaving invalid rooms on startup (for debugging)",
@@ -976,7 +991,7 @@ async def async_main():
 
         service.load_reg(args.config)
 
-        if args.identd:
+        if args.identd and not args.media_proxy:
             identd = Identd()
             await identd.start_listening(service, args.identd_port)
 
@@ -1015,7 +1030,7 @@ async def async_main():
             except Exception:
                 pass
 
-        await service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode)
+        await service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode, args.media_proxy)
 
 
 def main():

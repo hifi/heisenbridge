@@ -398,7 +398,7 @@ class BridgeAppService(AppService):
             server=server, media_id=media_id, checksum=self.mxc_checksum(server, media_id), filename=filename
         )
 
-        return "{}{}".format(self.media_endpoint, media_path)
+        return urllib.parse.urljoin(self.media_endpoint, media_path)
 
     async def reset(self, config_file, homeserver_url):
         with open(config_file) as f:

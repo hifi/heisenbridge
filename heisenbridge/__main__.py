@@ -337,7 +337,6 @@ class BridgeAppService(AppService):
             return str(self.api.base_url)
 
     def mxc_checksum(self, server: str, media_id: str) -> str:
-        # Add trailing slash to prevent length extension attacks
         checksum_raw = hmac.new(self.media_key, f"mxc://{server}/{media_id}/".encode("utf-8"), hashlib.sha256).digest()
         return base64.urlsafe_b64encode(checksum_raw[:8]).decode("utf-8").rstrip("=")
 

@@ -410,7 +410,9 @@ class PrivateRoom(Room):
         cmd.set_defaults(enabled=None)
         self.commands.register(cmd, self.cmd_reacts)
 
-        cmd = CommandParser(prog="PREFIXALL", description="prefix all bridged IRC lines with the user's nick, instead of just the first")
+        cmd = CommandParser(
+            prog="PREFIXALL", description="prefix all bridged IRC lines with the user's nick, instead of just the first"
+        )
         cmd.add_argument("--enable", dest="enabled", action="store_true", help="Prefix all lines")
         cmd.add_argument("--disable", dest="enabled", action="store_false", help="Only prefix first line")
         cmd.set_defaults(enabled=None)

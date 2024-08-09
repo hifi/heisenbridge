@@ -431,7 +431,7 @@ class ChannelRoom(PrivateRoom):
             self.send_notice(f"Users: {', '.join(others)}")
 
         if self.member_sync == "full":
-            for (irc_user_id, nick) in to_add:
+            for irc_user_id, nick in to_add:
                 self._add_puppet(nick)
         else:
             self.send_notice(f"Member sync is set to {self.member_sync}, skipping invites.")

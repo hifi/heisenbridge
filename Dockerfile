@@ -1,4 +1,4 @@
-FROM docker.io/alpine:3.17.0
+FROM docker.io/alpine:3.20
 
 # install runtime dependencies
 RUN apk add --no-cache python3 py3-ruamel.yaml.clib
@@ -13,7 +13,7 @@ COPY . .
 RUN apk add --no-cache --virtual build-dependencies py3-setuptools py3-pip python3-dev gcc musl-dev && \
     python setup.py gen_version && \
     rm -rf .git && \
-    pip install -e . && \
+    pip install --break-system-packages -e . && \
     apk del build-dependencies && \
     python -m heisenbridge  -h
 

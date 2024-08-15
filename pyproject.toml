@@ -12,4 +12,4 @@ line_length = 132
 
 [tool.black]
 line-length = 120
-target-version = ['py36']
+target-version = ['py310']

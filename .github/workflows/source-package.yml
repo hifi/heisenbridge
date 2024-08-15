@@ -19,10 +19,10 @@ jobs:
           [[ ! "$GITHUB_REF" =~ refs/tags ]] && exit
           echo "::set-output name=value::${GITHUB_REF#refs/tags/v}"
 
-      - name: Set up Python 3.9
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: 3.9
+          python-version: 3.12
 
       - name: Build source archive and wheel
         shell: bash

@@ -849,7 +849,11 @@ class PrivateRoom(Room):
         if str(event.content.msgtype) == "m.emote":
             await self._send_message(event, self.network.conn.action)
         elif str(event.content.msgtype) in ["m.image", "m.file", "m.audio", "m.video"]:
-            self.network.conn.privmsg(self.name, self.serv.mxc_to_url(event.content.url, event.content.body))
+            if event.content.filename and event.content.filename != event.content.body:
+                new_body = self.serv.mxc_to_url(event.content.url, event.content.filename) + "\n" + event.content.body
+            else:
+                new_body = self.serv.mxc_to_url(event.content.url, event.content.body)
+            self.network.conn.privmsg(self.name, new_body)
             if self.use_reacts:
                 self.react(event.event_id, "\U0001F517")  # link
             self.media.append([event.event_id, event.content.url])

@@ -237,13 +237,17 @@ class PlumbedRoom(ChannelRoom):
 
         if event.content.msgtype.is_media:
             # process media event like it was a text message
+            if event.content.filename and event.content.filename != event.content.body:
+                new_body = self.serv.mxc_to_url(event.content.url, event.content.filename) + "\n" + event.content.body
+            else:
+                new_body = self.serv.mxc_to_url(event.content.url, event.content.body)
             media_event = MessageEvent(
                 sender=event.sender,
                 type=None,
                 room_id=None,
                 event_id=None,
                 timestamp=None,
-                content=TextMessageEventContent(body=self.serv.mxc_to_url(event.content.url, event.content.body)),
+                content=TextMessageEventContent(body=new_body),
             )
             await self.relay_message(media_event, self.network.conn.privmsg, sender)
 

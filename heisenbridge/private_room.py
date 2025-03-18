@@ -15,6 +15,8 @@ from urllib.parse import urlparse
 from mautrix.api import Method
 from mautrix.api import SynapseAdminPath
 from mautrix.errors import MatrixStandardRequestError
+from mautrix.types import MessageEvent
+from mautrix.types import TextMessageEventContent
 from mautrix.types.event.state import JoinRestriction
 from mautrix.types.event.state import JoinRestrictionType
 from mautrix.types.event.state import JoinRule
@@ -706,9 +708,9 @@ class PrivateRoom(Room):
         content = event.content
 
         if content.formatted_body:
-            lines = str(await self.parser.parse(content.formatted_body)).split("\n")
+            lines = str(await self.parser.parse(content.formatted_body)).replace("\r", "").split("\n")
         elif content.body:
-            lines = content.body.split("\n")
+            lines = content.body.replace("\r", "").split("\n")
         else:
             logging.warning("_process_event_content called with no usable body")
             return
@@ -853,7 +855,15 @@ class PrivateRoom(Room):
                 new_body = self.serv.mxc_to_url(event.content.url, event.content.filename) + "\n" + event.content.body
             else:
                 new_body = self.serv.mxc_to_url(event.content.url, event.content.body)
-            self.network.conn.privmsg(self.name, new_body)
+            media_event = MessageEvent(
+                sender=event.sender,
+                type=None,
+                room_id=None,
+                event_id=None,
+                timestamp=None,
+                content=TextMessageEventContent(body=new_body),
+            )
+            await self._send_message(media_event, self.network.conn.privmsg)
             if self.use_reacts:
                 self.react(event.event_id, "\U0001F517")  # link
             self.media.append([event.event_id, event.content.url])

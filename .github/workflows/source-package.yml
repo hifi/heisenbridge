@@ -27,7 +27,7 @@ jobs:
       - name: Build source archive and wheel
         shell: bash
         run: |
-          pip install wheel
+          pip install setuptools wheel
           python setup.py sdist
           python setup.py bdist_wheel
 

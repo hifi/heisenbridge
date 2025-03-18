@@ -704,9 +704,9 @@ class PrivateRoom(Room):
         content = event.content
 
         if content.formatted_body:
-            lines = str(await self.parser.parse(content.formatted_body)).split("\n")
+            lines = str(await self.parser.parse(content.formatted_body)).replace("\r", "").split("\n")
         elif content.body:
-            lines = content.body.split("\n")
+            lines = content.body.replace("\r", "").split("\n")
         else:
             logging.warning("_process_event_content called with no usable body")
             return

@@ -73,7 +73,10 @@ def ircroom_event(target_arg=None):
                 except AttributeError:
                     logging.warning(f"Expected {room} to have on_{event.type} but didn't")
 
-            return f(self, conn, event)
+            try:
+                return f(self, conn, event)
+            except Exception:
+                logging.exception(f"Calling {event.type} failed on parent")
 
         return wrapper
 

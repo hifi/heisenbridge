@@ -354,7 +354,7 @@ class BridgeAppService(AppService):
         headers: dict[str, str] = {"Authorization": f"Bearer {self.az.as_token}"}
         resp_headers = {
             "Content-Security-Policy": (
-                "sandbox; default-src 'none'; script-src 'none'; style-src 'none'; object-src 'none';"
+                "sandbox; default-src 'none'; script-src 'none'; style-src 'none'; media-src 'self'; object-src 'none';"
             ),
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",

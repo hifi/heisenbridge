@@ -6,6 +6,7 @@ import re
 import unicodedata
 from datetime import datetime
 from datetime import timezone
+from enum import Enum
 from html import escape
 from typing import List
 from typing import Optional
@@ -31,6 +32,11 @@ from heisenbridge.room import Room
 
 class NetworkRoom:
     pass
+
+
+class ReplyMode(Enum):
+    MENTION = 1
+    QUOTE = 2
 
 
 def unix_to_local(timestamp: Optional[str]):
@@ -719,15 +725,21 @@ class PrivateRoom(Room):
         lines = [x for x in lines if not re.match(r"^\s*$", x)]
 
         # handle replies
-        if reply_to and reply_to.sender != event.sender:
+        if reply_to:
             # resolve displayname
             sender = reply_to.sender
             if sender in self.displaynames:
                 sender = self.displaynames[sender]
 
-            # prefix first line with nickname of the reply_to source
-            first_line = sender + ": " + lines.pop(0)
-            lines.insert(0, first_line)
+            if self.network.reply_mode == ReplyMode.QUOTE:
+                # prefix first line with nickname and last line of the body of the reply_to source
+                quoted_body = reply_to.content.body.strip().split("\n")[-1]
+                first_line = f"<{sender}> {quoted_body}"
+                lines.insert(0, first_line)
+            elif self.network.reply_mode == ReplyMode.MENTION and reply_to.sender != event.sender:
+                # prefix first line with nickname of the reply_to source
+                first_line = f"{sender}: {lines.pop(0)}"
+                lines.insert(0, first_line)
 
         messages = []
 

@@ -174,7 +174,7 @@ If for whatever reason you run Heisenbridge over the internet and require HTTPS 
 
 For [Synapse](https://github.com/matrix-org/synapse) see their [installation instructions](https://github.com/matrix-org/synapse/blob/develop/docs/application_services.md) for appservices.
 
-For [Conduit](https://gitlab.com/famedly/conduit) see their [installation instructions](https://gitlab.com/famedly/conduit/-/blob/next/APPSERVICES.md) for appservices.
+For [Conduit](https://gitlab.com/famedly/conduit) see their [installation instructions](https://docs.conduit.rs/appservices.html) for appservices.
 
 Install
 -------

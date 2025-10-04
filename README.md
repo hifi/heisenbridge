@@ -85,7 +85,7 @@ PyPI
 GitHub releases are automatically published to [PyPI](https://pypi.org/project/heisenbridge/):
 
 ```sh
-pip install heisenbridge
+pipx install heisenbridge
 ```
 
 Docker

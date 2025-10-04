@@ -185,6 +185,13 @@ class HeisenConnection(AioConnection):
         last = loop.time()
         penalty = 0
 
+        async def send_and_sleep(self, message):
+            super().send_raw(message)
+            # sleep is based on message length
+            sleep_time = max(len(message.encode()) / 512 * 6, 1.5)
+            if penalty > 5 or sleep_time > 1.5:
+                await asyncio.sleep(sleep_time)
+
         while True:
             try:
                 (priority, string, tag) = await self._queue.get()
@@ -199,13 +206,14 @@ class HeisenConnection(AioConnection):
                     if penalty < 0:
                         penalty = 0
 
-                super().send_raw(string)
+                if len(string) > 510 and string.split(" ")[0].lower() == "join":
+                    n_splits = int(len(string) / 512) + (len(string) % 512 > 0)
+                    channels = "".join(string.split(" ")[1:]).split(",")
 
-                # sleep is based on message length
-                sleep_time = max(len(string.encode()) / 512 * 6, 1.5)
-
-                if penalty > 5 or sleep_time > 1.5:
-                    await asyncio.sleep(sleep_time)
+                    for i in range(n_splits):
+                        await send_and_sleep(self, "JOIN " + ",".join(channels[i::n_splits]))
+                else:
+                    await send_and_sleep(self, string)
 
                 # this needs to be reset if we slept
                 last = loop.time()

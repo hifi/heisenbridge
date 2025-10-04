@@ -21,6 +21,7 @@ from mautrix.types.event.state import JoinRestriction
 from mautrix.types.event.state import JoinRestrictionType
 from mautrix.types.event.state import JoinRule
 from mautrix.types.event.state import JoinRulesStateEventContent
+from mautrix.types.event.state import PowerLevelStateEventContent
 from mautrix.types.event.type import EventType
 
 from heisenbridge.command_parse import CommandManager
@@ -494,10 +495,14 @@ class PrivateRoom(Room):
             self.id = await self.network.serv.create_room(
                 "{} ({})".format(displayname, self.network.name),
                 "Private chat with {} on {}".format(displayname, self.network.name),
-                [self.network.user_id, irc_user_id],
+                [self.network.user_id, self.network.serv.user_id],
+                as_user=irc_user_id, is_direct=True,
             )
             self.serv.register_room(self)
-            await self.az.intent.user(irc_user_id).ensure_joined(self.id)
+            await self.az.intent.ensure_joined(self.id)
+            power_levels = PowerLevelStateEventContent()
+            power_levels.set_user_level(self.network.serv.user_id, 100)
+            await self.az.intent.user(irc_user_id).set_power_levels(self.id, power_levels)
             await self.save()
             # start event queue now that we have an id
             self._queue.start()

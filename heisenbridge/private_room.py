@@ -212,8 +212,8 @@ def parse_irc_formatting(input: str, pills=None, color=None) -> Tuple[str, Optio
                 foreground = color_table[fg]
                 background = color_table[bg]
             elif ctrl[0] == "\x04":
-                foreground = f"#{fghex}"
-                background = f"#{bghex}"
+                foreground = f"#{fghex}" if fghex is not None else None
+                background = f"#{bghex}" if bghex is not None else None
             elif ctrl[0] == "\x11":
                 monospace = not monospace
             elif ctrl[0] == "\x1D":

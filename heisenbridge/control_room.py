@@ -570,19 +570,19 @@ class ControlRoom(Room):
         if args.remove:
             self.serv.config["media_url"] = None
             await self.serv.save()
-            self.serv.endpoint = await self.serv.detect_public_endpoint()
+            self.serv.media_endpoint = await self.serv.detect_public_endpoint()
         elif args.url:
             parsed = urlparse(args.url)
             if parsed.scheme in ["http", "https"] and not parsed.params and not parsed.query and not parsed.fragment:
                 self.serv.config["media_url"] = args.url
                 await self.serv.save()
-                self.serv.endpoint = args.url
+                self.serv.media_endpoint = args.url
             else:
                 self.send_notice(f"Invalid media URL format: {args.url}")
                 return
 
         self.send_notice(f"Media URL override is set to {self.serv.config['media_url']}")
-        self.send_notice(f"Current active media URL: {self.serv.endpoint}")
+        self.send_notice(f"Current active media URL: {self.serv.media_endpoint}")
 
     async def cmd_media_path(self, args):
         if args.remove:

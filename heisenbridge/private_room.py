@@ -14,7 +14,7 @@ from urllib.parse import urlparse
 
 from mautrix.api import Method
 from mautrix.api import SynapseAdminPath
-from mautrix.errors import MatrixStandardRequestError
+from mautrix.errors import MatrixError, MatrixStandardRequestError
 from mautrix.types import MessageEvent
 from mautrix.types import TextMessageEventContent
 from mautrix.types.event.state import JoinRestriction
@@ -955,11 +955,18 @@ class PrivateRoom(Room):
         self.hidden_room_id = self.serv.hidden_room.id
 
     async def _detach_hidden_room_internal(self) -> None:
-        await self.az.intent.send_state_event(
-            self.id,
-            EventType.ROOM_JOIN_RULES,
-            content=JoinRulesStateEventContent(join_rule=JoinRule.INVITE),
-        )
+        try:
+            await self.az.intent.send_state_event(
+                self.id,
+                EventType.ROOM_JOIN_RULES,
+                content=JoinRulesStateEventContent(join_rule=JoinRule.INVITE),
+            )
+        except MatrixError:
+            logging.warning(
+                f"Failed to detach hidden room for {self.id}. If this room is restricted to Space members and you are "
+                "not using the hidden room setting, you may ignore this error.",
+                exc_info=True,
+            )
         self.hidden_room_id = None
 
     async def _attach_hidden_room(self) -> None:

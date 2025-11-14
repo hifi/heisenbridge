@@ -1849,6 +1849,10 @@ class NetworkRoom(Room):
         # leave and join channels
         for room in self.rooms.values():
             if type(room) is ChannelRoom or type(room) is PlumbedRoom:
+                # Update the channel's IRC-side user list so that we don't try to bridge the puppet being kicked to
+                # an actual IRC kick
+                room.channel_leave(event.source.nick)
+                room.channel_join(event.target)
                 room.rename(event.source.nick, event.target)
 
     def on_nicknameinuse(self, conn, event) -> None:

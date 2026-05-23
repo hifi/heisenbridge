@@ -216,6 +216,33 @@ class ControlRoom(Room):
             cmd.add_argument("--remove", help="remove path override", action="store_true")
             self.commands.register(cmd, self.cmd_media_path)
 
+            cmd = CommandParser(
+                prog="URLPREVIEW",
+                description="configure URL link previews and inline media embedding",
+                epilog=(
+                    "Generates MSC4095 preview cards for web links and, when media embedding is on,"
+                    " inline image/video/audio for direct media URLs. With no arguments, shows status."
+                ),
+            )
+            cmd.add_argument("--enable", dest="enabled", action="store_true", help="Enable URL previews")
+            cmd.add_argument("--disable", dest="enabled", action="store_false", help="Disable URL previews")
+            cmd.set_defaults(enabled=None)
+            cmd.add_argument("--embed-media", dest="embed", action="store_true", help="Embed direct media inline")
+            cmd.add_argument(
+                "--no-embed-media", dest="embed", action="store_false", help="Show direct media as a card only"
+            )
+            cmd.set_defaults(embed=None)
+            cmd.add_argument("--allow-domain", help="restrict previews to this domain (repeatable)", action="append")
+            cmd.add_argument("--remove-domain", help="remove a domain from the allowlist", action="append")
+            cmd.add_argument("--clear-domains", action="store_true", help="clear the domain allowlist (allow all)")
+            cmd.add_argument(
+                "--user-agent",
+                help="override the HTTP User-Agent used when fetching previews (some sites only serve"
+                " OpenGraph tags to known crawler UAs)",
+            )
+            cmd.add_argument("--reset-user-agent", action="store_true", help="restore the default User-Agent")
+            self.commands.register(cmd, self.cmd_urlpreview)
+
             cmd = CommandParser(prog="VERSION", description="show bridge version")
             self.commands.register(cmd, self.cmd_version)
 
@@ -617,6 +644,55 @@ class ControlRoom(Room):
             await self.serv.save()
 
         self.send_notice(f"Reacts are {'enabled' if self.serv.config['use_reacts'] else 'disabled'} by default")
+
+    async def cmd_urlpreview(self, args):
+        changed = False
+        domains = list(self.serv.config.get("url_preview_domains") or [])
+
+        if args.enabled is not None:
+            self.serv.config["url_previews"] = args.enabled
+            changed = True
+        if args.embed is not None:
+            self.serv.config["url_preview_embed_media"] = args.embed
+            changed = True
+        if args.clear_domains:
+            domains = []
+            changed = True
+        for d in args.allow_domain or []:
+            d = d.strip().lower().lstrip(".")
+            if d and d not in domains:
+                domains.append(d)
+                changed = True
+        for d in args.remove_domain or []:
+            d = d.strip().lower().lstrip(".")
+            if d in domains:
+                domains.remove(d)
+                changed = True
+        if args.reset_user_agent:
+            self.serv.config["url_preview_user_agent"] = None
+            changed = True
+        elif args.user_agent is not None:
+            self.serv.config["url_preview_user_agent"] = args.user_agent
+            changed = True
+
+        if changed:
+            self.serv.config["url_preview_domains"] = domains
+            await self.serv.save()
+            # rebuild the fetcher so changes take effect immediately
+            self.serv.init_url_preview_fetcher()
+
+        from heisenbridge.url_preview import DEFAULT_USER_AGENT
+
+        enabled = self.serv.config.get("url_previews")
+        embed = self.serv.config.get("url_preview_embed_media", True)
+        ua = self.serv.config.get("url_preview_user_agent") or DEFAULT_USER_AGENT
+        self.send_notice(f"URL previews are {'enabled' if enabled else 'disabled'}.")
+        self.send_notice(f"Inline media embedding is {'enabled' if embed else 'disabled'}.")
+        if domains:
+            self.send_notice(f"Allowed domains: {', '.join(domains)}")
+        else:
+            self.send_notice("Allowed domains: all")
+        self.send_notice(f"User-Agent: {ua}")
 
     async def cmd_open(self, args):
         networks = self.networks()

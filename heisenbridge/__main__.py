@@ -504,7 +504,46 @@ class BridgeAppService(AppService):
 
         return use_hidden_room
 
-    async def run(self, listen_address, listen_port, homeserver_url, owner, safe_mode, media_proxy):
+    def init_url_preview_fetcher(self):
+        """(Re)create the URL preview fetcher from current config."""
+        old = getattr(self, "url_preview_fetcher", None)
+        if old is not None:
+            asyncio.ensure_future(old.close())
+
+        if not self.config.get("url_previews"):
+            self.url_preview_fetcher = None
+            logging.info("URL previews disabled")
+            return
+
+        from heisenbridge.url_preview import DEFAULT_USER_AGENT
+        from heisenbridge.url_preview import URLPreviewFetcher
+
+        self.url_preview_fetcher = URLPreviewFetcher(
+            self.az.intent,
+            embed_media=self.config.get("url_preview_embed_media", True),
+            allowed_domains=self.config.get("url_preview_domains") or [],
+            fetch_timeout=self._url_preview_timeout,
+            user_agent=self.config.get("url_preview_user_agent") or DEFAULT_USER_AGENT,
+        )
+        domains = self.config.get("url_preview_domains") or []
+        logging.info(
+            "URL previews enabled (embed_media=%s, domains=%s)",
+            self.config.get("url_preview_embed_media", True),
+            ", ".join(domains) if domains else "all",
+        )
+
+    async def run(
+        self,
+        listen_address,
+        listen_port,
+        homeserver_url,
+        owner,
+        safe_mode,
+        media_proxy,
+        url_previews=True,
+        url_preview_timeout=6.0,
+    ):
+        self._url_preview_timeout = url_preview_timeout
         if "sender_localpart" not in self.registration:
             print("Missing sender_localpart from registration file.")
             sys.exit(1)
@@ -641,6 +680,11 @@ class BridgeAppService(AppService):
             "media_path": None,
             "media_key": None,
             "namespace": self.puppet_prefix,
+            # URL link previews / inline media embedding (issue #209)
+            "url_previews": url_previews,
+            "url_preview_embed_media": True,
+            "url_preview_domains": [],
+            "url_preview_user_agent": None,
         }
         logging.debug(f"Default config: {self.config}")
         self.synapse_admin = False
@@ -716,6 +760,12 @@ class BridgeAppService(AppService):
         if owner is not None and self.config["owner"] != owner:
             logging.info(f"Overriding loaded owner with '{owner}'")
             self.config["owner"] = owner
+
+        # command line --no-url-previews always wins over stored config
+        if not url_previews:
+            self.config["url_previews"] = False
+
+        self.init_url_preview_fetcher()
 
         # always ensure our merged and migrated configuration is up-to-date
         await self.save()
@@ -933,6 +983,18 @@ async def async_main():
         default=None,
     )
     parser.add_argument(
+        "--url-previews",
+        action=argparse.BooleanOptionalAction,
+        help="generate MSC4095 link preview cards and inline media for URLs in IRC messages",
+        default=True,
+    )
+    parser.add_argument(
+        "--url-preview-timeout",
+        type=float,
+        help="HTTP timeout in seconds for URL preview fetches",
+        default=6.0,
+    )
+    parser.add_argument(
         "homeserver",
         nargs="?",
         help="URL of Matrix homeserver",
@@ -1030,7 +1092,16 @@ async def async_main():
             except Exception:
                 pass
 
-        await service.run(listen_address, listen_port, args.homeserver, args.owner, args.safe_mode, args.media_proxy)
+        await service.run(
+            listen_address,
+            listen_port,
+            args.homeserver,
+            args.owner,
+            args.safe_mode,
+            args.media_proxy,
+            url_previews=args.url_previews,
+            url_preview_timeout=args.url_preview_timeout,
+        )
 
 
 def main():

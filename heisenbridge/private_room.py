@@ -27,6 +27,7 @@ from heisenbridge.command_parse import CommandManager
 from heisenbridge.command_parse import CommandParser
 from heisenbridge.command_parse import CommandParserError
 from heisenbridge.room import Room
+from heisenbridge.url_preview import extract_urls
 
 
 class NetworkRoom:
@@ -377,6 +378,7 @@ class PrivateRoom(Room):
     prefix_all = False
 
     commands: CommandManager
+    _preview_lock: Optional[asyncio.Lock] = None
 
     def init(self) -> None:
         self.name = None
@@ -628,12 +630,13 @@ class PrivateRoom(Room):
         ):
             self.lazy_members[irc_user_id] = event.source.nick
 
-        self.send_message(
-            plain,
-            irc_user_id,
-            formatted=formatted,
-            fallback_html=f"<b>Message from {str(event.source)}</b>: {html.escape(plain)}",
-        )
+        fallback_html = f"<b>Message from {str(event.source)}</b>: {html.escape(plain)}"
+        fetcher = getattr(self.serv, "url_preview_fetcher", None)
+        urls = extract_urls(plain) if fetcher is not None else []
+        if urls:
+            self._relay_with_previews(plain, irc_user_id, formatted, fallback_html, urls, fetcher)
+        else:
+            self.send_message(plain, irc_user_id, formatted=formatted, fallback_html=fallback_html)
 
         # lazy update displayname if we detect a change
         if (
@@ -642,6 +645,39 @@ class PrivateRoom(Room):
             and irc_user_id in self.members
         ):
             asyncio.ensure_future(self.serv.ensure_irc_user_id(self.network.name, event.source.nick))
+
+    def _relay_with_previews(self, plain, irc_user_id, formatted, fallback_html, urls, fetcher) -> None:
+        # A per-room lock keeps back-to-back messages in order even when the
+        # first one's preview fetch is slower than the second's.
+        if self._preview_lock is None:
+            self._preview_lock = asyncio.Lock()
+        asyncio.ensure_future(self._fetch_then_relay(plain, irc_user_id, formatted, fallback_html, urls, fetcher))
+
+    async def _fetch_then_relay(self, plain, irc_user_id, formatted, fallback_html, urls, fetcher) -> None:
+        previews = []
+        media = []
+        for url in urls:
+            try:
+                result = await fetcher.fetch(url)
+            except Exception:
+                logging.debug("URL preview fetch raised for %s", url, exc_info=True)
+                result = None
+            if result is None:
+                continue
+            if result.preview:
+                previews.append(result.preview)
+            if result.media:
+                media.append(result.media)
+        async with self._preview_lock:
+            self.send_message(
+                plain,
+                irc_user_id,
+                formatted=formatted,
+                fallback_html=fallback_html,
+                url_previews=previews or None,
+            )
+            for embed in media:
+                self.send_media(embed, irc_user_id, fallback_html=fallback_html)
 
     def on_privnotice(self, conn, event) -> None:
         if self.network is None:

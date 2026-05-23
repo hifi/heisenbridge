@@ -78,6 +78,11 @@ class EventQueue:
                 if "formatted_body" in prev["content"]:
                     prev_len += len(prev["content"]["formatted_body"])
 
+            # never merge events that carry their own bundled link previews,
+            # otherwise the appended body would no longer match the preview
+            prev_previews = "m.url_previews" in prev["content"] or "com.beeper.linkpreviews" in prev["content"]
+            cur_previews = "m.url_previews" in event["content"] or "com.beeper.linkpreviews" in event["content"]
+
             if (
                 prev["type"] == event["type"]
                 and prev["type"][0] != "_"
@@ -86,6 +91,8 @@ class EventQueue:
                 and prev["content"]["msgtype"] == event["content"]["msgtype"]
                 and prev_formatted == cur_formatted
                 and prev_len < 64_000  # a single IRC event can't overflow with this
+                and not prev_previews
+                and not cur_previews
             ):
                 prev["content"]["body"] += "\n" + event["content"]["body"]
                 if cur_formatted:

@@ -20,6 +20,21 @@ class RoomInvalidError(Exception):
     pass
 
 
+def to_beeper_preview(preview: dict) -> dict:
+    """Convert an MSC4095 preview dict to the legacy com.beeper.linkpreviews shape.
+
+    The two formats are identical except for the matched-URL key and the
+    image-encryption key, so older Beeper clients (which read the legacy key)
+    need ``matched_url`` rather than MSC4095's ``matrix:matched_url``.
+    """
+    out = dict(preview)
+    if "matrix:matched_url" in out:
+        out["matched_url"] = out.pop("matrix:matched_url")
+    if "matrix:image:encryption" in out:
+        out["beeper:image:encryption"] = out.pop("matrix:image:encryption")
+    return out
+
+
 class Room(ABC):
     az: MauService
     id: str
@@ -278,31 +293,64 @@ class Room(ABC):
 
     # send message to mx user (may be puppeted)
     def send_message(
-        self, text: str, user_id: Optional[str] = None, formatted=None, fallback_html: Optional[str] = None
+        self,
+        text: str,
+        user_id: Optional[str] = None,
+        formatted=None,
+        fallback_html: Optional[str] = None,
+        url_previews: Optional[List] = None,
     ) -> None:
         if formatted:
-            event = {
-                "type": "m.room.message",
-                "content": {
-                    "msgtype": "m.text",
-                    "format": "org.matrix.custom.html",
-                    "body": text,
-                    "formatted_body": formatted,
-                },
-                "user_id": user_id,
-                "fallback_html": fallback_html,
+            content = {
+                "msgtype": "m.text",
+                "format": "org.matrix.custom.html",
+                "body": text,
+                "formatted_body": formatted,
             }
         else:
-            event = {
-                "type": "m.room.message",
-                "content": {
-                    "msgtype": "m.text",
-                    "body": text,
-                },
-                "user_id": user_id,
-                "fallback_html": fallback_html,
+            content = {
+                "msgtype": "m.text",
+                "body": text,
             }
+        if url_previews:
+            # m.url_previews is the MSC4095 key; com.beeper.linkpreviews is the
+            # legacy key still read by current Beeper clients (different field
+            # name for the matched URL, see to_beeper_preview).
+            content["m.url_previews"] = list(url_previews)
+            content["com.beeper.linkpreviews"] = [to_beeper_preview(p) for p in url_previews]
+        event = {
+            "type": "m.room.message",
+            "content": content,
+            "user_id": user_id,
+            "fallback_html": fallback_html,
+        }
 
+        self._queue.enqueue(event)
+
+    # send inline media (m.image / m.video / m.audio) to mx user (may be puppeted)
+    def send_media(self, embed, user_id: Optional[str] = None, fallback_html: Optional[str] = None) -> None:
+        info = {}
+        if embed.mimetype:
+            info["mimetype"] = embed.mimetype
+        if embed.size:
+            info["size"] = embed.size
+        if embed.width:
+            info["w"] = embed.width
+        if embed.height:
+            info["h"] = embed.height
+        content = {
+            "msgtype": embed.msgtype,
+            "body": embed.body,
+            "url": embed.url,
+        }
+        if info:
+            content["info"] = info
+        event = {
+            "type": "m.room.message",
+            "content": content,
+            "user_id": user_id,
+            "fallback_html": fallback_html,
+        }
         self._queue.enqueue(event)
 
     # send emote to mx user (may be puppeted)

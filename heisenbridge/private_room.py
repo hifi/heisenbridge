@@ -869,6 +869,18 @@ class PrivateRoom(Room):
             self.media.append([event.event_id, event.content.url])
             await self.save()
         elif str(event.content.msgtype) == "m.text":
+            # clients that don't turn "/me ..." into a real m.emote send it as
+            # literal text, relay it as an IRC ACTION instead of a plain line
+            if event.content.body == "/me" or event.content.body.startswith("/me "):
+                event.content.body = event.content.body[len("/me") :].lstrip()
+                if event.content.formatted_body:
+                    event.content.formatted_body = re.sub(
+                        r"(^\s*(?:<[^>]+>)*)\s*/me\s*", r"\1", event.content.formatted_body, count=1
+                    )
+                await self._send_message(event, self.network.conn.action)
+                await self.az.intent.send_receipt(event.room_id, event.event_id)
+                return
+
             # allow commanding the appservice in rooms
             match = re.match(r"^\s*@?([^:,\s]+)[\s:,]*(.+)$", event.content.body)
             if match and match.group(1).lower() == self.serv.registration["sender_localpart"]:

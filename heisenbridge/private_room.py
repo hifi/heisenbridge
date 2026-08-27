@@ -422,6 +422,7 @@ class PrivateRoom(Room):
 
         self.mx_register("m.room.message", self.on_mx_message)
         self.mx_register("m.room.redaction", self.on_mx_redaction)
+        self.mx_register("m.reaction", self.on_mx_reaction)
 
     def from_config(self, config: dict) -> None:
         if "max_lines" in config:
@@ -882,6 +883,34 @@ class PrivateRoom(Room):
             await self._send_message(event, self.network.conn.privmsg)
 
         await self.az.intent.send_receipt(event.room_id, event.event_id)
+
+    async def on_mx_reaction(self, event) -> None:
+        if event.sender != self.user_id:
+            return
+
+        if self.network is None or self.network.conn is None or not self.network.conn.connected:
+            return
+
+        target_event_id = event.content.relates_to.event_id
+        key = event.content.relates_to.key
+        if not target_event_id or not key:
+            return
+
+        try:
+            target = await self.az.intent.get_event(self.id, target_event_id)
+        except Exception:
+            logging.debug("Failed to fetch reacted-to event %s", target_event_id, exc_info=True)
+            return
+
+        if target.sender == self.user_id:
+            nick = self.network.conn.real_nickname
+        else:
+            nick = self.serv.nick_from_irc_user_id(self.network.name, target.sender)
+
+        if not nick:
+            return
+
+        self.network.conn.privmsg(self.name, f"{nick}: {key}")
 
     async def on_mx_redaction(self, event) -> None:
         for media in self.media:

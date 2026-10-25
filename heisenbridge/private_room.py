@@ -582,6 +582,10 @@ class PrivateRoom(Room):
             if member in self.displaynames:
                 nick = self.displaynames[member]
                 lnick = nick.lower()
+                # our own ghost shares our nick, the pill must stay ours
+                if lnick in ret and ret[lnick][0] == self.user_id:
+                    continue
+
                 if len(nick) >= self.network.pills_length and lnick not in ignore:
                     ret[lnick] = (member, nick)
 

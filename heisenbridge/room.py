@@ -303,6 +303,10 @@ class Room(ABC):
                 "fallback_html": fallback_html,
             }
 
+        # a pill of the owner is a highlight, tell clients it mentions them
+        if formatted and f'href="https://matrix.to/#/{self.user_id}"' in formatted:
+            event["content"]["m.mentions"] = {"user_ids": [self.user_id]}
+
         self._queue.enqueue(event)
 
     # send emote to mx user (may be puppeted)

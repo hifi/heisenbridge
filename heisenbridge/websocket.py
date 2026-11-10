@@ -39,7 +39,9 @@ class AppserviceWebsocket:
                 )
             )
         else:
-            logging.warning("Unhandled WS command: %s", data)
+            # Only the command and id: requests such as http_proxy carry the
+            # caller's Authorization header in their data.
+            logging.warning("Unhandled WS command: %s (id %s)", data.get("command"), data.get("id"))
 
     async def _loop(self):
         while True:

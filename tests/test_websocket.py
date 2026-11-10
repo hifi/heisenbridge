@@ -21,12 +21,15 @@ def make():
     return AppserviceWebsocket("wss://example.invalid", "token", callback), events
 
 
-def test_message_without_status_is_ignored():
+def test_message_without_status_is_ignored(caplog):
     ws, events = make()
     fake = FakeWS()
-    asyncio.run(ws.handle_message(fake, {"command": "ping", "id": 1, "data": {}}))
+    request = {"command": "http_proxy", "id": 1, "data": {"headers": {"Authorization": ["Bearer secret"]}}}
+    asyncio.run(ws.handle_message(fake, request))
     assert fake.sent == []
     assert events == []
+    assert "http_proxy" in caplog.text
+    assert "secret" not in caplog.text
 
 
 def test_transaction_is_dispatched_and_acknowledged():

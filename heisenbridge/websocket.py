@@ -18,6 +18,29 @@ class AppserviceWebsocket:
     async def start(self):
         asyncio.create_task(self._loop())
 
+    async def handle_message(self, ws, data):
+        # Not every message carries "status" (only transactions do), so a plain
+        # data["status"] lookup raised KeyError and dropped the connection.
+        if data.get("status") == "ok" and data.get("command") == "transaction":
+            logging.debug(f"Websocket transaction {data['txn_id']}")
+            for event in data["events"]:
+                try:
+                    await self.callback(Event.deserialize(event))
+                except Exception as e:
+                    logging.error(e)
+
+            await ws.send_str(
+                json.dumps(
+                    {
+                        "command": "response",
+                        "id": data["id"],
+                        "data": {},
+                    }
+                )
+            )
+        else:
+            logging.warning("Unhandled WS command: %s", data)
+
     async def _loop(self):
         while True:
             try:
@@ -32,26 +55,7 @@ class AppserviceWebsocket:
                                 logging.debug("Unhandled WS message: %s", msg)
                                 continue
 
-                            data = msg.json()
-                            if data["status"] == "ok" and data["command"] == "transaction":
-                                logging.debug(f"Websocket transaction {data['txn_id']}")
-                                for event in data["events"]:
-                                    try:
-                                        await self.callback(Event.deserialize(event))
-                                    except Exception as e:
-                                        logging.error(e)
-
-                                await ws.send_str(
-                                    json.dumps(
-                                        {
-                                            "command": "response",
-                                            "id": data["id"],
-                                            "data": {},
-                                        }
-                                    )
-                                )
-                            else:
-                                logging.warn("Unhandled WS command: %s", data)
+                            await self.handle_message(ws, msg.json())
 
                 logging.info("Websocket disconnected.")
             except asyncio.CancelledError:

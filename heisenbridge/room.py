@@ -174,12 +174,7 @@ class Room(ABC):
                         del self.lazy_members[event["user_id"]]
 
                     if event["user_id"] in self.members:
-                        if event["reason"] is not None:
-                            await self.az.intent.user(event["user_id"]).kick_user(
-                                self.id, event["user_id"], event["reason"]
-                            )
-                        else:
-                            await self.az.intent.user(event["user_id"]).leave_room(self.id)
+                        await self.az.intent.user(event["user_id"]).leave_room(self.id, reason=event["reason"])
                         if event["user_id"] in self.members:
                             self.members.remove(event["user_id"])
                         if event["user_id"] in self.displaynames:
@@ -212,8 +207,8 @@ class Room(ABC):
                         await self.serv.ensure_irc_user_id(self.network.name, event["new_nick"])
 
                         # old puppet away
-                        await self.az.intent.user(old_irc_user_id).kick_user(
-                            self.id, old_irc_user_id, f"Changing nick to {event['new_nick']}"
+                        await self.az.intent.user(old_irc_user_id).leave_room(
+                            self.id, reason=f"Changing nick to {event['new_nick']}"
                         )
                         self.members.remove(old_irc_user_id)
                         if old_irc_user_id in self.displaynames:

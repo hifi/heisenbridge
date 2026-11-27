@@ -270,10 +270,9 @@ class BridgeAppService(AppService):
                 logging.info(f"Whitelisted user {event.sender} invited {event.state_key}, going to reject.")
 
                 try:
-                    await self.az.intent.user(event.state_key).kick_user(
+                    await self.az.intent.user(event.state_key).leave_room(
                         event.room_id,
-                        event.state_key,
-                        "Will invite YOU instead",
+                        reason="Will invite YOU instead",
                     )
                 except Exception:
                     logging.exception("Failed to reject invitation.")
